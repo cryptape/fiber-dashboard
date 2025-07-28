@@ -1,0 +1,45 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: fiber-dashbord-timescaledb
+    environment:
+      POSTGRES_DB: fiber_dashbord
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - ./data/timescaledb:/var/lib/postgresql/data
+    networks:
+      - fiber-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fiber_dashbord"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  fiber-dashbord:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fiber-dashbord-backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@timescaledb:5432/fiber_dashbord
+      - RUST_LOG=info
+      - HTTP_PORT=8080
+      - FIBER_RPC_URL=http://18.163.221.211:8227
+    ports:
+      - "8080:8080"
+    networks:
+      - fiber-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  timescaledb_data:
+
+networks:
+  fiber-network:
+    driver: bridge
