@@ -1,7 +1,7 @@
 pub mod http_server;
 mod ip_location;
-pub mod pg_read_types;
-pub mod pg_write_types;
+pub mod pg_read;
+pub mod pg_write;
 mod rpc_client;
 pub mod types;
 

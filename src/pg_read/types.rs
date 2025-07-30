@@ -2,12 +2,12 @@ use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::{FromRow, Pool, Postgres};
 
 use ckb_jsonrpc_types::{JsonBytes, Script};
-use ckb_types::{H256, bytes::Bytes};
+use ckb_types::H256;
 use multiaddr::MultiAddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::types::{ChannelInfo, ChannelUpdateInfo, U64Hex};
+use crate::types::{ChannelUpdateInfo, U64Hex, U128Hex};
 
 const SELECT_HOURLY_NODES_SQL: &str = "SELECT DISTINCT ON (node_id)
   online_nodes_hourly.node_id as node_id,
@@ -55,47 +55,18 @@ ORDER BY channel_outpoint, bucket DESC";
 
 const PAGE_SIZE: usize = 500;
 
-pub async fn read_nodes(
-    pool: &Pool<Postgres>,
-    page: usize,
-) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page(pool, page)
-        .await
-        .map(|(entities, next_page)| {
-            (
-                entities.into_iter().map(HourlyNodeInfo::from).collect(),
-                next_page,
-            )
-        })
-}
-
-pub async fn read_channels(
-    pool: &Pool<Postgres>,
-    page: usize,
-) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page(pool, page)
-        .await
-        .map(|(entities, next_page)| {
-            (
-                entities.into_iter().map(ChannelInfo::from).collect(),
-                next_page,
-            )
-        })
-}
-
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HourlyNodeInfo {
-    pub node_id: Bytes,
+    pub node_id: String,
     pub node_name: String,
     pub addresses: Vec<MultiAddr>,
-    #[serde_as(as = "U64Hex")]
+    pub commit_timestamp: String,
     /// The latest timestamp set by the owner for the node announcement.
     /// When a Node is online this timestamp will be updated to the latest value.
-    pub timestamp: u64,
+    pub announce_timestamp: u64,
     /// The chain hash of the node.
     pub chain_hash: H256,
-    #[serde_as(as = "U64Hex")]
     /// The minimum CKB funding amount for automatically accepting open channel requests.
     pub auto_accept_min_ckb_funding_amount: u64,
     pub country: Option<String>,
@@ -109,8 +80,9 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
         HourlyNodeInfo {
             node_name: info.node_name,
             addresses: serde_json::from_str(&info.addresses).unwrap(),
-            node_id: info.node_id.into_bytes().into(),
-            timestamp: info.announce_timestamp.timestamp_millis() as u64,
+            node_id: format!("0x{}", info.node_id),
+            commit_timestamp: info.last_seen_hour.to_rfc3339(),
+            announce_timestamp: info.announce_timestamp.timestamp_millis() as u64,
             chain_hash: {
                 let mut hash_bytes = [0u8; 32];
                 faster_hex::hex_decode(info.chain_hash.as_bytes(), &mut hash_bytes).unwrap();
@@ -171,16 +143,40 @@ impl HourlyNodeInfoDBRead {
     }
 }
 
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ChannelInfo {
+    /// The outpoint of the channel.
+    pub channel_outpoint: String,
+    /// The identity public key of the first node.
+    pub node1: String,
+    /// The identity public key of the second node.
+    pub node2: String,
+    pub commit_timestamp: String,
+    #[serde_as(as = "U64Hex")]
+    pub created_timestamp: u64,
+
+    /// The update info from node1 to node2, e.g. timestamp, fee_rate, tlc_expiry_delta, tlc_minimum_value
+    pub update_info_of_node1: Option<ChannelUpdateInfo>,
+
+    /// The update info from node2 to node1, e.g. timestamp, fee_rate, tlc_expiry_delta, tlc_minimum_value
+    pub update_info_of_node2: Option<ChannelUpdateInfo>,
+
+    /// The capacity of the channel.
+    #[serde_as(as = "U128Hex")]
+    pub capacity: u128,
+    /// The chain hash of the channel.
+    pub chain_hash: H256,
+    /// The UDT type script of the channel.
+    pub udt_type_script: Option<Script>,
+}
+
 impl From<HourlyChannelInfoDBRead> for ChannelInfo {
     fn from(info: HourlyChannelInfoDBRead) -> Self {
         ChannelInfo {
-            channel_outpoint: {
-                let mut res = vec![0u8; info.channel_outpoint.len() / 2];
-                faster_hex::hex_decode(info.channel_outpoint.as_bytes(), &mut res).unwrap();
-                JsonBytes::from_vec(res)
-            },
-            node1: info.node1.into_bytes().into(),
-            node2: info.node2.into_bytes().into(),
+            channel_outpoint: format!("0x{}", info.channel_outpoint),
+            node1: format!("0x{}", info.node1),
+            node2: format!("0x{}", info.node2),
             capacity: {
                 let mut capacity_bytes = [0u8; 16];
                 faster_hex::hex_decode(info.capacity.as_bytes(), &mut capacity_bytes).unwrap();
@@ -191,6 +187,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                 faster_hex::hex_decode(info.chain_hash.as_bytes(), &mut hash_bytes).unwrap();
                 H256::from(hash_bytes)
             },
+            commit_timestamp: info.last_seen_hour.to_rfc3339(),
             created_timestamp: info.created_timestamp.timestamp_millis() as u64,
             update_info_of_node1: info.update_of_node1_timestamp.map(|timestamp| {
                 ChannelUpdateInfo {

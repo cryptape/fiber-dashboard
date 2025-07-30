@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     get_pg_pool,
-    pg_read_types::{HourlyNodeInfo, read_channels, read_nodes},
-    types::ChannelInfo,
+    pg_read::{ChannelInfo, HourlyNodeInfo, read_channels, read_nodes},
 };
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -26,7 +25,10 @@ struct ChannelPage {
 }
 
 #[handler]
-pub async fn list_nodes(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+pub async fn list_nodes_hourly(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
     let nodes = read_nodes(pool, page.page).await.map_err(|e| {
@@ -43,7 +45,10 @@ pub async fn list_nodes(req: &mut Request, _res: &mut Response) -> Result<String
 }
 
 #[handler]
-pub async fn list_channels(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+pub async fn list_channels_hourly(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
     let channels = read_channels(pool, page.page).await.map_err(|e| {
