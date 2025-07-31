@@ -1,4 +1,4 @@
-use ckb_jsonrpc_types::JsonBytes;
+use ckb_jsonrpc_types::{JsonBytes, Script};
 use salvo::{Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,12 @@ struct Page {
 #[salvo(extract(default_source(from = "query")))]
 struct NodeId {
     node_id: JsonBytes,
+}
+
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "body")))]
+struct NodesByUdt {
+    udt: Script,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -88,4 +94,20 @@ pub async fn node_udt_infos(
             ))
         })?;
     Ok(serde_json::to_string(&udt_infos)?)
+}
+
+#[handler]
+pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let udt = req.extract::<NodesByUdt>().await?;
+    let pool = get_pg_pool();
+    let nodes = crate::pg_read::query_nodes_by_udt(pool, udt.udt)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query nodes by UDT: {}", e);
+            salvo::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to query nodes by UDT",
+            ))
+        })?;
+    Ok(serde_json::json!({ "nodes": nodes }).to_string())
 }

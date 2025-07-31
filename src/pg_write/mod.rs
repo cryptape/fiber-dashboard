@@ -73,7 +73,7 @@ pub async fn init_global_cache(pool: &Pool<Postgres>) {
     }));
 }
 
-fn global_cache() -> &'static ArcSwap<RelationCache> {
+pub(crate) fn global_cache() -> &'static ArcSwap<RelationCache> {
     static GLOBAL_CACHE: LazyLock<ArcSwap<RelationCache>> =
         LazyLock::new(|| ArcSwap::new(Arc::new(RelationCache::default())));
     &*GLOBAL_CACHE

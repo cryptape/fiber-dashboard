@@ -24,7 +24,7 @@ fn main() {
 
 async fn http_server() {
     use fiber_dashbord_backend::http_server::{
-        list_channels_hourly, list_nodes_hourly, node_udt_infos,
+        list_channels_hourly, list_nodes_hourly, node_udt_infos, nodes_by_udt,
     };
     use salvo::{Listener, Router, Server, Service, conn::TcpListener, cors::Cors};
 
@@ -32,7 +32,8 @@ async fn http_server() {
     let router = Router::new()
         .push(Router::with_path("nodes_hourly").get(list_nodes_hourly))
         .push(Router::with_path("channels_hourly").get(list_channels_hourly))
-        .push(Router::with_path("udt_infos").get(node_udt_infos));
+        .push(Router::with_path("node_udt_infos").get(node_udt_infos))
+        .push(Router::with_path("nodes_by_udt").post(nodes_by_udt));
 
     let service = Service::new(router).hoop(cors);
     let http_port = std::env::var("HTTP_PORT").unwrap_or("8000".to_string());

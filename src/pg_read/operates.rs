@@ -6,6 +6,7 @@ use sqlx::{Pool, Postgres, Row};
 
 use crate::{
     pg_read::{ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead},
+    pg_write::global_cache,
     types::{UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
@@ -196,4 +197,32 @@ pub async fn query_node_udt_relation(
     }
 
     Ok(UdtCfgInfos(udt_infos))
+}
+
+pub async fn query_nodes_by_udt(
+    pool: &Pool<Postgres>,
+    udt: Script,
+) -> Result<Vec<String>, sqlx::Error> {
+    let udt_id = global_cache()
+        .load()
+        .udt
+        .get(&udt)
+        .cloned()
+        .ok_or_else(|| sqlx::Error::RowNotFound)?;
+    let sql = r#"
+        select node_id
+        from node_udt_relations
+        where udt_info_id = $1
+    "#;
+
+    Ok(sqlx::query(&sql)
+        .bind(udt_id)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let node_id: String = row.get("node_id");
+            format!("0x{}", node_id)
+        })
+        .collect::<Vec<_>>())
 }
