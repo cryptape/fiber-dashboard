@@ -53,6 +53,52 @@ FROM online_channels_hourly
 join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
 ORDER BY channel_outpoint, bucket DESC";
 
+const SELECT_MONTHLY_NODES_SQL: &str = "SELECT
+  node_id,
+  bucket AS last_seen_hour,
+  node_name,
+  addresses,
+  announce_timestamp,
+  chain_hash,
+  auto_accept_min_ckb_funding_amount,
+  country,
+  city,
+  region,
+  loc
+FROM online_nodes_hourly
+WHERE bucket >= $1::timestamp
+ORDER BY node_id, bucket DESC";
+
+const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT
+  channel_outpoint,
+  bucket AS last_seen_hour,
+  node1,
+  node2,
+  capacity,
+  chain_hash,
+  created_timestamp,
+  update_of_node1_timestamp,
+  update_of_node1_enabled,
+  update_of_node1_outbound_liquidity,
+  update_of_node1_tlc_expiry_delta,
+  update_of_node1_tlc_minimum_value,
+  update_of_node1_fee_rate,
+  update_of_node2_timestamp,
+  update_of_node2_enabled,
+  update_of_node2_outbound_liquidity,
+  update_of_node2_tlc_expiry_delta,
+  update_of_node2_tlc_minimum_value,
+  update_of_node2_fee_rate,
+  udt_infos.name AS udt_name,
+  udt_infos.code_hash AS udt_code_hash,
+  udt_infos.hash_type AS udt_hash_type,
+  udt_infos.args AS udt_args,
+  udt_infos.auto_accept_amount AS udt_auto_accept_amount
+FROM online_channels_hourly
+join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
+WHERE bucket >= $1::timestamp
+ORDER BY channel_outpoint, bucket DESC";
+
 const PAGE_SIZE: usize = 500;
 
 #[serde_as]
@@ -128,7 +174,7 @@ impl HourlyNodeInfoDBRead {
             .await
     }
 
-    pub async fn fetch_by_page(
+    pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
@@ -137,6 +183,38 @@ impl HourlyNodeInfoDBRead {
             "{} LIMIT {} OFFSET {}",
             SELECT_HOURLY_NODES_SQL, PAGE_SIZE, offset
         ))
+        .fetch_all(pool)
+        .await
+        .map(|rows| (rows, page.saturating_add(1)))
+    }
+
+    pub async fn fetch_by_page_monthly(
+        pool: &Pool<Postgres>,
+        month_bucket: DateTime<Utc>,
+        page: usize,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        sqlx::query_as::<_, Self>(&format!(
+            "{} LIMIT {} OFFSET {}",
+            SELECT_MONTHLY_NODES_SQL, PAGE_SIZE, offset
+        ))
+        .bind(month_bucket)
+        .fetch_all(pool)
+        .await
+        .map(|rows| (rows, page.saturating_add(1)))
+    }
+
+    pub async fn fetch_by_page_nearly_a_month(
+        pool: &Pool<Postgres>,
+        page: usize,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        let month_bucket = Utc::now() - chrono::Duration::days(30);
+        sqlx::query_as::<_, Self>(&format!(
+            "{} LIMIT {} OFFSET {}",
+            SELECT_MONTHLY_NODES_SQL, PAGE_SIZE, offset
+        ))
+        .bind(month_bucket)
         .fetch_all(pool)
         .await
         .map(|rows| (rows, page.saturating_add(1)))
@@ -350,7 +428,7 @@ impl HourlyChannelInfoDBRead {
             .await
     }
 
-    pub async fn fetch_by_page(
+    pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
@@ -359,6 +437,38 @@ impl HourlyChannelInfoDBRead {
             "{} LIMIT {} OFFSET {}",
             SELECT_HOURLY_CHANNELS_SQL, PAGE_SIZE, offset
         ))
+        .fetch_all(pool)
+        .await
+        .map(|rows| (rows, page.saturating_add(1)))
+    }
+
+    pub async fn fetch_by_page_monthly(
+        pool: &Pool<Postgres>,
+        month_bucket: DateTime<Utc>,
+        page: usize,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        sqlx::query_as::<_, Self>(&format!(
+            "{} LIMIT {} OFFSET {}",
+            SELECT_MONTHLY_CHANNELS_SQL, PAGE_SIZE, offset
+        ))
+        .bind(month_bucket)
+        .fetch_all(pool)
+        .await
+        .map(|rows| (rows, page.saturating_add(1)))
+    }
+
+    pub async fn fetch_by_page_nearly_a_month(
+        pool: &Pool<Postgres>,
+        page: usize,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        let month_bucket = Utc::now() - chrono::Duration::days(30);
+        sqlx::query_as::<_, Self>(&format!(
+            "{} LIMIT {} OFFSET {}",
+            SELECT_MONTHLY_CHANNELS_SQL, PAGE_SIZE, offset
+        ))
+        .bind(month_bucket)
         .fetch_all(pool)
         .await
         .map(|rows| (rows, page.saturating_add(1)))

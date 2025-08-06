@@ -110,7 +110,7 @@ SELECT add_continuous_aggregate_policy(
   schedule_interval => INTERVAL '5 minute'
 );
 
-SELECT add_retention_policy('online_nodes_hourly', INTERVAL '7 days');
+SELECT add_retention_policy('online_nodes_hourly', INTERVAL '12 months');
 
 create index idx_node_hourly_id_time
   ON online_nodes_hourly(node_id, bucket DESC);
@@ -152,7 +152,7 @@ SELECT add_continuous_aggregate_policy(
   schedule_interval => INTERVAL '5 minute'
 );
 
-SELECT add_retention_policy('online_channels_hourly', INTERVAL '7 days');
+SELECT add_retention_policy('online_channels_hourly', INTERVAL '12 months');
 
 create index idx_channels_hourly_node1
   ON online_channels_hourly(node1, bucket DESC);

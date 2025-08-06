@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     get_pg_pool,
-    pg_read::{ChannelInfo, HourlyNodeInfo, read_channels_hourly, read_nodes_hourly},
+    pg_read::{
+        ChannelInfo, HourlyNodeInfo, read_channels_hourly, read_channels_monthly,
+        read_nodes_hourly, read_nodes_monthly,
+    },
 };
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -58,6 +61,26 @@ pub async fn list_nodes_hourly(
 }
 
 #[handler]
+pub async fn list_nodes_monthly(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let page = req.extract::<Page>().await?;
+    let pool = get_pg_pool();
+    let nodes = read_nodes_monthly(pool, page.page).await.map_err(|e| {
+        log::error!("Failed to read nodes: {}", e);
+        salvo::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to read nodes",
+        ))
+    })?;
+    Ok(serde_json::to_string(&NodePage {
+        next_page: nodes.1,
+        nodes: nodes.0,
+    })?)
+}
+
+#[handler]
 pub async fn list_channels_hourly(
     req: &mut Request,
     _res: &mut Response,
@@ -65,6 +88,26 @@ pub async fn list_channels_hourly(
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
     let channels = read_channels_hourly(pool, page.page).await.map_err(|e| {
+        log::error!("Failed to read channels: {}", e);
+        salvo::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to read channels",
+        ))
+    })?;
+    Ok(serde_json::to_string(&ChannelPage {
+        next_page: channels.1,
+        channels: channels.0,
+    })?)
+}
+
+#[handler]
+pub async fn list_channels_monthly(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let page = req.extract::<Page>().await?;
+    let pool = get_pg_pool();
+    let channels = read_channels_monthly(pool, page.page).await.map_err(|e| {
         log::error!("Failed to read channels: {}", e);
         salvo::Error::Io(std::io::Error::new(
             std::io::ErrorKind::Other,

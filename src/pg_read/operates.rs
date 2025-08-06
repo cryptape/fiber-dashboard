@@ -14,7 +14,21 @@ pub async fn read_nodes_hourly(
     pool: &Pool<Postgres>,
     page: usize,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page(pool, page)
+    HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, page)
+        .await
+        .map(|(entities, next_page)| {
+            (
+                entities.into_iter().map(HourlyNodeInfo::from).collect(),
+                next_page,
+            )
+        })
+}
+
+pub async fn read_nodes_monthly(
+    pool: &Pool<Postgres>,
+    page: usize,
+) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+    HourlyNodeInfoDBRead::fetch_by_page_nearly_a_month(pool, page)
         .await
         .map(|(entities, next_page)| {
             (
@@ -28,7 +42,21 @@ pub async fn read_channels_hourly(
     pool: &Pool<Postgres>,
     page: usize,
 ) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page(pool, page)
+    HourlyChannelInfoDBRead::fetch_by_page_hourly(pool, page)
+        .await
+        .map(|(entities, next_page)| {
+            (
+                entities.into_iter().map(ChannelInfo::from).collect(),
+                next_page,
+            )
+        })
+}
+
+pub async fn read_channels_monthly(
+    pool: &Pool<Postgres>,
+    page: usize,
+) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
+    HourlyChannelInfoDBRead::fetch_by_page_nearly_a_month(pool, page)
         .await
         .map(|(entities, next_page)| {
             (
