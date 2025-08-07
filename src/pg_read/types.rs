@@ -22,6 +22,7 @@ const SELECT_HOURLY_NODES_SQL: &str = "SELECT DISTINCT ON (node_id)
   region,
   loc
 FROM online_nodes_hourly
+WHERE bucket >= $1::timestamp
 ORDER BY node_id, bucket DESC";
 
 const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
@@ -51,6 +52,7 @@ const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   udt_infos.auto_accept_amount AS udt_auto_accept_amount
 FROM online_channels_hourly
 join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
+WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
 const SELECT_MONTHLY_NODES_SQL: &str = "SELECT
@@ -169,7 +171,9 @@ pub struct HourlyNodeInfoDBRead {
 impl HourlyNodeInfoDBRead {
     /// fetch all hourly node information from the database.
     pub async fn fetch_all(pool: &Pool<Postgres>) -> Result<Vec<Self>, sqlx::Error> {
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         sqlx::query_as::<_, Self>(SELECT_HOURLY_NODES_SQL)
+            .bind(hour_bucket)
             .fetch_all(pool)
             .await
     }
@@ -179,10 +183,12 @@ impl HourlyNodeInfoDBRead {
         page: usize,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         sqlx::query_as::<_, Self>(&format!(
             "{} LIMIT {} OFFSET {}",
             SELECT_HOURLY_NODES_SQL, PAGE_SIZE, offset
         ))
+        .bind(hour_bucket)
         .fetch_all(pool)
         .await
         .map(|rows| (rows, page.saturating_add(1)))
@@ -423,7 +429,9 @@ pub struct HourlyChannelInfoDBRead {
 impl HourlyChannelInfoDBRead {
     /// fetch all active channel information from the database.
     pub async fn fetch_all(pool: &Pool<Postgres>) -> Result<Vec<Self>, sqlx::Error> {
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         sqlx::query_as::<_, Self>(SELECT_HOURLY_CHANNELS_SQL)
+            .bind(hour_bucket)
             .fetch_all(pool)
             .await
     }
@@ -433,10 +441,12 @@ impl HourlyChannelInfoDBRead {
         page: usize,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         sqlx::query_as::<_, Self>(&format!(
             "{} LIMIT {} OFFSET {}",
             SELECT_HOURLY_CHANNELS_SQL, PAGE_SIZE, offset
         ))
+        .bind(hour_bucket)
         .fetch_all(pool)
         .await
         .map(|rows| (rows, page.saturating_add(1)))

@@ -103,6 +103,8 @@ FROM node_infos
 GROUP BY bucket, node_id
 WITH NO DATA;
 
+-- bucket by hour, so the data will be aggregated every hour
+-- it means that 2025-08-07 03:00:00+00 will be aggregated after 2025-08-07 04:10:00+00
 SELECT add_continuous_aggregate_policy(
   'online_nodes_hourly',
   start_offset => INTERVAL '3 hour',

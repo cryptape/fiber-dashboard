@@ -1,12 +1,13 @@
 use ckb_jsonrpc_types::{JsonBytes, Script};
 use salvo::{Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
+use sqlx::pool;
 
 use crate::{
     get_pg_pool,
     pg_read::{
-        ChannelInfo, HourlyNodeInfo, read_channels_hourly, read_channels_monthly,
-        read_nodes_hourly, read_nodes_monthly,
+        ChannelInfo, HourlyNodeInfo, query_channel_capacity_analysis_hourly, read_channels_hourly,
+        read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
     },
 };
 
@@ -153,4 +154,22 @@ pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<Stri
             ))
         })?;
     Ok(serde_json::json!({ "nodes": nodes }).to_string())
+}
+
+#[handler]
+pub async fn channel_capacitys_hourly(
+    _req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let pool = get_pg_pool();
+    let capacitys = query_channel_capacity_analysis_hourly(pool)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query channel capacity analysis: {}", e);
+            salvo::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to query channel capacity analysis",
+            ))
+        })?;
+    Ok(serde_json::to_string(&capacitys)?)
 }

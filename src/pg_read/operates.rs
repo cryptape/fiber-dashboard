@@ -2,12 +2,14 @@ use std::collections::HashMap;
 
 use ckb_jsonrpc_types::{DepType, JsonBytes, OutPoint as OutPointWrapper, Script};
 use ckb_types::H256;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sqlx::{Pool, Postgres, Row};
 
 use crate::{
     pg_read::{ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead},
     pg_write::global_cache,
-    types::{UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
+    types::{U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
 pub async fn read_nodes_hourly(
@@ -253,4 +255,68 @@ pub async fn query_nodes_by_udt(
             format!("0x{}", node_id)
         })
         .collect::<Vec<_>>())
+}
+
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChannelCapacitys {
+    #[serde_as(as = "U128Hex")]
+    max_capacity: u128,
+    #[serde_as(as = "U128Hex")]
+    min_capacity: u128,
+    #[serde_as(as = "U128Hex")]
+    avg_capacity: u128,
+    #[serde_as(as = "U128Hex")]
+    total_capacity: u128,
+    #[serde_as(as = "U128Hex")]
+    median_capacity: u128,
+}
+
+pub async fn query_channel_capacity_analysis_hourly(
+    pool: &Pool<Postgres>,
+) -> Result<Vec<ChannelCapacitys>, sqlx::Error> {
+    let sql = "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from online_channels_hourly WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC";
+    let start_time = chrono::Utc::now() - chrono::Duration::hours(3);
+    let mut channel_capacitys = sqlx::query(sql)
+        .bind(start_time)
+        .fetch_all(pool)
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| {
+                    let capacity: u128 = {
+                        let raw: String = row.get("capacity");
+                        let mut buf = [0u8; 16];
+                        faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                        u128::from_le_bytes(buf)
+                    };
+                    capacity
+                })
+                .collect::<Vec<_>>()
+        })?;
+    channel_capacitys.sort_unstable();
+    let total_capacity = channel_capacitys.iter().sum();
+    let max_capacity = *channel_capacitys.last().unwrap_or(&0);
+    let min_capacity = *channel_capacitys.first().unwrap_or(&0);
+    let avg_capacity = if channel_capacitys.is_empty() {
+        0
+    } else {
+        total_capacity / channel_capacitys.len() as u128
+    };
+    let median_capacity = if channel_capacitys.is_empty() {
+        0
+    } else if channel_capacitys.len() % 2 == 0 {
+        (channel_capacitys[channel_capacitys.len() / 2 - 1]
+            + channel_capacitys[channel_capacitys.len() / 2])
+            / 2
+    } else {
+        channel_capacitys[channel_capacitys.len() / 2]
+    };
+    Ok(vec![ChannelCapacitys {
+        max_capacity,
+        min_capacity,
+        avg_capacity,
+        total_capacity,
+        median_capacity,
+    }])
 }
