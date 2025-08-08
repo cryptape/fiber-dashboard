@@ -9,7 +9,7 @@ use sqlx::{Pool, Postgres, Row};
 use crate::{
     pg_read::{ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead},
     pg_write::global_cache,
-    types::{U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
+    types::{U64Hex, U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
 pub async fn read_nodes_hourly(
@@ -270,11 +270,13 @@ pub struct ChannelCapacitys {
     total_capacity: u128,
     #[serde_as(as = "U128Hex")]
     median_capacity: u128,
+    #[serde_as(as = "U64Hex")]
+    channel_len: u64,
 }
 
 pub async fn query_channel_capacity_analysis_hourly(
     pool: &Pool<Postgres>,
-) -> Result<Vec<ChannelCapacitys>, sqlx::Error> {
+) -> Result<ChannelCapacitys, sqlx::Error> {
     let sql = "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from online_channels_hourly WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC";
     let start_time = chrono::Utc::now() - chrono::Duration::hours(3);
     let mut channel_capacitys = sqlx::query(sql)
@@ -312,11 +314,12 @@ pub async fn query_channel_capacity_analysis_hourly(
     } else {
         channel_capacitys[channel_capacitys.len() / 2]
     };
-    Ok(vec![ChannelCapacitys {
+    Ok(ChannelCapacitys {
         max_capacity,
         min_capacity,
         avg_capacity,
         total_capacity,
         median_capacity,
-    }])
+        channel_len: channel_capacitys.len() as u64,
+    })
 }

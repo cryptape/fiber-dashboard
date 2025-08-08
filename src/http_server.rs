@@ -1,7 +1,6 @@
 use ckb_jsonrpc_types::{JsonBytes, Script};
 use salvo::{Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
-use sqlx::pool;
 
 use crate::{
     get_pg_pool,
