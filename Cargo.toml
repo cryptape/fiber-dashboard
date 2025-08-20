@@ -34,7 +34,7 @@ sqlx = { version = "0.8", features = [
     "derive",
 ] }
 chrono = "0.4"
-salvo = { version = "0.81", features = ["cors"] }
+salvo = { version = "0.82", features = ["cors"] }
 
 ckb-jsonrpc-types = "0.200.0"
 ckb-types = "0.200.0"
