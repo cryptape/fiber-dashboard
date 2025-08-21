@@ -7,6 +7,7 @@ use crate::{
     types::NodeInfo,
 };
 
+use chrono::Duration;
 use ckb_jsonrpc_types::DepType;
 use faster_hex::hex_string;
 use multiaddr::{Multiaddr, Protocol};
@@ -175,6 +176,121 @@ pub async fn insert_batch(
     ChannelInfoDBSchema::use_sqlx(&mut tx, channel_schemas, time).await?;
     tx.commit().await?;
     Ok(())
+}
+
+pub async fn daily_statistics(
+    pool: &Pool<Postgres>,
+    start_time: Option<DateTime<Utc>>,
+) -> Result<(), sqlx::Error> {
+    use sqlx::Row;
+
+    let now = Utc::now();
+
+    let end_time = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
+    let start_time = start_time.unwrap_or(end_time - Duration::days(1));
+
+    let nodes_count_sql = "
+    SELECT
+        time_bucket('1 day', bucket) AS day_bucket,
+        COUNT(DISTINCT node_id) AS nodes_count
+    FROM online_nodes_hourly
+    WHERE bucket < $1::timestamp and bucket >= $2::timestamp
+    GROUP BY day_bucket
+    ORDER BY day_bucket DESC
+    ";
+    let channels_data_sql = "
+    SELECT DISTINCT ON (time_bucket('1 day', bucket), channel_outpoint)
+        time_bucket('1 day', bucket) AS day_bucket,
+        channel_outpoint,
+        capacity
+    FROM online_channels_hourly
+    WHERE bucket < $1::timestamp and bucket >= $2::timestamp
+    ORDER BY time_bucket('1 day', bucket), channel_outpoint, bucket DESC
+    ";
+    let nodes_count: Vec<(DateTime<Utc>, i64)> = sqlx::query(nodes_count_sql)
+        .bind(end_time)
+        .bind(start_time)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let day_bucket: DateTime<Utc> = row.get("day_bucket");
+            let nodes_count: i64 = row.get("nodes_count");
+            (day_bucket, nodes_count)
+        })
+        .collect();
+    let channels_data: Vec<(DateTime<Utc>, u128)> = sqlx::query(channels_data_sql)
+        .bind(end_time)
+        .bind(start_time)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let day_bucket: DateTime<Utc> = row.get("day_bucket");
+            let capacity: u128 = {
+                let raw: String = row.get("capacity");
+                let mut buf = [0u8; 16];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                u128::from_le_bytes(buf)
+            };
+            (day_bucket, capacity)
+        })
+        .collect();
+
+    let summarized_data = summarize_data(channels_data, nodes_count);
+    if summarized_data.is_empty() {
+        return Ok(());
+    }
+    let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> = sqlx::QueryBuilder::new(
+        "Insert into daily_summarized_data (day, channels_count, capacity_sum, nodes_count) ",
+    );
+
+    query_builder.push_values(
+        summarized_data.iter().take(65535 / 6),
+        |mut b, (dt, count, sum, nodes_count)| {
+            b.push_bind(dt)
+                .push_bind(count)
+                .push_bind(sum)
+                .push_bind(nodes_count);
+        },
+    );
+
+    query_builder.push(" On Conflict (day) Do Nothing");
+    query_builder.build().execute(pool).await?;
+
+    Ok(())
+}
+
+fn summarize_data(
+    channels_data: Vec<(DateTime<Utc>, u128)>,
+    nodes_data: Vec<(DateTime<Utc>, i64)>,
+) -> Vec<(DateTime<Utc>, i64, String, i64)> {
+    use std::collections::HashMap;
+
+    let mut summary: HashMap<DateTime<Utc>, (usize, u128, u64)> = HashMap::new();
+
+    for (dt, value) in channels_data {
+        let entry = summary.entry(dt).or_insert((0, 0, 0));
+        entry.0 += 1;
+        entry.1 += value;
+    }
+
+    for (dt, value) in nodes_data {
+        let entry = summary.entry(dt).or_insert((0, 0, 0));
+        entry.2 = value as u64;
+    }
+
+    summary
+        .into_iter()
+        .map(|(dt, (count, sum, nodes_count))| {
+            (
+                dt,
+                count as i64,
+                faster_hex::hex_string(sum.to_le_bytes().as_ref()),
+                nodes_count as i64,
+            )
+        })
+        .collect()
 }
 
 pub fn multiaddr_to_socketaddr(addr: &Multiaddr) -> Option<SocketAddr> {

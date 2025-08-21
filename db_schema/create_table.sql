@@ -22,9 +22,17 @@ create table node_udt_relations (
     udt_info_id integer not null references udt_infos(id)
 );
 
+create table daily_summarized_data (
+    day date NOT NULL PRIMARY KEY,
+    channels_count INTEGER NOT NULL,
+    capacity_sum TEXT NOT NULL, -- u128 with hexadecimal format
+    nodes_count INTEGER NOT NULL
+);
+
 create index idx_udt_dep_id on udt_dep(udt_info_id);
 create index idx_node_udt_relations_udt on node_udt_relations(udt_info_id);
 create index idx_node_udt_relations_node on node_udt_relations(node_id);
+create index idx_daily_summarized_data_day on daily_summarized_data(day);
 
 create table node_infos (
     time TIMESTAMPTZ NOT NULL,

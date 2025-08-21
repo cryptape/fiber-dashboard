@@ -259,7 +259,7 @@ pub async fn query_nodes_by_udt(
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ChannelCapacitys {
+pub struct AnalysisHourly {
     #[serde_as(as = "U128Hex")]
     max_capacity: u128,
     #[serde_as(as = "U128Hex")]
@@ -272,14 +272,16 @@ pub struct ChannelCapacitys {
     median_capacity: u128,
     #[serde_as(as = "U64Hex")]
     channel_len: u64,
+    #[serde_as(as = "U64Hex")]
+    total_nodes: u64,
 }
 
-pub async fn query_channel_capacity_analysis_hourly(
-    pool: &Pool<Postgres>,
-) -> Result<ChannelCapacitys, sqlx::Error> {
-    let sql = "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from online_channels_hourly WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC";
+pub async fn query_analysis_hourly(pool: &Pool<Postgres>) -> Result<AnalysisHourly, sqlx::Error> {
+    let channel_sql = "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from online_channels_hourly WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC";
+    let node_sql =
+        "SELECT COUNT(DISTINCT node_id) FROM online_nodes_hourly WHERE bucket >= $1::timestamp";
     let start_time = chrono::Utc::now() - chrono::Duration::hours(3);
-    let mut channel_capacitys = sqlx::query(sql)
+    let mut channel_capacitys = sqlx::query(channel_sql)
         .bind(start_time)
         .fetch_all(pool)
         .await
@@ -295,6 +297,14 @@ pub async fn query_channel_capacity_analysis_hourly(
                     capacity
                 })
                 .collect::<Vec<_>>()
+        })?;
+    let total_nodes: u64 = sqlx::query(node_sql)
+        .bind(start_time)
+        .fetch_one(pool)
+        .await
+        .map(|row| {
+            let count: i64 = row.get(0);
+            count as u64
         })?;
     channel_capacitys.sort_unstable();
     let total_capacity = channel_capacitys.iter().sum();
@@ -314,12 +324,162 @@ pub async fn query_channel_capacity_analysis_hourly(
     } else {
         channel_capacitys[channel_capacitys.len() / 2]
     };
-    Ok(ChannelCapacitys {
+    Ok(AnalysisHourly {
         max_capacity,
         min_capacity,
         avg_capacity,
         total_capacity,
         median_capacity,
         channel_len: channel_capacitys.len() as u64,
+        total_nodes,
     })
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum AnalysisField {
+    #[serde(alias = "channels")]
+    Channels,
+    #[serde(alias = "nodes")]
+    Nodes,
+    #[serde(alias = "capacity")]
+    Capacity,
+}
+
+impl AnalysisField {
+    pub fn to_sql(&self) -> String {
+        match self {
+            AnalysisField::Channels => "channels_count".to_string(),
+            AnalysisField::Nodes => "nodes_count".to_string(),
+            AnalysisField::Capacity => "capacity_sum".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, salvo::macros::Extractible)]
+#[salvo(extract(default_source(from = "body")))]
+pub struct AnalysisParams {
+    start_time: Option<chrono::NaiveDate>,
+    end_time: Option<chrono::NaiveDate>,
+    #[serde(default)]
+    fields: Vec<AnalysisField>,
+    interval: Option<String>,
+    range: Option<String>,
+}
+
+impl AnalysisParams {
+    fn to_sql(&self) -> (String, Meta) {
+        let mut meta = Meta::default();
+        let mut sql = String::from("SELECT day, ");
+        let end_time = self
+            .end_time
+            .unwrap_or_else(|| chrono::Utc::now().date_naive());
+        let start_time = self.start_time.unwrap_or_else(|| match self.range {
+            None => end_time - chrono::Duration::days(30),
+            Some(ref range) => {
+                meta.range = range.clone();
+                match range.as_str() {
+                    "1M" => end_time - chrono::Duration::days(30),
+                    "3M" => end_time - chrono::Duration::days(3 * 30),
+                    "6M" => end_time - chrono::Duration::days(6 * 30),
+                    "1Y" => end_time - chrono::Duration::days(365),
+                    "2Y" => end_time - chrono::Duration::days(2 * 365),
+                    _ => end_time - chrono::Duration::days(30),
+                }
+            }
+        });
+        let fields = if self.fields.is_empty() {
+            meta.fields = vec![
+                AnalysisField::Channels,
+                AnalysisField::Nodes,
+                AnalysisField::Capacity,
+            ];
+            "*".to_string()
+        } else {
+            meta.fields = self.fields.clone();
+            self.fields
+                .iter()
+                .map(|f| f.to_sql())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        sql.push_str(&fields);
+        sql.push_str(" from daily_summarized_data ");
+        sql.push_str(&format!(
+            "where day >= '{}'::date and day < '{}'::date ",
+            start_time, end_time
+        ));
+        sql.push_str("order by day asc");
+        meta.start_time = format!("{}", start_time.format("%Y-%m-%d"));
+        meta.end_time = format!("{}", end_time.format("%Y-%m-%d"));
+        meta.interval = self.interval.clone().unwrap_or_else(|| "day".to_string());
+
+        (sql, meta)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct Meta {
+    fields: Vec<AnalysisField>,
+    start_time: String,
+    end_time: String,
+    interval: String,
+    range: String,
+}
+
+pub async fn query_analysis(
+    pool: &Pool<Postgres>,
+    params: &AnalysisParams,
+) -> Result<String, sqlx::Error> {
+    let (sql, meta) = params.to_sql();
+    let rows = sqlx::query(&sql).fetch_all(pool).await?;
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Res {
+        series: Vec<Tables>,
+        meta: Meta,
+    }
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Tables {
+        name: AnalysisField,
+        points: Vec<(chrono::NaiveDate, serde_json::Value)>,
+    }
+    let mut results = Res {
+        series: Vec::new(),
+        meta,
+    };
+    let mut tables = results
+        .meta
+        .fields
+        .iter()
+        .map(|field| Tables {
+            name: *field,
+            points: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    for row in rows {
+        let timestamp: chrono::NaiveDate = row.get("day");
+        for table in tables.iter_mut() {
+            match table.name {
+                AnalysisField::Channels => {
+                    let value: i32 = row.get(table.name.to_sql().as_str());
+                    table
+                        .points
+                        .push((timestamp, serde_json::Value::Number(value.into())));
+                }
+                AnalysisField::Capacity => {
+                    let value: String = row.get(table.name.to_sql().as_str());
+                    table
+                        .points
+                        .push((timestamp, serde_json::Value::String(format!("0x{}", value))));
+                }
+                AnalysisField::Nodes => {
+                    let value: i32 = row.get(table.name.to_sql().as_str());
+                    table
+                        .points
+                        .push((timestamp, serde_json::Value::Number(value.into())));
+                }
+            }
+        }
+    }
+    results.series = tables;
+    Ok(serde_json::to_string(&results).unwrap())
 }

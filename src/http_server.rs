@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     get_pg_pool,
     pg_read::{
-        ChannelInfo, HourlyNodeInfo, query_channel_capacity_analysis_hourly, read_channels_hourly,
-        read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
+        AnalysisParams, ChannelInfo, HourlyNodeInfo, query_analysis, query_analysis_hourly,
+        read_channels_hourly, read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
     },
 };
 
@@ -156,19 +156,31 @@ pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<Stri
 }
 
 #[handler]
-pub async fn channel_capacitys_hourly(
+pub async fn analysis_hourly(
     _req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
     let pool = get_pg_pool();
-    let capacitys = query_channel_capacity_analysis_hourly(pool)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query channel capacity analysis: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to query channel capacity analysis",
-            ))
-        })?;
+    let capacitys = query_analysis_hourly(pool).await.map_err(|e| {
+        log::error!("Failed to query channel capacity analysis: {}", e);
+        salvo::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to query channel capacity analysis",
+        ))
+    })?;
     Ok(serde_json::to_string(&capacitys)?)
+}
+
+#[handler]
+pub async fn analysis(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let params = req.extract::<AnalysisParams>().await?;
+    let pool = get_pg_pool();
+    let capacitys = query_analysis(pool, &params).await.map_err(|e| {
+        log::error!("Failed to query channel capacity analysis: {}", e);
+        salvo::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to query channel capacity analysis",
+        ))
+    })?;
+    Ok(capacitys)
 }

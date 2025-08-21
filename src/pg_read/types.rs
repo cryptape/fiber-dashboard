@@ -51,7 +51,7 @@ const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   udt_infos.args AS udt_args,
   udt_infos.auto_accept_amount AS udt_auto_accept_amount
 FROM online_channels_hourly
-join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
+left join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
 WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
@@ -97,7 +97,7 @@ const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT
   udt_infos.args AS udt_args,
   udt_infos.auto_accept_amount AS udt_auto_accept_amount
 FROM online_channels_hourly
-join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
+left join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
 WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
@@ -484,3 +484,17 @@ impl HourlyChannelInfoDBRead {
         .map(|rows| (rows, page.saturating_add(1)))
     }
 }
+
+// SELECT DISTINCT ON (time_bucket('1 day', bucket), channel_outpoint)
+//   time_bucket('1 day', bucket) AS day_bucket,
+//   channel_outpoint,
+//   capacity
+// FROM online_channels_hourly
+// ORDER BY time_bucket('1 day', bucket), channel_outpoint, bucket DESC
+
+// SELECT
+//   time_bucket('1 day', bucket) AS day_bucket,
+//   COUNT(DISTINCT node_id) AS unique_nodes_count
+// FROM online_nodes_hourly
+// GROUP BY day_bucket
+// ORDER BY day_bucket DESC;

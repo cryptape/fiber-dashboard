@@ -1,6 +1,9 @@
 use fiber_dashbord_backend::{
     RpcClient, create_pg_pool, get_pg_pool, init_db,
-    pg_write::{ChannelInfoDBSchema, from_rpc_to_db_schema, init_global_cache, insert_batch},
+    pg_write::{
+        ChannelInfoDBSchema, daily_statistics, from_rpc_to_db_schema, init_global_cache,
+        insert_batch,
+    },
     types::{GraphChannelsParams, GraphNodesParams},
 };
 
@@ -16,6 +19,7 @@ fn main() {
         let pool = get_pg_pool();
         init_db(pool).await;
         init_global_cache(pool).await;
+        tokio::spawn(daily_commit());
         tokio::spawn(timed_commit_states());
 
         http_server().await;
@@ -24,7 +28,7 @@ fn main() {
 
 async fn http_server() {
     use fiber_dashbord_backend::http_server::{
-        channel_capacitys_hourly, list_channels_hourly, list_channels_monthly, list_nodes_hourly,
+        analysis, analysis_hourly, list_channels_hourly, list_channels_monthly, list_nodes_hourly,
         list_nodes_monthly, node_udt_infos, nodes_by_udt,
     };
     use salvo::{Listener, Router, Server, Service, conn::TcpListener, cors::Cors};
@@ -37,7 +41,8 @@ async fn http_server() {
         .push(Router::with_path("nodes_by_udt").post(nodes_by_udt))
         .push(Router::with_path("nodes_nearly_monthly").get(list_nodes_monthly))
         .push(Router::with_path("channels_nearly_monthly").get(list_channels_monthly))
-        .push(Router::with_path("channel_capacitys_hourly").get(channel_capacitys_hourly));
+        .push(Router::with_path("analysis_hourly").get(analysis_hourly))
+        .push(Router::with_path("analysis").post(analysis));
 
     let service = Service::new(router).hoop(cors);
     let http_port = std::env::var("HTTP_PORT").unwrap_or("8000".to_string());
@@ -152,5 +157,16 @@ async fn timed_commit_states() {
                 .expect("Failed to refresh continuous aggregate");
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * 30)).await;
+    }
+}
+
+async fn daily_commit() {
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(60 * 60 * 4)).await;
+        let pool = get_pg_pool();
+        daily_statistics(pool, Some(Utc::now() - chrono::Duration::days(20)))
+            .await
+            .unwrap();
+        log::info!("Daily statistics committed");
     }
 }
