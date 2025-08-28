@@ -31,14 +31,15 @@ async fn http_server() {
         analysis, analysis_hourly, list_channels_hourly, list_channels_monthly, list_nodes_hourly,
         list_nodes_monthly, node_udt_infos, nodes_by_udt,
     };
-    use salvo::{Listener, Router, Server, Service, conn::TcpListener, cors::Cors};
+    use salvo::{
+        Listener, Router, Server, Service, conn::TcpListener, cors::AllowOrigin, cors::Cors,
+    };
 
     use salvo::http::Method;
     let cors = Cors::new()
-        .allow_origin("http://localhost:3000")
+        .allow_origin(AllowOrigin::any())
         .allow_headers(vec!["content-type", "accept", "authorization"])
         .allow_methods(vec![Method::GET, Method::POST, Method::OPTIONS])
-        .allow_credentials(true)
         .into_handler();
     let router = Router::new()
         .push(Router::with_path("nodes_hourly").get(list_nodes_hourly))
