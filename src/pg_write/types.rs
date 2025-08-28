@@ -6,15 +6,17 @@ use faster_hex::hex_string;
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::{PgConnection, QueryBuilder};
 
-use crate::{pg_write::global_cache, types::ChannelInfo};
+use crate::{
+    pg_write::{Network, global_cache, global_cache_testnet},
+    types::ChannelInfo,
+};
 
 pub const UDT_INFO_INSERT_SQL: &str =
-    "insert into udt_infos (id, name, code_hash, hash_type, args, auto_accept_amount) ";
-pub const UDT_DEP_RELATION_INSERT_SQL: &str = "insert into udt_dep (outpoint_tx_hash, outpoint_index, dep_type, code_hash, hash_type, args, udt_info_id) ";
-pub const UDT_NODE_RELATION_INSERT_SQL: &str =
-    "insert into node_udt_relations (node_id, udt_info_id) ";
-pub const NODE_INFO_INSERT_SQL: &str = "insert into node_infos (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country, city, region, loc) ";
-pub const CHANNEL_INFO_INSERT_SQL: &str = "insert into channel_infos (
+    "insert into {} (id, name, code_hash, hash_type, args, auto_accept_amount) ";
+pub const UDT_DEP_RELATION_INSERT_SQL: &str = "insert into {} (outpoint_tx_hash, outpoint_index, dep_type, code_hash, hash_type, args, udt_info_id) ";
+pub const UDT_NODE_RELATION_INSERT_SQL: &str = "insert into {} (node_id, udt_info_id) ";
+pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country, city, region, loc) ";
+pub const CHANNEL_INFO_INSERT_SQL: &str = "insert into {} (
     time, channel_outpoint, node1, node2, capacity, chain_hash, udt_type_script, 
     created_timestamp, update_of_node1_timestamp, update_of_node1_enabled, 
     update_of_node1_outbound_liquidity, update_of_node1_tlc_expiry_delta, 
@@ -51,12 +53,13 @@ impl UdtInfos {
     pub async fn insert_batch(
         conn: &mut PgConnection,
         udts: &[UdtInfos],
+        net: Network,
     ) -> Result<(), sqlx::Error> {
         if udts.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> =
-            QueryBuilder::new(UDT_INFO_INSERT_SQL);
+        let sql = UDT_INFO_INSERT_SQL.replace("{}", net.udt_infos());
+        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
         query_builder.push_values(udts.iter().take(65535 / 6), |mut b, udt| {
             b.push_bind(udt.id)
@@ -86,12 +89,13 @@ impl UdtdepRelation {
     pub async fn use_sqlx(
         conn: &mut PgConnection,
         relations: &[UdtdepRelation],
+        net: Network,
     ) -> Result<(), sqlx::Error> {
         if relations.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> =
-            QueryBuilder::new(UDT_DEP_RELATION_INSERT_SQL);
+        let sql = UDT_DEP_RELATION_INSERT_SQL.replace("{}", net.udt_dep());
+        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
         query_builder.push_values(relations.iter().take(65535 / 7), |mut b, relation| {
             b.push_bind(&relation.outpoint_tx_hash)
@@ -117,12 +121,13 @@ impl UdtNodeRelation {
     pub async fn use_sqlx(
         conn: &mut PgConnection,
         relations: &[UdtNodeRelation],
+        net: Network,
     ) -> Result<(), sqlx::Error> {
         if relations.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> =
-            QueryBuilder::new(UDT_NODE_RELATION_INSERT_SQL);
+        let sql = UDT_NODE_RELATION_INSERT_SQL.replace("{}", net.node_udt_relations());
+        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
         query_builder.push_values(relations.iter().take(65535 / 2), |mut b, relation| {
             b.push_bind(&relation.node_id)
@@ -155,12 +160,13 @@ impl NodeInfoDBSchema {
         conn: &mut PgConnection,
         nodes: &[NodeInfoDBSchema],
         time: &DateTime<Utc>,
+        net: Network,
     ) -> Result<(), sqlx::Error> {
         if nodes.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> =
-            QueryBuilder::new(NODE_INFO_INSERT_SQL);
+        let sql = NODE_INFO_INSERT_SQL.replace("{}", net.node_infos());
+        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
         query_builder.push_values(nodes.iter().take(65535 / 11), |mut b, node| {
             b.push_bind(time)
@@ -229,12 +235,13 @@ impl ChannelInfoDBSchema {
         conn: &mut PgConnection,
         channels: &[ChannelInfoDBSchema],
         time: &DateTime<Utc>,
+        net: Network,
     ) -> Result<(), sqlx::Error> {
         if channels.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> =
-            QueryBuilder::new(CHANNEL_INFO_INSERT_SQL);
+        let sql = CHANNEL_INFO_INSERT_SQL.replace("{}", net.channel_infos());
+        let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
         query_builder.push_values(channels.iter().take(65535 / 20), |mut b, channel| {
             b.push_bind(time)
@@ -264,8 +271,8 @@ impl ChannelInfoDBSchema {
     }
 }
 
-impl From<ChannelInfo> for ChannelInfoDBSchema {
-    fn from(channel_info: ChannelInfo) -> Self {
+impl From<(ChannelInfo, Network)> for ChannelInfoDBSchema {
+    fn from((channel_info, net): (ChannelInfo, Network)) -> Self {
         Self {
             channel_outpoint: hex_string(&channel_info.channel_outpoint.as_bytes()),
             node1: String::from_utf8(channel_info.node1.to_vec()).unwrap(),
@@ -275,7 +282,10 @@ impl From<ChannelInfo> for ChannelInfoDBSchema {
             udt_type_script: channel_info
                 .udt_type_script
                 .as_ref()
-                .and_then(|script| global_cache().load().udt.get(script).cloned()),
+                .and_then(|script| match net {
+                    Network::Mainnet => global_cache().load().udt.get(script).cloned(),
+                    Network::Testnet => global_cache_testnet().load().udt.get(script).cloned(),
+                }),
             created_timestamp: DateTime::from_timestamp_millis(
                 channel_info.created_timestamp as i64,
             )

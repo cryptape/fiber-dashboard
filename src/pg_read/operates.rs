@@ -7,16 +7,18 @@ use serde_with::serde_as;
 use sqlx::{Pool, Postgres, Row};
 
 use crate::{
+    Network,
     pg_read::{ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead},
-    pg_write::global_cache,
+    pg_write::{global_cache, global_cache_testnet},
     types::{U64Hex, U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
 pub async fn read_nodes_hourly(
     pool: &Pool<Postgres>,
     page: usize,
+    net: Network,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, page)
+    HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, page, net)
         .await
         .map(|(entities, next_page)| {
             (
@@ -29,8 +31,11 @@ pub async fn read_nodes_hourly(
 pub async fn read_nodes_monthly(
     pool: &Pool<Postgres>,
     page: usize,
+    start: chrono::DateTime<chrono::Utc>,
+    end: chrono::DateTime<chrono::Utc>,
+    net: Network,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page_nearly_a_month(pool, page)
+    HourlyNodeInfoDBRead::fetch_by_page_monthly(pool, page, start, end, net)
         .await
         .map(|(entities, next_page)| {
             (
@@ -43,8 +48,9 @@ pub async fn read_nodes_monthly(
 pub async fn read_channels_hourly(
     pool: &Pool<Postgres>,
     page: usize,
+    net: Network,
 ) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page_hourly(pool, page)
+    HourlyChannelInfoDBRead::fetch_by_page_hourly(pool, page, net)
         .await
         .map(|(entities, next_page)| {
             (
@@ -57,8 +63,11 @@ pub async fn read_channels_hourly(
 pub async fn read_channels_monthly(
     pool: &Pool<Postgres>,
     page: usize,
+    start: chrono::DateTime<chrono::Utc>,
+    end: chrono::DateTime<chrono::Utc>,
+    net: Network,
 ) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page_nearly_a_month(pool, page)
+    HourlyChannelInfoDBRead::fetch_by_page_monthly(pool, page, start, end, net)
         .await
         .map(|(entities, next_page)| {
             (
@@ -71,13 +80,20 @@ pub async fn read_channels_monthly(
 pub async fn query_node_udt_relation(
     pool: &Pool<Postgres>,
     node_id: JsonBytes,
+    net: Network,
 ) -> Result<UdtCfgInfos, sqlx::Error> {
-    let sql = r#"
+    let sql = format!(
+        r#"
         select id, name, code_hash, hash_type, args, auto_accept_amount 
-        from udt_infos 
-        join node_udt_relations on udt_infos.id = node_udt_relations.udt_info_id 
+        from {} 
+        join {} on {}.id = {}.udt_info_id 
         where node_id = $1
-    "#;
+    "#,
+        net.udt_infos(),
+        net.node_udt_relations(),
+        net.udt_infos(),
+        net.node_udt_relations()
+    );
 
     let raw_udt_infos = sqlx::query(&sql)
         .bind(faster_hex::hex_string(node_id.as_bytes()))
@@ -232,18 +248,30 @@ pub async fn query_node_udt_relation(
 pub async fn query_nodes_by_udt(
     pool: &Pool<Postgres>,
     udt: Script,
+    net: Network,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let udt_id = global_cache()
-        .load()
-        .udt
-        .get(&udt)
-        .cloned()
-        .ok_or_else(|| sqlx::Error::RowNotFound)?;
-    let sql = r#"
+    let udt_id = match net {
+        Network::Mainnet => global_cache()
+            .load()
+            .udt
+            .get(&udt)
+            .cloned()
+            .ok_or_else(|| sqlx::Error::RowNotFound)?,
+        Network::Testnet => global_cache_testnet()
+            .load()
+            .udt
+            .get(&udt)
+            .cloned()
+            .ok_or_else(|| sqlx::Error::RowNotFound)?,
+    };
+    let sql = format!(
+        r#"
         select node_id
-        from node_udt_relations
+        from {}
         where udt_info_id = $1
-    "#;
+    "#,
+        net.node_udt_relations()
+    );
 
     Ok(sqlx::query(&sql)
         .bind(udt_id)
@@ -276,12 +304,20 @@ pub struct AnalysisHourly {
     total_nodes: u64,
 }
 
-pub async fn query_analysis_hourly(pool: &Pool<Postgres>) -> Result<AnalysisHourly, sqlx::Error> {
-    let channel_sql = "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from online_channels_hourly WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC";
-    let node_sql =
-        "SELECT COUNT(DISTINCT node_id) FROM online_nodes_hourly WHERE bucket >= $1::timestamp";
+pub async fn query_analysis_hourly(
+    pool: &Pool<Postgres>,
+    net: Network,
+) -> Result<AnalysisHourly, sqlx::Error> {
+    let channel_sql = format!(
+        "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from {} WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC",
+        net.online_channels_hourly()
+    );
+    let node_sql = format!(
+        "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp",
+        net.online_nodes_hourly()
+    );
     let start_time = chrono::Utc::now() - chrono::Duration::hours(3);
-    let mut channel_capacitys = sqlx::query(channel_sql)
+    let mut channel_capacitys = sqlx::query(&channel_sql)
         .bind(start_time)
         .fetch_all(pool)
         .await
@@ -298,7 +334,7 @@ pub async fn query_analysis_hourly(pool: &Pool<Postgres>) -> Result<AnalysisHour
                 })
                 .collect::<Vec<_>>()
         })?;
-    let total_nodes: u64 = sqlx::query(node_sql)
+    let total_nodes: u64 = sqlx::query(&node_sql)
         .bind(start_time)
         .fetch_one(pool)
         .await
@@ -350,7 +386,10 @@ impl AnalysisField {
         match self {
             AnalysisField::Channels => "channels_count".to_string(),
             AnalysisField::Nodes => "nodes_count".to_string(),
-            AnalysisField::Capacity => "capacity_sum".to_string(),
+            AnalysisField::Capacity => {
+                "sum_capacity, avg_capacity, min_capacity, max_capacity, median_capacity"
+                    .to_string()
+            }
         }
     }
 }
@@ -364,6 +403,8 @@ pub struct AnalysisParams {
     fields: Vec<AnalysisField>,
     interval: Option<String>,
     range: Option<String>,
+    #[serde(default)]
+    net: crate::Network,
 }
 
 impl AnalysisParams {
@@ -403,7 +444,7 @@ impl AnalysisParams {
                 .join(", ")
         };
         sql.push_str(&fields);
-        sql.push_str(" from daily_summarized_data ");
+        sql.push_str(&format!(" from {} ", self.net.daily_summarized_data()));
         sql.push_str(&format!(
             "where day >= '{}'::date and day < '{}'::date ",
             start_time, end_time
@@ -466,10 +507,14 @@ pub async fn query_analysis(
                         .push((timestamp, serde_json::Value::Number(value.into())));
                 }
                 AnalysisField::Capacity => {
-                    let value: String = row.get(table.name.to_sql().as_str());
+                    let mut values = Vec::new();
+                    for name in table.name.to_sql().split(", ") {
+                        let value: String = row.get(name);
+                        values.push(serde_json::Value::String(format!("0x{}", value)));
+                    }
                     table
                         .points
-                        .push((timestamp, serde_json::Value::String(format!("0x{}", value))));
+                        .push((timestamp, serde_json::Value::Array(values)));
                 }
                 AnalysisField::Nodes => {
                     let value: i32 = row.get(table.name.to_sql().as_str());

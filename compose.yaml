@@ -27,7 +27,8 @@ services:
       - DATABASE_URL=postgresql://postgres:password@timescaledb:5432/fiber_dashbord
       - RUST_LOG=info
       - HTTP_PORT=8080
-      - FIBER_RPC_URL=http://18.163.221.211:8227
+      - FIBER_MAINNET_RPC_URL=http://18.163.221.211:8227
+      - FIBER_TESTNET_RPC_URL=http://18.163.221.211:8227
     ports:
       - "8080:8080"
     networks:

@@ -7,7 +7,10 @@ use multiaddr::MultiAddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::types::{ChannelUpdateInfo, U64Hex, U128Hex};
+use crate::{
+    Network,
+    types::{ChannelUpdateInfo, U64Hex, U128Hex},
+};
 
 const SELECT_HOURLY_NODES_SQL: &str = "SELECT DISTINCT ON (node_id)
   online_nodes_hourly.node_id as node_id,
@@ -21,7 +24,7 @@ const SELECT_HOURLY_NODES_SQL: &str = "SELECT DISTINCT ON (node_id)
   city,
   region,
   loc
-FROM online_nodes_hourly
+FROM {}
 WHERE bucket >= $1::timestamp
 ORDER BY node_id, bucket DESC";
 
@@ -45,13 +48,13 @@ const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   update_of_node2_tlc_expiry_delta,
   update_of_node2_tlc_minimum_value,
   update_of_node2_fee_rate,
-  udt_infos.name AS udt_name,
-  udt_infos.code_hash AS udt_code_hash,
-  udt_infos.hash_type AS udt_hash_type,
-  udt_infos.args AS udt_args,
-  udt_infos.auto_accept_amount AS udt_auto_accept_amount
-FROM online_channels_hourly
-left join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
+  {2}.name AS udt_name,
+  {2}.code_hash AS udt_code_hash,
+  {2}.hash_type AS udt_hash_type,
+  {2}.args AS udt_args,
+  {2}.auto_accept_amount AS udt_auto_accept_amount
+FROM {1}
+left join udt_infos on {1}.udt_type_script = {2}.id
 WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
@@ -67,8 +70,8 @@ const SELECT_MONTHLY_NODES_SQL: &str = "SELECT
   city,
   region,
   loc
-FROM online_nodes_hourly
-WHERE bucket >= $1::timestamp
+FROM {}
+WHERE bucket >= $1::timestamp and bucket < $2::timestamp
 ORDER BY node_id, bucket DESC";
 
 const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT
@@ -91,14 +94,14 @@ const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT
   update_of_node2_tlc_expiry_delta,
   update_of_node2_tlc_minimum_value,
   update_of_node2_fee_rate,
-  udt_infos.name AS udt_name,
-  udt_infos.code_hash AS udt_code_hash,
-  udt_infos.hash_type AS udt_hash_type,
-  udt_infos.args AS udt_args,
-  udt_infos.auto_accept_amount AS udt_auto_accept_amount
-FROM online_channels_hourly
-left join udt_infos on online_channels_hourly.udt_type_script = udt_infos.id
-WHERE bucket >= $1::timestamp
+  {2}.name AS udt_name,
+  {2}.code_hash AS udt_code_hash,
+  {2}.hash_type AS udt_hash_type,
+  {2}.args AS udt_args,
+  {2}.auto_accept_amount AS udt_auto_accept_amount
+FROM {1}
+left join {2} on {1}.udt_type_script = {2}.id
+WHERE bucket >= $1::timestamp and bucket < $2::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
 const PAGE_SIZE: usize = 500;
@@ -170,9 +173,10 @@ pub struct HourlyNodeInfoDBRead {
 
 impl HourlyNodeInfoDBRead {
     /// fetch all hourly node information from the database.
-    pub async fn fetch_all(pool: &Pool<Postgres>) -> Result<Vec<Self>, sqlx::Error> {
+    pub async fn fetch_all(pool: &Pool<Postgres>, net: Network) -> Result<Vec<Self>, sqlx::Error> {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        sqlx::query_as::<_, Self>(SELECT_HOURLY_NODES_SQL)
+        let sql = SELECT_HOURLY_NODES_SQL.replace("{}", net.online_nodes_hourly());
+        sqlx::query_as::<_, Self>(&sql)
             .bind(hour_bucket)
             .fetch_all(pool)
             .await
@@ -181,49 +185,33 @@ impl HourlyNodeInfoDBRead {
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,
+        net: Network,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_HOURLY_NODES_SQL, PAGE_SIZE, offset
-        ))
-        .bind(hour_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
+        let sql = SELECT_HOURLY_NODES_SQL.replace("{}", net.online_nodes_hourly());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(hour_bucket)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
     }
 
     pub async fn fetch_by_page_monthly(
         pool: &Pool<Postgres>,
-        month_bucket: DateTime<Utc>,
         page: usize,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        net: Network,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_MONTHLY_NODES_SQL, PAGE_SIZE, offset
-        ))
-        .bind(month_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
-    }
-
-    pub async fn fetch_by_page_nearly_a_month(
-        pool: &Pool<Postgres>,
-        page: usize,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
-        let month_bucket = Utc::now() - chrono::Duration::days(30);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_MONTHLY_NODES_SQL, PAGE_SIZE, offset
-        ))
-        .bind(month_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
+        let sql = SELECT_MONTHLY_NODES_SQL.replace("{}", net.online_nodes_hourly());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(start)
+            .bind(end)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
     }
 }
 
@@ -428,9 +416,12 @@ pub struct HourlyChannelInfoDBRead {
 
 impl HourlyChannelInfoDBRead {
     /// fetch all active channel information from the database.
-    pub async fn fetch_all(pool: &Pool<Postgres>) -> Result<Vec<Self>, sqlx::Error> {
+    pub async fn fetch_all(pool: &Pool<Postgres>, net: Network) -> Result<Vec<Self>, sqlx::Error> {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        sqlx::query_as::<_, Self>(SELECT_HOURLY_CHANNELS_SQL)
+        let sql = SELECT_HOURLY_CHANNELS_SQL
+            .replace("{1}", net.online_channels_hourly())
+            .replace("{2}", net.udt_infos());
+        sqlx::query_as::<_, Self>(&sql)
             .bind(hour_bucket)
             .fetch_all(pool)
             .await
@@ -439,62 +430,36 @@ impl HourlyChannelInfoDBRead {
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,
+        net: Network,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_HOURLY_CHANNELS_SQL, PAGE_SIZE, offset
-        ))
-        .bind(hour_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
+        let sql = SELECT_HOURLY_CHANNELS_SQL
+            .replace("{1}", net.online_channels_hourly())
+            .replace("{2}", net.udt_infos());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(hour_bucket)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
     }
 
     pub async fn fetch_by_page_monthly(
         pool: &Pool<Postgres>,
-        month_bucket: DateTime<Utc>,
         page: usize,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        net: Network,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_MONTHLY_CHANNELS_SQL, PAGE_SIZE, offset
-        ))
-        .bind(month_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
-    }
-
-    pub async fn fetch_by_page_nearly_a_month(
-        pool: &Pool<Postgres>,
-        page: usize,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
-        let month_bucket = Utc::now() - chrono::Duration::days(30);
-        sqlx::query_as::<_, Self>(&format!(
-            "{} LIMIT {} OFFSET {}",
-            SELECT_MONTHLY_CHANNELS_SQL, PAGE_SIZE, offset
-        ))
-        .bind(month_bucket)
-        .fetch_all(pool)
-        .await
-        .map(|rows| (rows, page.saturating_add(1)))
+        let sql = SELECT_MONTHLY_CHANNELS_SQL
+            .replace("{1}", net.online_channels_hourly())
+            .replace("{2}", net.udt_infos());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(start)
+            .bind(end)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
     }
 }
-
-// SELECT DISTINCT ON (time_bucket('1 day', bucket), channel_outpoint)
-//   time_bucket('1 day', bucket) AS day_bucket,
-//   channel_outpoint,
-//   capacity
-// FROM online_channels_hourly
-// ORDER BY time_bucket('1 day', bucket), channel_outpoint, bucket DESC
-
-// SELECT
-//   time_bucket('1 day', bucket) AS day_bucket,
-//   COUNT(DISTINCT node_id) AS unique_nodes_count
-// FROM online_nodes_hourly
-// GROUP BY day_bucket
-// ORDER BY day_bucket DESC;

@@ -42,3 +42,72 @@ pub async fn init_db(pool: &sqlx::Pool<sqlx::Postgres>) {
             .expect("Failed to execute initialization SQL");
     }
 }
+
+#[derive(
+    Debug, Clone, Copy, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default,
+)]
+pub enum Network {
+    #[serde(alias = "mainnet")]
+    #[default]
+    Mainnet,
+    #[serde(alias = "testnet")]
+    Testnet,
+}
+
+impl Network {
+    pub fn node_infos(&self) -> &str {
+        match self {
+            Network::Mainnet => "node_infos",
+            Network::Testnet => "node_infos_testnet",
+        }
+    }
+
+    pub fn channel_infos(&self) -> &str {
+        match self {
+            Network::Mainnet => "channel_infos",
+            Network::Testnet => "channel_infos_testnet",
+        }
+    }
+
+    pub fn online_nodes_hourly(&self) -> &str {
+        match self {
+            Network::Mainnet => "online_nodes_hourly",
+            Network::Testnet => "online_nodes_hourly_testnet",
+        }
+    }
+
+    pub fn online_channels_hourly(&self) -> &str {
+        match self {
+            Network::Mainnet => "online_channels_hourly",
+            Network::Testnet => "online_channels_hourly_testnet",
+        }
+    }
+
+    pub fn udt_infos(&self) -> &str {
+        match self {
+            Network::Mainnet => "udt_infos",
+            Network::Testnet => "udt_infos_testnet",
+        }
+    }
+
+    pub fn udt_dep(&self) -> &str {
+        match self {
+            Network::Mainnet => "udt_dep",
+            Network::Testnet => "udt_dep_testnet",
+        }
+    }
+
+    pub fn node_udt_relations(&self) -> &str {
+        match self {
+            Network::Mainnet => "node_udt_relations",
+            Network::Testnet => "node_udt_relations_testnet",
+        }
+    }
+
+    pub fn daily_summarized_data(&self) -> &str {
+        match self {
+            Network::Mainnet => "daily_summarized_data",
+            Network::Testnet => "daily_summarized_data_testnet",
+        }
+    }
+}

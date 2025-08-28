@@ -61,107 +61,131 @@ async fn http_server() {
 }
 
 async fn timed_commit_states() {
-    let rpc_url =
-        std::env::var("FIBER_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
-    let rpc = RpcClient::new(&rpc_url);
+    let mainnet_rpc_url =
+        std::env::var("FIBER_MAINNET_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
+    let testnet_rpc_url =
+        std::env::var("FIBER_TESTNET_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
+    let mainnet_rpc = RpcClient::new(&mainnet_rpc_url);
+    let testnet_rpc = RpcClient::new(&testnet_rpc_url);
     loop {
-        let mut raw_nodes = Vec::new();
-        let mut after_cursor = None;
+        for net in [
+            fiber_dashbord_backend::Network::Mainnet,
+            fiber_dashbord_backend::Network::Testnet,
+        ] {
+            let rpc = match net {
+                fiber_dashbord_backend::Network::Mainnet => &mainnet_rpc,
+                fiber_dashbord_backend::Network::Testnet => &testnet_rpc,
+            };
 
-        loop {
-            let nodes = rpc
-                .get_node_graph(GraphNodesParams {
-                    limit: None,
-                    after: after_cursor,
-                })
-                .await
-                .expect("Failed to get node graph");
+            let mut raw_nodes = Vec::new();
+            let mut after_cursor = None;
 
-            let has_more = nodes.nodes.len() == 500;
-            raw_nodes.extend(nodes.nodes);
+            loop {
+                let nodes = rpc
+                    .get_node_graph(GraphNodesParams {
+                        limit: None,
+                        after: after_cursor,
+                    })
+                    .await
+                    .expect("Failed to get node graph");
 
-            if !has_more {
-                break;
+                let has_more = nodes.nodes.len() == 500;
+                raw_nodes.extend(nodes.nodes);
+
+                if !has_more {
+                    break;
+                }
+
+                after_cursor = Some(nodes.last_cursor);
             }
 
-            after_cursor = Some(nodes.last_cursor);
-        }
+            let mut raw_channels = Vec::new();
+            let mut after_cursor = None;
 
-        let mut raw_channels = Vec::new();
-        let mut after_cursor = None;
+            loop {
+                let channels = rpc
+                    .get_channel_graph(GraphChannelsParams {
+                        limit: None,
+                        after: after_cursor,
+                    })
+                    .await
+                    .expect("Failed to get channel graph");
 
-        loop {
-            let channels = rpc
-                .get_channel_graph(GraphChannelsParams {
-                    limit: None,
-                    after: after_cursor,
-                })
-                .await
-                .expect("Failed to get channel graph");
+                let has_more = channels.channels.len() == 500;
+                raw_channels.extend(channels.channels);
 
-            let has_more = channels.channels.len() == 500;
-            raw_channels.extend(channels.channels);
+                if !has_more {
+                    break;
+                }
 
-            if !has_more {
-                break;
+                after_cursor = Some(channels.last_cursor);
             }
 
-            after_cursor = Some(channels.last_cursor);
-        }
+            let mut node_schemas = Vec::with_capacity(raw_nodes.len());
+            let mut udt_infos = Vec::new();
+            let mut udt_dep_relations = Vec::new();
+            let mut udt_node_relations = Vec::new();
+            for node in raw_nodes {
+                let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
+                    from_rpc_to_db_schema(node, net).await;
+                node_schemas.push(node_schema);
+                udt_infos.extend(udt_info);
+                udt_dep_relations.extend(udt_dep_relation);
+                udt_node_relations.extend(udt_node_relation);
+            }
 
-        let mut node_schemas = Vec::with_capacity(raw_nodes.len());
-        let mut udt_infos = Vec::new();
-        let mut udt_dep_relations = Vec::new();
-        let mut udt_node_relations = Vec::new();
-        for node in raw_nodes {
-            let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
-                from_rpc_to_db_schema(node).await;
-            node_schemas.push(node_schema);
-            udt_infos.extend(udt_info);
-            udt_dep_relations.extend(udt_dep_relation);
-            udt_node_relations.extend(udt_node_relation);
-        }
+            let mut channel_schemas = Vec::with_capacity(raw_channels.len());
+            for channel in raw_channels {
+                let channel_schema: ChannelInfoDBSchema = (channel, net).into();
+                channel_schemas.push(channel_schema);
+            }
 
-        let mut channel_schemas = Vec::with_capacity(raw_channels.len());
-        for channel in raw_channels {
-            let channel_schema: ChannelInfoDBSchema = channel.into();
-            channel_schemas.push(channel_schema);
-        }
+            log::info!(
+                "{:?} Fetched {} nodes and {} channels",
+                net,
+                node_schemas.len(),
+                channel_schemas.len()
+            );
 
-        log::info!(
-            "Fetched {} nodes and {} channels",
-            node_schemas.len(),
-            channel_schemas.len()
-        );
+            let now = Utc::now();
 
-        let now = Utc::now();
-
-        let pool = get_pg_pool();
-        insert_batch(
-            pool,
-            &udt_infos,
-            &udt_dep_relations,
-            &udt_node_relations,
-            &node_schemas,
-            &channel_schemas,
-            &now,
-        )
-        .await
-        .expect("Failed to insert batch");
-        let count = sqlx::query("SELECT COUNT(*) FROM online_nodes_hourly")
-            .fetch_one(pool)
+            let pool = get_pg_pool();
+            insert_batch(
+                pool,
+                &udt_infos,
+                &udt_dep_relations,
+                &udt_node_relations,
+                &node_schemas,
+                &channel_schemas,
+                &now,
+                net,
+            )
             .await
-            .map(|row| row.get::<i64, _>(0))
-            .expect("Failed to count rows");
-        if count == 0 {
-            sqlx::query("CALL refresh_continuous_aggregate('online_nodes_hourly', NULL, NULL)")
-                .execute(pool)
+            .expect("Failed to insert batch");
+            let sql = format!("SELECT COUNT(*) FROM {}", net.online_nodes_hourly());
+            let count = sqlx::query(&sql)
+                .fetch_one(pool)
                 .await
-                .expect("Failed to refresh continuous aggregate");
-            sqlx::query("CALL refresh_continuous_aggregate('online_channels_hourly', NULL, NULL)")
-                .execute(pool)
-                .await
-                .expect("Failed to refresh continuous aggregate");
+                .map(|row| row.get::<i64, _>(0))
+                .expect("Failed to count rows");
+            if count == 0 {
+                let flush_nodes_sql = format!(
+                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                    net.online_nodes_hourly()
+                );
+                let flush_channels_sql = format!(
+                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                    net.online_channels_hourly()
+                );
+                sqlx::query(&flush_nodes_sql)
+                    .execute(pool)
+                    .await
+                    .expect("Failed to refresh continuous aggregate");
+                sqlx::query(&flush_channels_sql)
+                    .execute(pool)
+                    .await
+                    .expect("Failed to refresh continuous aggregate");
+            }
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * 30)).await;
     }
