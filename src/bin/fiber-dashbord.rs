@@ -67,6 +67,7 @@ async fn timed_commit_states() {
         std::env::var("FIBER_TESTNET_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
     let mainnet_rpc = RpcClient::new(&mainnet_rpc_url);
     let testnet_rpc = RpcClient::new(&testnet_rpc_url);
+    let (mut testnet_init, mut mainnet_init) = (false, false);
     loop {
         for net in [
             fiber_dashbord_backend::Network::Mainnet,
@@ -162,29 +163,38 @@ async fn timed_commit_states() {
             )
             .await
             .expect("Failed to insert batch");
-            let sql = format!("SELECT COUNT(*) FROM {}", net.online_nodes_hourly());
-            let count = sqlx::query(&sql)
-                .fetch_one(pool)
-                .await
-                .map(|row| row.get::<i64, _>(0))
-                .expect("Failed to count rows");
-            if count == 0 {
-                let flush_nodes_sql = format!(
-                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
-                    net.online_nodes_hourly()
-                );
-                let flush_channels_sql = format!(
-                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
-                    net.online_channels_hourly()
-                );
-                sqlx::query(&flush_nodes_sql)
-                    .execute(pool)
+            if match net {
+                fiber_dashbord_backend::Network::Mainnet => !mainnet_init,
+                fiber_dashbord_backend::Network::Testnet => !testnet_init,
+            } {
+                let sql = format!("SELECT COUNT(*) FROM {}", net.online_nodes_hourly());
+                let count = sqlx::query(&sql)
+                    .fetch_one(pool)
                     .await
-                    .expect("Failed to refresh continuous aggregate");
-                sqlx::query(&flush_channels_sql)
-                    .execute(pool)
-                    .await
-                    .expect("Failed to refresh continuous aggregate");
+                    .map(|row| row.get::<i64, _>(0))
+                    .expect("Failed to count rows");
+                if count == 0 {
+                    let flush_nodes_sql = format!(
+                        "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                        net.online_nodes_hourly()
+                    );
+                    let flush_channels_sql = format!(
+                        "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                        net.online_channels_hourly()
+                    );
+                    sqlx::query(&flush_nodes_sql)
+                        .execute(pool)
+                        .await
+                        .expect("Failed to refresh continuous aggregate");
+                    sqlx::query(&flush_channels_sql)
+                        .execute(pool)
+                        .await
+                        .expect("Failed to refresh continuous aggregate");
+                }
+                match net {
+                    fiber_dashbord_backend::Network::Mainnet => mainnet_init = true,
+                    fiber_dashbord_backend::Network::Testnet => testnet_init = true,
+                }
             }
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * 30)).await;
