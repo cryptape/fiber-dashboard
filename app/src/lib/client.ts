@@ -24,13 +24,26 @@ import {
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
 export class APIClient {
-  constructor(public baseUrl: string = API_CONFIG.baseUrl) {}
+  constructor(
+    public baseUrl: string = API_CONFIG.baseUrl,
+    public net: "mainnet" | "testnet" = "mainnet"
+  ) {}
+
+  static createMainnetClient(baseUrl?: string): APIClient {
+    return new APIClient(baseUrl, "mainnet");
+  }
+
+  static createTestnetClient(baseUrl?: string): APIClient {
+    return new APIClient(baseUrl, "testnet");
+  }
 
   private async apiRequest<T>(
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Add net parameter to all requests
+    const separator = endpoint.includes("?") ? "&" : "?";
+    const url = `${this.baseUrl}${endpoint}${separator}net=${this.net}`;
 
     try {
       const response = await fetch(url, {
@@ -59,8 +72,15 @@ export class APIClient {
     return this.apiRequest<NodeResponse>(`/nodes_hourly?page=${page}`);
   }
 
-  async getHistoricalNodesByPage(page: number = 0): Promise<NodeResponse> {
-    return this.apiRequest<NodeResponse>(`/nodes_nearly_monthly?page=${page}`);
+  async getHistoricalNodesByPage(
+    page: number = 0,
+    start?: string,
+    end?: string
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_nearly_monthly?page=${page}`;
+    if (start) endpoint += `&start=${start}`;
+    if (end) endpoint += `&end=${end}`;
+    return this.apiRequest<NodeResponse>(endpoint);
   }
 
   async getActiveChannelsByPage(page: number = 0): Promise<ChannelResponse> {
@@ -68,11 +88,14 @@ export class APIClient {
   }
 
   async getHistoricalChannelsByPage(
-    page: number = 0
+    page: number = 0,
+    start?: string,
+    end?: string
   ): Promise<ChannelResponse> {
-    return this.apiRequest<ChannelResponse>(
-      `/channels_nearly_monthly?page=${page}`
-    );
+    let endpoint = `/channels_nearly_monthly?page=${page}`;
+    if (start) endpoint += `&start=${start}`;
+    if (end) endpoint += `&end=${end}`;
+    return this.apiRequest<ChannelResponse>(endpoint);
   }
 
   async getNodeUdtInfos(nodeId: string): Promise<UdtCfgInfos> {
@@ -160,7 +183,10 @@ export class APIClient {
     return allChannels;
   }
 
-  async fetchAllHistoricalNodes(): Promise<RustNodeInfo[]> {
+  async fetchAllHistoricalNodes(
+    start?: string,
+    end?: string
+  ): Promise<RustNodeInfo[]> {
     const allNodes: RustNodeInfo[] = [];
     let page = 0;
     let hasMore = true;
@@ -168,9 +194,7 @@ export class APIClient {
 
     while (hasMore) {
       try {
-        const response = await this.apiRequest<NodeResponse>(
-          `/nodes_nearly_monthly?page=${page}`
-        );
+        const response = await this.getHistoricalNodesByPage(page, start, end);
         const nodes = response.nodes || [];
         allNodes.push(...nodes);
 
@@ -185,7 +209,10 @@ export class APIClient {
     return allNodes;
   }
 
-  async fetchAllHistoricalChannels(): Promise<RustChannelInfo[]> {
+  async fetchAllHistoricalChannels(
+    start?: string,
+    end?: string
+  ): Promise<RustChannelInfo[]> {
     const allChannels: RustChannelInfo[] = [];
     let page = 0;
     let hasMore = true;
@@ -193,8 +220,10 @@ export class APIClient {
 
     while (hasMore) {
       try {
-        const response = await this.apiRequest<ChannelResponse>(
-          `/channels_nearly_monthly?page=${page}`
+        const response = await this.getHistoricalChannelsByPage(
+          page,
+          start,
+          end
         );
         const channels = response.channels || [];
         allChannels.push(...channels);
@@ -259,11 +288,12 @@ export class APIClient {
     );
 
     // Convert the data format to match the expected TimeSeries format
+    // Capacity now returns [sum, avg, min, max, median], we'll use sum for total capacity
     const capacityTimeSeries: TimeSeriesData[] =
       capacitySeries?.points.map(point => {
         return {
           timestamp: point[0],
-          value: APIUtils.parseChannelCapacityToCKB(point[1]),
+          value: APIUtils.parseChannelCapacityToCKB(point[1][0]), // Use sum (first element)
         };
       }) || [];
 
@@ -281,6 +311,48 @@ export class APIClient {
       channels: {
         label: "Total Channels",
         data: channelsTimeSeries,
+      },
+    };
+  }
+
+  async fetchCapacityHistoryTimeSeriesWithAggregation(
+    aggregationType: "sum" | "avg" | "min" | "max" | "median" = "sum",
+    range: "1M" | "3M" | "6M" | "1Y" | "2Y" = "1M",
+    interval: "day" = "day"
+  ) {
+    // Use the new getHistoryAnalysis API to get time series data
+    const historyAnalysis = await this.getHistoryAnalysis({
+      range,
+      interval,
+      fields: ["capacity"],
+    });
+
+    // Extract capacity series from the response
+    const capacitySeries = historyAnalysis.series.find(
+      s => s.name === "Capacity"
+    );
+
+    const aggregationIndex = {
+      sum: 0,
+      avg: 1,
+      min: 2,
+      max: 3,
+      median: 4,
+    }[aggregationType];
+
+    // Convert the data format to match the expected TimeSeries format
+    const capacityTimeSeries: TimeSeriesData[] =
+      capacitySeries?.points.map(point => {
+        return {
+          timestamp: point[0],
+          value: APIUtils.parseChannelCapacityToCKB(point[1][aggregationIndex]),
+        };
+      }) || [];
+
+    return {
+      capacity: {
+        label: `${aggregationType.charAt(0).toUpperCase() + aggregationType.slice(1)} Capacity (CKB)`,
+        data: capacityTimeSeries,
       },
     };
   }
@@ -352,10 +424,13 @@ export class APIClient {
     };
   }
 
-  async fetchHistoricalDashboardData(): Promise<DashboardData> {
+  async fetchHistoricalDashboardData(
+    start?: string,
+    end?: string
+  ): Promise<DashboardData> {
     const [nodes, channels] = await Promise.all([
-      this.fetchAllHistoricalNodes(),
-      this.fetchAllHistoricalChannels(),
+      this.fetchAllHistoricalNodes(start, end),
+      this.fetchAllHistoricalChannels(start, end),
     ]);
 
     const geoNodes = APIUtils.calculateGeographicalDistribution(
