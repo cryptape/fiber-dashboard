@@ -11,6 +11,10 @@ use sqlx::{Row, types::chrono::Utc};
 
 fn main() {
     env_logger::init();
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("Panic occurred: {:?}", info);
+        std::process::exit(1);
+    }));
 
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -82,44 +86,50 @@ async fn timed_commit_states() {
             let mut after_cursor = None;
 
             loop {
-                let nodes = rpc
+                if let Ok(nodes) = rpc
                     .get_node_graph(GraphNodesParams {
                         limit: None,
-                        after: after_cursor,
+                        after: after_cursor.clone(),
                     })
                     .await
-                    .expect("Failed to get node graph");
+                {
+                    let has_more = nodes.nodes.len() == 500;
+                    raw_nodes.extend(nodes.nodes);
 
-                let has_more = nodes.nodes.len() == 500;
-                raw_nodes.extend(nodes.nodes);
+                    if !has_more {
+                        break;
+                    }
 
-                if !has_more {
-                    break;
+                    after_cursor = Some(nodes.last_cursor);
+                } else {
+                    log::warn!("Failed to get node graph");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
-
-                after_cursor = Some(nodes.last_cursor);
             }
 
             let mut raw_channels = Vec::new();
             let mut after_cursor = None;
 
             loop {
-                let channels = rpc
+                if let Ok(channels) = rpc
                     .get_channel_graph(GraphChannelsParams {
                         limit: None,
-                        after: after_cursor,
+                        after: after_cursor.clone(),
                     })
                     .await
-                    .expect("Failed to get channel graph");
+                {
+                    let has_more = channels.channels.len() == 500;
+                    raw_channels.extend(channels.channels);
 
-                let has_more = channels.channels.len() == 500;
-                raw_channels.extend(channels.channels);
+                    if !has_more {
+                        break;
+                    }
 
-                if !has_more {
-                    break;
+                    after_cursor = Some(channels.last_cursor);
+                } else {
+                    log::warn!("Failed to get channel graph");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
-
-                after_cursor = Some(channels.last_cursor);
             }
 
             let mut node_schemas = Vec::with_capacity(raw_nodes.len());
