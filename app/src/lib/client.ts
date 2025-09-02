@@ -29,14 +29,6 @@ export class APIClient {
     public net: "mainnet" | "testnet" = "mainnet"
   ) {}
 
-  static createMainnetClient(baseUrl?: string): APIClient {
-    return new APIClient(baseUrl, "mainnet");
-  }
-
-  static createTestnetClient(baseUrl?: string): APIClient {
-    return new APIClient(baseUrl, "testnet");
-  }
-
   private async apiRequest<T>(
     endpoint: string,
     options?: RequestInit
@@ -461,6 +453,18 @@ export class APIClient {
       nodeLocations,
       ispRankings,
     };
+  }
+}
+
+export class MainnetAPIClient extends APIClient {
+  constructor(baseUrl?: string) {
+    super(baseUrl, "mainnet");
+  }
+}
+
+export class TestnetAPIClient extends APIClient {
+  constructor(baseUrl?: string) {
+    super(baseUrl, "testnet");
   }
 }
 

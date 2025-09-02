@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { TimeSeries } from "@/lib/types";
-import { APIClient } from "@/lib/client";
+import { useNetwork } from "@/features/networks/context/NetworkContext";
 import DualAxisTimeSeriesChart from "@/shared/components/chart/DualAxisTimeSeriesChart";
 
 export default function HistoryChannelCapacityChart() {
+  const { apiClient, currentNetwork } = useNetwork();
   const [capacitySeries, setCapacitySeries] = useState<TimeSeries | null>(null);
   const [channelsSeries, setChannelsSeries] = useState<TimeSeries | null>(null);
   const [loading, setLoading] = useState(true);
@@ -15,7 +16,6 @@ export default function HistoryChannelCapacityChart() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const apiClient = new APIClient();
         const timeSeriesData =
           await apiClient.fetchChannelCapacityHistoryTimeSeries();
 
@@ -30,7 +30,7 @@ export default function HistoryChannelCapacityChart() {
     };
 
     fetchData();
-  }, []);
+  }, [apiClient, currentNetwork]);
 
   if (loading) {
     return (

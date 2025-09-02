@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { APIClient } from "../client";
+import { APIClient, MainnetAPIClient, TestnetAPIClient } from "../client";
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -21,12 +21,12 @@ describe("API Functions", () => {
     });
 
     it("creates mainnet client via factory method", () => {
-      const client = APIClient.createMainnetClient();
+      const client = new MainnetAPIClient();
       expect(client.net).toBe("mainnet");
     });
 
     it("creates testnet client via factory method", () => {
-      const client = APIClient.createTestnetClient();
+      const client = new TestnetAPIClient();
       expect(client.net).toBe("testnet");
     });
   });

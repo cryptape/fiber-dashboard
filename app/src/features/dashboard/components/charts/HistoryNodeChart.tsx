@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { TimeSeries } from "@/lib/types";
-import { APIClient } from "@/lib/client";
+import { useNetwork } from "@/features/networks/context/NetworkContext";
 import TimeSeriesChart from "@/shared/components/chart/TimeSeriesChart";
 
 export default function HistoryNodeChart() {
+  const { apiClient, currentNetwork } = useNetwork();
   const [nodesSeries, setNodesSeries] = useState<TimeSeries | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,9 +15,8 @@ export default function HistoryNodeChart() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const apiClient = new APIClient();
         const timeSeriesData = await apiClient.fetchNodeHistoryTimeSeries();
-
+        console.log("timeSeriesData", timeSeriesData);
         setNodesSeries(timeSeriesData.nodes);
       } catch (err) {
         console.error("Error fetching node history:", err);
@@ -27,7 +27,7 @@ export default function HistoryNodeChart() {
     };
 
     fetchData();
-  }, []);
+  }, [apiClient, currentNetwork]);
 
   if (loading) {
     return (

@@ -14,32 +14,34 @@ import {
 } from "@/shared/components/ui/card";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { Globe, ArrowUpRight, Network } from "lucide-react";
-import { apiClient } from "@/lib";
+import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { SwipeableKpiCards } from "./SwipeableKpiCards";
 import NetworkGraphChart from "./charts/NetworkGraphChart";
 import NodesRankingChart from "./charts/NodesRankingChart";
 
 export default function Dashboard() {
+  const { apiClient, currentNetwork } = useNetwork();
+
   const { data: kpiData, isLoading: kpiLoading } = useQuery({
-    queryKey: queryKeys.kpis,
+    queryKey: [...queryKeys.kpis, currentNetwork],
     queryFn: () => apiClient.fetchKpiData(),
     refetchInterval: 30000, // 30秒轮询
   });
 
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
-    queryKey: queryKeys.geoNodes,
+    queryKey: [...queryKeys.geoNodes, currentNetwork],
     queryFn: () => apiClient.fetchDashboardData(),
     refetchInterval: 300000, // 5分钟轮询
   });
 
   const { data: nodes, isLoading: nodesLoading } = useQuery({
-    queryKey: queryKeys.nodes,
+    queryKey: [...queryKeys.nodes, currentNetwork],
     queryFn: () => apiClient.fetchAllActiveNodes(),
     refetchInterval: 300000, // 5分钟轮询
   });
 
   const { data: channels, isLoading: channelsLoading } = useQuery({
-    queryKey: queryKeys.channels,
+    queryKey: [...queryKeys.channels, currentNetwork],
     queryFn: () => apiClient.fetchAllActiveChannels(),
     refetchInterval: 300000, // 5分钟轮询
   });
