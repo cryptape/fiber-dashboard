@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar, Footer } from "@/shared/components/layout";
+import { NetworkProvider } from "@/features/networks/context/NetworkContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,9 +41,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased min-h-screen bg-background text-foreground flex flex-col`}
       >
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <NetworkProvider>
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </NetworkProvider>
       </body>
     </html>
   );

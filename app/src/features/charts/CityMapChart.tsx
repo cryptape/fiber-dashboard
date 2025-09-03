@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts";
 import { CityNode, NodeLocation } from "@/lib/types";
-import worldGeoJson from "../../maps/world.json";
+import worldGeoJson from "../dashboard/maps/world.json";
 import { formatCompactNumber } from "@/lib";
 
 interface CityMapChartProps {

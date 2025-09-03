@@ -215,7 +215,16 @@ export interface ChannelsSeries {
 
 export interface CapacitySeries {
   name: "Capacity";
-  points: [timestamp: string, value: string][];
+  points: [
+    timestamp: string,
+    capacity: [
+      sum: string,
+      avg: string,
+      min: string,
+      max: string,
+      median: string,
+    ],
+  ][];
 }
 
 export interface NodesSeries {

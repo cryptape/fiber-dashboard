@@ -24,13 +24,18 @@ import {
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
 export class APIClient {
-  constructor(public baseUrl: string = API_CONFIG.baseUrl) {}
+  constructor(
+    public baseUrl: string = API_CONFIG.baseUrl,
+    public net: "mainnet" | "testnet" = "mainnet"
+  ) {}
 
   private async apiRequest<T>(
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Add net parameter to all requests
+    const separator = endpoint.includes("?") ? "&" : "?";
+    const url = `${this.baseUrl}${endpoint}${separator}net=${this.net}`;
 
     try {
       const response = await fetch(url, {
@@ -59,8 +64,15 @@ export class APIClient {
     return this.apiRequest<NodeResponse>(`/nodes_hourly?page=${page}`);
   }
 
-  async getHistoricalNodesByPage(page: number = 0): Promise<NodeResponse> {
-    return this.apiRequest<NodeResponse>(`/nodes_nearly_monthly?page=${page}`);
+  async getHistoricalNodesByPage(
+    page: number = 0,
+    start?: string,
+    end?: string
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_nearly_monthly?page=${page}`;
+    if (start) endpoint += `&start=${start}`;
+    if (end) endpoint += `&end=${end}`;
+    return this.apiRequest<NodeResponse>(endpoint);
   }
 
   async getActiveChannelsByPage(page: number = 0): Promise<ChannelResponse> {
@@ -68,11 +80,14 @@ export class APIClient {
   }
 
   async getHistoricalChannelsByPage(
-    page: number = 0
+    page: number = 0,
+    start?: string,
+    end?: string
   ): Promise<ChannelResponse> {
-    return this.apiRequest<ChannelResponse>(
-      `/channels_nearly_monthly?page=${page}`
-    );
+    let endpoint = `/channels_nearly_monthly?page=${page}`;
+    if (start) endpoint += `&start=${start}`;
+    if (end) endpoint += `&end=${end}`;
+    return this.apiRequest<ChannelResponse>(endpoint);
   }
 
   async getNodeUdtInfos(nodeId: string): Promise<UdtCfgInfos> {
@@ -160,7 +175,10 @@ export class APIClient {
     return allChannels;
   }
 
-  async fetchAllHistoricalNodes(): Promise<RustNodeInfo[]> {
+  async fetchAllHistoricalNodes(
+    start?: string,
+    end?: string
+  ): Promise<RustNodeInfo[]> {
     const allNodes: RustNodeInfo[] = [];
     let page = 0;
     let hasMore = true;
@@ -168,9 +186,7 @@ export class APIClient {
 
     while (hasMore) {
       try {
-        const response = await this.apiRequest<NodeResponse>(
-          `/nodes_nearly_monthly?page=${page}`
-        );
+        const response = await this.getHistoricalNodesByPage(page, start, end);
         const nodes = response.nodes || [];
         allNodes.push(...nodes);
 
@@ -185,7 +201,10 @@ export class APIClient {
     return allNodes;
   }
 
-  async fetchAllHistoricalChannels(): Promise<RustChannelInfo[]> {
+  async fetchAllHistoricalChannels(
+    start?: string,
+    end?: string
+  ): Promise<RustChannelInfo[]> {
     const allChannels: RustChannelInfo[] = [];
     let page = 0;
     let hasMore = true;
@@ -193,8 +212,10 @@ export class APIClient {
 
     while (hasMore) {
       try {
-        const response = await this.apiRequest<ChannelResponse>(
-          `/channels_nearly_monthly?page=${page}`
+        const response = await this.getHistoricalChannelsByPage(
+          page,
+          start,
+          end
         );
         const channels = response.channels || [];
         allChannels.push(...channels);
@@ -259,11 +280,12 @@ export class APIClient {
     );
 
     // Convert the data format to match the expected TimeSeries format
+    // Capacity now returns [sum, avg, min, max, median], we'll use sum for total capacity
     const capacityTimeSeries: TimeSeriesData[] =
       capacitySeries?.points.map(point => {
         return {
           timestamp: point[0],
-          value: APIUtils.parseChannelCapacityToCKB(point[1]),
+          value: APIUtils.parseChannelCapacityToCKB(point[1][0]), // Use sum (first element)
         };
       }) || [];
 
@@ -281,6 +303,48 @@ export class APIClient {
       channels: {
         label: "Total Channels",
         data: channelsTimeSeries,
+      },
+    };
+  }
+
+  async fetchCapacityHistoryTimeSeriesWithAggregation(
+    aggregationType: "sum" | "avg" | "min" | "max" | "median" = "sum",
+    range: "1M" | "3M" | "6M" | "1Y" | "2Y" = "1M",
+    interval: "day" = "day"
+  ) {
+    // Use the new getHistoryAnalysis API to get time series data
+    const historyAnalysis = await this.getHistoryAnalysis({
+      range,
+      interval,
+      fields: ["capacity"],
+    });
+
+    // Extract capacity series from the response
+    const capacitySeries = historyAnalysis.series.find(
+      s => s.name === "Capacity"
+    );
+
+    const aggregationIndex = {
+      sum: 0,
+      avg: 1,
+      min: 2,
+      max: 3,
+      median: 4,
+    }[aggregationType];
+
+    // Convert the data format to match the expected TimeSeries format
+    const capacityTimeSeries: TimeSeriesData[] =
+      capacitySeries?.points.map(point => {
+        return {
+          timestamp: point[0],
+          value: APIUtils.parseChannelCapacityToCKB(point[1][aggregationIndex]),
+        };
+      }) || [];
+
+    return {
+      capacity: {
+        label: `${aggregationType.charAt(0).toUpperCase() + aggregationType.slice(1)} Capacity (CKB)`,
+        data: capacityTimeSeries,
       },
     };
   }
@@ -352,10 +416,13 @@ export class APIClient {
     };
   }
 
-  async fetchHistoricalDashboardData(): Promise<DashboardData> {
+  async fetchHistoricalDashboardData(
+    start?: string,
+    end?: string
+  ): Promise<DashboardData> {
     const [nodes, channels] = await Promise.all([
-      this.fetchAllHistoricalNodes(),
-      this.fetchAllHistoricalChannels(),
+      this.fetchAllHistoricalNodes(start, end),
+      this.fetchAllHistoricalChannels(start, end),
     ]);
 
     const geoNodes = APIUtils.calculateGeographicalDistribution(
@@ -389,7 +456,38 @@ export class APIClient {
   }
 }
 
+export class MainnetAPIClient extends APIClient {
+  constructor(baseUrl?: string) {
+    super(baseUrl, "mainnet");
+  }
+}
+
+export class TestnetAPIClient extends APIClient {
+  constructor(baseUrl?: string) {
+    super(baseUrl, "testnet");
+  }
+}
+
 export class APIUtils {
+  static filterChannelsByValidNodes(
+    nodes: RustNodeInfo[],
+    channels: RustChannelInfo[]
+  ): RustChannelInfo[] {
+    const validNodeIds = new Set(nodes.map(node => node.node_id));
+    const validChannels = channels.filter(
+      channel =>
+        validNodeIds.has(channel.node1) && validNodeIds.has(channel.node2)
+    );
+
+    if (validChannels.length !== channels.length) {
+      console.warn(
+        `APIUtils: Filtered out ${channels.length - validChannels.length} channels with missing nodes. Total channels: ${channels.length}, Valid channels: ${validChannels.length}`
+      );
+    }
+
+    return validChannels;
+  }
+
   private static reduceChannelTotalCapacity(
     sum: number,
     channel: RustChannelInfo
@@ -405,6 +503,76 @@ export class APIUtils {
 
   static getTotalCapacityFromChannels(channels: RustChannelInfo[]) {
     return channels.reduce(APIUtils.reduceChannelTotalCapacity, 0);
+  }
+
+  static addGroupToChannels(channels: RustChannelInfo[]) {
+    const groupMap = new Map<string, number>();
+    let groupCounter = 0;
+
+    return channels.map(channel => {
+      // canonical key (only used in the Map)
+      const key = [channel.node1, channel.node2].sort().join("|");
+
+      let groupId = groupMap.get(key);
+      if (groupId === undefined) {
+        groupId = groupCounter++;
+        groupMap.set(key, groupId);
+      }
+
+      return { ...channel, group: groupId };
+    });
+  }
+
+  static getNodeChannelInfoFromChannels(
+    nodes: RustNodeInfo[],
+    channels: RustChannelInfo[]
+  ) {
+    const nodeCapacity = new Map<string, number>();
+    const nodeChannelCount = new Map<string, number>();
+
+    channels.forEach(channel => {
+      try {
+        const capacityInCKB = APIUtils.parseChannelCapacityToCKB(
+          channel.capacity
+        );
+        // Distribute capacity equally between both nodes
+        nodeCapacity.set(
+          channel.node1,
+          (nodeCapacity.get(channel.node1) || 0) + capacityInCKB / 2
+        );
+        nodeCapacity.set(
+          channel.node2,
+          (nodeCapacity.get(channel.node2) || 0) + capacityInCKB / 2
+        );
+
+        // Count channels for each node
+        nodeChannelCount.set(
+          channel.node1,
+          (nodeChannelCount.get(channel.node1) || 0) + 1
+        );
+        nodeChannelCount.set(
+          channel.node2,
+          (nodeChannelCount.get(channel.node2) || 0) + 1
+        );
+      } catch (error) {
+        console.warn("Error processing channel for node data:", error, channel);
+      }
+    });
+
+    return nodes.map(node => {
+      const totalCapacity =
+        Math.round(Math.max(0, nodeCapacity.get(node.node_id) || 0) * 100) /
+        100;
+      const totalChannels = nodeChannelCount.get(node.node_id) || 0;
+
+      return {
+        ...{
+          totalCapacity,
+          totalChannels,
+        },
+        ...node,
+      };
+    });
   }
 
   static getAverageChannelCapacity(

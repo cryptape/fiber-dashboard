@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/shared/components/ui/button";
 import { Badge } from "@/shared/components/ui/badge";
+import { NetworkSwitcher } from "@/features/networks/components/NetworkSwitcher";
 import { Zap, Menu, X, ExternalLink, Search, Keyboard } from "lucide-react";
 import { useState } from "react";
 import { APP_CONFIG } from "@/lib/const";
@@ -26,7 +27,6 @@ export default function Navbar() {
     <nav className="bg-white/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50 shadow-lg">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo and Brand */}
           <div className="flex items-center space-x-3">
             <Link href="/" className="flex items-center space-x-2 group">
               <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-all duration-200 group-hover:scale-105">
@@ -111,10 +111,8 @@ export default function Navbar() {
               })}
             </div>
 
-            {/* Download Button */}
-            <Button size="sm" className="btn-zed-primary">
-              Testnet
-            </Button>
+            {/* Network Switcher */}
+            <NetworkSwitcher />
           </div>
 
           {/* Mobile menu button */}

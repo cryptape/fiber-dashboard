@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import * as echarts from "echarts";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
-import worldGeoJson from "../../maps/world.json";
+import worldGeoJson from "../dashboard/maps/world.json";
 import { formatCompactNumber } from "@/lib/utils";
+import { APIUtils } from "@/lib";
 
 interface ChannelMapChartProps {
   nodes: RustNodeInfo[];
@@ -82,7 +83,7 @@ export default function ChannelMapChart({
       const {
         u128LittleEndianToDecimal,
         hexToDecimal,
-      } = require("../../../../lib/utils");
+      } = require("@/lib/utils");
       const SHANNONS_PER_CKB = 100000000; // 1 CKB = 100,000,000 shannons
 
       const capacityInShannons =
@@ -96,13 +97,19 @@ export default function ChannelMapChart({
     []
   );
 
+  // Filter channels to only include those where both nodes exist
+  const validChannels = useMemo(
+    () => APIUtils.filterChannelsByValidNodes(nodes, channels),
+    [nodes, channels]
+  );
+
   // Memoized node data processing with capacity and channel count
   const nodeScatterData = useMemo(() => {
     // Calculate node capacity and channel count
     const nodeCapacity = new Map<string, number>();
     const nodeChannelCount = new Map<string, number>();
 
-    channels.forEach(channel => {
+    validChannels.forEach(channel => {
       try {
         const capacityInCKB = parseChannelCapacityToCKB(channel.capacity);
         // Distribute capacity equally between both nodes
@@ -153,7 +160,13 @@ export default function ChannelMapChart({
         };
       })
       .filter((node): node is NonNullable<typeof node> => node !== null);
-  }, [nodes, channels, parseCoordinates, parseChannelCapacityToCKB, maxNodes]);
+  }, [
+    nodes,
+    validChannels,
+    parseCoordinates,
+    parseChannelCapacityToCKB,
+    maxNodes,
+  ]);
 
   // Memoized channel data processing with grouping by node pairs
   const channelLinesData = useMemo(() => {
@@ -172,7 +185,7 @@ export default function ChannelMapChart({
       }
     >();
 
-    channels
+    validChannels
       .slice(0, maxChannels) // Limit number of channels
       .forEach(channel => {
         const node1 = nodeMap.get(channel.node1);
@@ -212,7 +225,7 @@ export default function ChannelMapChart({
 
     return Array.from(channelGroups.values());
   }, [
-    channels,
+    validChannels,
     nodes,
     parseCoordinates,
     parseChannelCapacityToCKB,
