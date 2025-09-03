@@ -469,6 +469,25 @@ export class TestnetAPIClient extends APIClient {
 }
 
 export class APIUtils {
+  static filterChannelsByValidNodes(
+    nodes: RustNodeInfo[],
+    channels: RustChannelInfo[]
+  ): RustChannelInfo[] {
+    const validNodeIds = new Set(nodes.map(node => node.node_id));
+    const validChannels = channels.filter(
+      channel =>
+        validNodeIds.has(channel.node1) && validNodeIds.has(channel.node2)
+    );
+
+    if (validChannels.length !== channels.length) {
+      console.warn(
+        `APIUtils: Filtered out ${channels.length - validChannels.length} channels with missing nodes. Total channels: ${channels.length}, Valid channels: ${validChannels.length}`
+      );
+    }
+
+    return validChannels;
+  }
+
   private static reduceChannelTotalCapacity(
     sum: number,
     channel: RustChannelInfo

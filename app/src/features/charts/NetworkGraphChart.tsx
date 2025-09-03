@@ -42,9 +42,12 @@ function NetworkGraphChart({
   graphClassName = "",
 }: NetworkGraphChartProps) {
   const graphData = useMemo(() => {
+    // Filter channels to only include those where both nodes exist
+    const validChannels = APIUtils.filterChannelsByValidNodes(nodes, channels);
+
     const graphNodes = APIUtils.getNodeChannelInfoFromChannels(
       nodes,
-      channels
+      validChannels // Use filtered channels instead of all channels
     ).map(node => ({
       id: node.node_id,
       name: node.node_name,
@@ -55,12 +58,14 @@ function NetworkGraphChart({
       totalCapacity: formatCompactNumber(node.totalCapacity),
     }));
 
-    const graphLinks = APIUtils.addGroupToChannels(channels).map(channel => ({
-      source: channel.node1,
-      target: channel.node2,
-      capacity: formatCompactNumber(channel.capacity),
-      groupId: channel.group,
-    }));
+    const graphLinks = APIUtils.addGroupToChannels(validChannels).map(
+      channel => ({
+        source: channel.node1,
+        target: channel.node2,
+        capacity: formatCompactNumber(channel.capacity),
+        groupId: channel.group,
+      })
+    );
 
     return { nodes: graphNodes, links: graphLinks };
   }, [nodes, channels]);
@@ -114,6 +119,11 @@ function NetworkGraphChart({
         <div className="text-xs text-muted-foreground space-y-1">
           <div>Nodes: {graphData.nodes.length}</div>
           <div>Channels: {graphData.links.length}</div>
+          {channels.length !== graphData.links.length && (
+            <div className="text-orange-500">
+              Filtered: {channels.length - graphData.links.length} invalid
+            </div>
+          )}
         </div>
       </div>
     </div>
