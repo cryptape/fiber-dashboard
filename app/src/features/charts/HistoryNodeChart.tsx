@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { TimeSeries } from "@/lib/types";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
-import DualAxisTimeSeriesChart from "@/shared/components/chart/DualAxisTimeSeriesChart";
+import TimeSeriesChart from "@/shared/components/chart/TimeSeriesChart";
 
-export default function HistoryChannelCapacityChart() {
+export default function HistoryNodeChart() {
   const { apiClient, currentNetwork } = useNetwork();
-  const [capacitySeries, setCapacitySeries] = useState<TimeSeries | null>(null);
-  const [channelsSeries, setChannelsSeries] = useState<TimeSeries | null>(null);
+  const [nodesSeries, setNodesSeries] = useState<TimeSeries | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,13 +15,11 @@ export default function HistoryChannelCapacityChart() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const timeSeriesData =
-          await apiClient.fetchChannelCapacityHistoryTimeSeries();
-
-        setCapacitySeries(timeSeriesData.capacity);
-        setChannelsSeries(timeSeriesData.channels);
+        const timeSeriesData = await apiClient.fetchNodeHistoryTimeSeries();
+        console.log("timeSeriesData", timeSeriesData);
+        setNodesSeries(timeSeriesData.nodes);
       } catch (err) {
-        console.error("Error fetching channel capacity history:", err);
+        console.error("Error fetching node history:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch data");
       } finally {
         setLoading(false);
@@ -35,7 +32,7 @@ export default function HistoryChannelCapacityChart() {
   if (loading) {
     return (
       <div className="w-full h-[300px] flex items-center justify-center">
-        <div className="text-lg">Loading historical data...</div>
+        <div className="text-lg">Loading node history data...</div>
       </div>
     );
   }
@@ -48,21 +45,19 @@ export default function HistoryChannelCapacityChart() {
     );
   }
 
-  if (!capacitySeries || !channelsSeries) {
+  if (!nodesSeries || nodesSeries.data.length === 0) {
     return (
-      <div className="w-full h-[300px] flex items-center justify-center">
-        <div className="text-lg">No data available</div>
+      <div className="w-full h-[300px] flex items-center justify-center card">
+        <div className="text-lg">No node data available</div>
       </div>
     );
   }
 
   return (
     <div className="w-full">
-      <DualAxisTimeSeriesChart
-        leftSeries={capacitySeries}
-        rightSeries={channelsSeries}
-        title="Lightning Network History"
-        subtitle="Network Capacity vs Active Channels"
+      <TimeSeriesChart
+        data={[nodesSeries]}
+        title="Lightning Network Node History"
         height="300px"
         className="w-full"
       />

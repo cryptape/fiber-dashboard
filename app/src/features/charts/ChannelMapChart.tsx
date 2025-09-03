@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import * as echarts from "echarts";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
-import worldGeoJson from "../../maps/world.json";
+import worldGeoJson from "../dashboard/maps/world.json";
 import { formatCompactNumber } from "@/lib/utils";
 
 interface ChannelMapChartProps {
@@ -82,7 +82,7 @@ export default function ChannelMapChart({
       const {
         u128LittleEndianToDecimal,
         hexToDecimal,
-      } = require("../../../../lib/utils");
+      } = require("@/lib/utils");
       const SHANNONS_PER_CKB = 100000000; // 1 CKB = 100,000,000 shannons
 
       const capacityInShannons =

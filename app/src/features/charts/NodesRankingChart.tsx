@@ -2,7 +2,11 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
-import { formatCompactNumber } from "@/lib/utils";
+import {
+  formatCompactNumber,
+  u128LittleEndianToDecimal,
+  hexToDecimal,
+} from "@/lib/utils";
 import { Button } from "@/shared/components/ui/button";
 import {
   Card,
@@ -59,10 +63,6 @@ export default function NodesRankingChart({
   // Capacity parsing utility
   const parseChannelCapacityToCKB = useCallback(
     (capacity: string | number): number => {
-      const {
-        u128LittleEndianToDecimal,
-        hexToDecimal,
-      } = require("../../../../lib/utils");
       const SHANNONS_PER_CKB = 100000000;
 
       try {

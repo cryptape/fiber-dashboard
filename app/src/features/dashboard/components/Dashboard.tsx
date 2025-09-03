@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../hooks/useDashboard";
-import CityMapChart from "./charts/CityMapChart";
-import ChannelMapChart from "./charts/ChannelMapChart";
-import HistoryChannelCapacityChart from "./charts/HistoryChannelCapacityChart";
-import HistoryNodeChart from "./charts/HistoryNodeChart";
+import CityMapChart from "../../charts/CityMapChart";
+import ChannelMapChart from "../../charts/ChannelMapChart";
+import HistoryChannelCapacityChart from "../../charts/HistoryChannelCapacityChart";
+import HistoryNodeChart from "../../charts/HistoryNodeChart";
 import {
   Card,
   CardContent,
@@ -13,11 +13,11 @@ import {
   CardTitle,
 } from "@/shared/components/ui/card";
 import { Skeleton } from "@/shared/components/ui/skeleton";
-import { Globe, ArrowUpRight, Network } from "lucide-react";
+import { Globe, Network } from "lucide-react";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { SwipeableKpiCards } from "./SwipeableKpiCards";
-import NetworkGraphChart from "./charts/NetworkGraphChart";
-import NodesRankingChart from "./charts/NodesRankingChart";
+import NetworkGraphChart from "../../charts/NetworkGraphChart";
+import NodesRankingChart from "../../charts/NodesRankingChart";
 
 export default function Dashboard() {
   const { apiClient, currentNetwork } = useNetwork();
@@ -73,7 +73,6 @@ export default function Dashboard() {
               </div>
               Network Graph
             </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
@@ -101,7 +100,6 @@ export default function Dashboard() {
               </div>
               Channels On World Map
             </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
@@ -127,7 +125,6 @@ export default function Dashboard() {
               </div>
               Fiber Nodes Global Distribution
             </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">

@@ -486,6 +486,76 @@ export class APIUtils {
     return channels.reduce(APIUtils.reduceChannelTotalCapacity, 0);
   }
 
+  static addGroupToChannels(channels: RustChannelInfo[]) {
+    const groupMap = new Map<string, number>();
+    let groupCounter = 0;
+
+    return channels.map(channel => {
+      // canonical key (only used in the Map)
+      const key = [channel.node1, channel.node2].sort().join("|");
+
+      let groupId = groupMap.get(key);
+      if (groupId === undefined) {
+        groupId = groupCounter++;
+        groupMap.set(key, groupId);
+      }
+
+      return { ...channel, group: groupId };
+    });
+  }
+
+  static getNodeChannelInfoFromChannels(
+    nodes: RustNodeInfo[],
+    channels: RustChannelInfo[]
+  ) {
+    const nodeCapacity = new Map<string, number>();
+    const nodeChannelCount = new Map<string, number>();
+
+    channels.forEach(channel => {
+      try {
+        const capacityInCKB = APIUtils.parseChannelCapacityToCKB(
+          channel.capacity
+        );
+        // Distribute capacity equally between both nodes
+        nodeCapacity.set(
+          channel.node1,
+          (nodeCapacity.get(channel.node1) || 0) + capacityInCKB / 2
+        );
+        nodeCapacity.set(
+          channel.node2,
+          (nodeCapacity.get(channel.node2) || 0) + capacityInCKB / 2
+        );
+
+        // Count channels for each node
+        nodeChannelCount.set(
+          channel.node1,
+          (nodeChannelCount.get(channel.node1) || 0) + 1
+        );
+        nodeChannelCount.set(
+          channel.node2,
+          (nodeChannelCount.get(channel.node2) || 0) + 1
+        );
+      } catch (error) {
+        console.warn("Error processing channel for node data:", error, channel);
+      }
+    });
+
+    return nodes.map(node => {
+      const totalCapacity =
+        Math.round(Math.max(0, nodeCapacity.get(node.node_id) || 0) * 100) /
+        100;
+      const totalChannels = nodeChannelCount.get(node.node_id) || 0;
+
+      return {
+        ...{
+          totalCapacity,
+          totalChannels,
+        },
+        ...node,
+      };
+    });
+  }
+
   static getAverageChannelCapacity(
     totalCapacity: number,
     totalChannels: number
