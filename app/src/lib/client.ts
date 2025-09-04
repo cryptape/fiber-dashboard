@@ -1,4 +1,5 @@
 import { API_CONFIG, SHANNONS_PER_CKB } from "./const";
+import { z } from "zod";
 import {
   DashboardData,
   GeoNode,
@@ -16,6 +17,8 @@ import {
   UdtCfgInfosSchema,
   ActiveAnalysisSchema,
   NodesByUdtResponseSchema,
+  NodeResponseSchema,
+  ChannelResponseSchema,
   KpiData,
   TimeSeriesData,
   AnalysisRequestParams,
@@ -31,7 +34,8 @@ export class APIClient {
 
   private async apiRequest<T>(
     endpoint: string,
-    options?: RequestInit
+    options?: RequestInit,
+    schema?: z.ZodSchema<T>
   ): Promise<T> {
     // Add net parameter to all requests
     const separator = endpoint.includes("?") ? "&" : "?";
@@ -52,8 +56,11 @@ export class APIClient {
         );
       }
 
-      const data: T = await response.json();
-      return data;
+      const json = await response.json();
+      if (schema) {
+        return schema.parse(json);
+      }
+      return json as T;
     } catch (error) {
       console.error("API request error:", error);
       throw error;
@@ -61,7 +68,11 @@ export class APIClient {
   }
 
   async getActiveNodesByPage(page: number = 0): Promise<NodeResponse> {
-    return this.apiRequest<NodeResponse>(`/nodes_hourly?page=${page}`);
+    return this.apiRequest<NodeResponse>(
+      `/nodes_hourly?page=${page}`,
+      undefined,
+      NodeResponseSchema
+    );
   }
 
   async getHistoricalNodesByPage(
@@ -72,11 +83,19 @@ export class APIClient {
     let endpoint = `/nodes_nearly_monthly?page=${page}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
-    return this.apiRequest<NodeResponse>(endpoint);
+    return this.apiRequest<NodeResponse>(
+      endpoint,
+      undefined,
+      NodeResponseSchema
+    );
   }
 
   async getActiveChannelsByPage(page: number = 0): Promise<ChannelResponse> {
-    return this.apiRequest<ChannelResponse>(`/channels_hourly?page=${page}`);
+    return this.apiRequest<ChannelResponse>(
+      `/channels_hourly?page=${page}`,
+      undefined,
+      ChannelResponseSchema
+    );
   }
 
   async getHistoricalChannelsByPage(
@@ -87,33 +106,38 @@ export class APIClient {
     let endpoint = `/channels_nearly_monthly?page=${page}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
-    return this.apiRequest<ChannelResponse>(endpoint);
+    return this.apiRequest<ChannelResponse>(
+      endpoint,
+      undefined,
+      ChannelResponseSchema
+    );
   }
 
   async getNodeUdtInfos(nodeId: string): Promise<UdtCfgInfos> {
-    const response = await this.apiRequest<UdtCfgInfos>(
-      `/node_udt_infos?node_id=${encodeURIComponent(nodeId)}`
+    return this.apiRequest<UdtCfgInfos>(
+      `/node_udt_infos?node_id=${encodeURIComponent(nodeId)}`,
+      undefined,
+      UdtCfgInfosSchema
     );
-
-    return UdtCfgInfosSchema.parse(response);
   }
 
   async getNodesByUdt(udtScript: UdtScript): Promise<NodesByUdtResponse> {
-    const response = await this.apiRequest<NodesByUdtResponse>(
+    return this.apiRequest<NodesByUdtResponse>(
       `/nodes_by_udt`,
       {
         method: "POST",
         body: JSON.stringify({ udt: udtScript }),
-      }
+      },
+      NodesByUdtResponseSchema
     );
-
-    return NodesByUdtResponseSchema.parse(response);
   }
 
   async getActiveAnalysis(): Promise<ActiveAnalysis> {
-    const response = await this.apiRequest<ActiveAnalysis>(`/analysis_hourly`);
-
-    return ActiveAnalysisSchema.parse(response);
+    return this.apiRequest<ActiveAnalysis>(
+      `/analysis_hourly`,
+      undefined,
+      ActiveAnalysisSchema
+    );
   }
 
   async getHistoryAnalysis(

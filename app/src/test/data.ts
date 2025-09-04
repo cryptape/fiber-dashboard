@@ -26,7 +26,16 @@ const generateCapacity = (): string => {
   return "0x" + capacityInShannons.toString(16);
 };
 
-const generateTimestamp = (): string => {
+const generateTimestamp = (): number => {
+  const now = new Date();
+  const randomDaysAgo = Math.floor(Math.random() * 365);
+  const randomDate = new Date(
+    now.getTime() - randomDaysAgo * 24 * 60 * 60 * 1000
+  );
+  return randomDate.getMilliseconds();
+};
+
+const generateTimeString = (): string => {
   const now = new Date();
   const randomDaysAgo = Math.floor(Math.random() * 365);
   const randomDate = new Date(
@@ -74,11 +83,11 @@ export function generateMockData(
       node_id: generateNodeId(),
       node_name: generateNodeName(),
       addresses: [generateAddress()],
-      commit_timestamp: generateTimestamp(),
+      commit_timestamp: generateTimeString(),
       announce_timestamp: generateTimestamp(),
       chain_hash:
         "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
-      auto_accept_min_ckb_funding_amount: "0",
+      auto_accept_min_ckb_funding_amount: 0,
       country,
       city,
       region: country,
@@ -101,8 +110,8 @@ export function generateMockData(
       channel_outpoint: generateChannelOutpoint(),
       node1: nodes[node1Index].node_id,
       node2: nodes[node2Index].node_id,
-      commit_timestamp: generateTimestamp(),
-      created_timestamp: generateTimestamp(),
+      commit_timestamp: generateTimeString(),
+      created_timestamp: generateTimeString(),
       capacity: generateCapacity(),
       chain_hash:
         "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",

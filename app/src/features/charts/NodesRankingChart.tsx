@@ -116,6 +116,7 @@ export default function NodesRankingChart({
 
   // Process nodes with additional stats
   const processedNodes = useMemo((): NodeWithStats[] => {
+    console.log(nodes.slice(0, 2));
     return nodes.map(node => {
       const announceDate = new Date(node.announce_timestamp);
       const now = new Date();
@@ -156,7 +157,6 @@ export default function NodesRankingChart({
           formatCompactNumber(node.totalCapacity)
             .toLowerCase()
             .includes(term) ||
-          node.auto_accept_min_ckb_funding_amount.includes(term) ||
           (node.addresses[0] && node.addresses[0].toLowerCase().includes(term))
       );
     }
@@ -184,8 +184,8 @@ export default function NodesRankingChart({
           bValue = (b.city || "").toLowerCase();
           break;
         case "auto_accept_min_ckb_funding_amount":
-          aValue = parseInt(a.auto_accept_min_ckb_funding_amount) || 0;
-          bValue = parseInt(b.auto_accept_min_ckb_funding_amount) || 0;
+          aValue = a.auto_accept_min_ckb_funding_amount || 0;
+          bValue = b.auto_accept_min_ckb_funding_amount || 0;
           break;
         case "announce_timestamp":
           aValue = new Date(a.announce_timestamp).getTime();
@@ -420,8 +420,7 @@ export default function NodesRankingChart({
                   <td className="p-3">
                     <div className="font-mono text-sm">
                       {formatCompactNumber(
-                        parseInt(node.auto_accept_min_ckb_funding_amount) /
-                          100000000
+                        node.auto_accept_min_ckb_funding_amount / 100000000
                       )}
                     </div>
                   </td>
