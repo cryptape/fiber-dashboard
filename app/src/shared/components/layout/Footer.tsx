@@ -36,7 +36,7 @@ const footerLinks = {
 const socialLinks = [
   {
     name: "GitHub",
-    href: "https://github.com/driftluo/fiber-dashboard-backend",
+    href: "https://github.com/driftluo/fiber-dashboard",
     icon: Github,
   },
   { name: "Twitter", href: "https://x.com/FiberDevs", icon: Twitter },

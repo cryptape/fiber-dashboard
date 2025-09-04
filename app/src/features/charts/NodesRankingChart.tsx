@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
 import {
   formatCompactNumber,
@@ -59,6 +59,7 @@ export default function NodesRankingChart({
   const [sortField, setSortField] = useState<SortField>("total_channels");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [searchTerm, setSearchTerm] = useState("");
+  const [pageInput, setPageInput] = useState<string>("1");
 
   // Capacity parsing utility
   const parseChannelCapacityToCKB = useCallback(
@@ -211,6 +212,11 @@ export default function NodesRankingChart({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentNodes = filteredAndSortedNodes.slice(startIndex, endIndex);
+
+  // Sync page input when currentPage changes
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
 
   // Handle sorting
   const handleSort = useCallback(
@@ -510,6 +516,47 @@ export default function NodesRankingChart({
                     </Button>
                   );
                 })}
+              </div>
+
+              <div className="flex items-center gap-2 ml-2">
+                <span className="text-sm text-muted-foreground">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, totalPages)}
+                  value={pageInput}
+                  onChange={e =>
+                    setPageInput(e.target.value.replace(/[^0-9]/g, ""))
+                  }
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const num = Number(pageInput);
+                      if (!Number.isNaN(num) && num >= 1 && num <= totalPages) {
+                        setCurrentPage(num);
+                      }
+                    }
+                  }}
+                  className="w-16 px-2 py-1 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+                <span className="text-sm text-muted-foreground">
+                  of {Math.max(1, totalPages)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const num = Number(pageInput);
+                    if (!Number.isNaN(num)) {
+                      const clamped = Math.min(
+                        Math.max(1, num),
+                        Math.max(1, totalPages)
+                      );
+                      setCurrentPage(clamped);
+                    }
+                  }}
+                >
+                  Go
+                </Button>
               </div>
 
               <Button
