@@ -5,6 +5,12 @@ export interface MockDataConfig {
   channelCount: number;
 }
 
+const generateRandomLocationString = (): string => {
+  const latitude = Math.random() * 180 - 90; // [-90, 90)
+  const longitude = Math.random() * 360 - 180; // [-180, 180)
+  return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+};
+
 const generateNodeId = (): string => {
   const prefix = "02";
   const randomHex = Array.from({ length: 32 }, () =>
@@ -91,7 +97,7 @@ export function generateMockData(
       country,
       city,
       region: country,
-      loc: `${city}, ${country}`,
+      loc: generateRandomLocationString(),
     });
   }
 
