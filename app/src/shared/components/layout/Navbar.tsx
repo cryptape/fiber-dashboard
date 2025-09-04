@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/shared/components/ui/button";
 import { Badge } from "@/shared/components/ui/badge";
 import { NetworkSwitcher } from "@/features/networks/components/NetworkSwitcher";
-import { Zap, Menu, X, ExternalLink, Search, Keyboard } from "lucide-react";
+import { Zap, Menu, X, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { APP_CONFIG } from "@/lib/const";
 
@@ -72,20 +72,6 @@ export default function Navbar() {
 
           {/* Right side actions */}
           <div className="hidden lg:flex items-center space-x-3">
-            {/* Search */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-all duration-200"
-            >
-              <Search className="h-4 w-4" />
-              <span className="text-sm">Search</span>
-              <div className="flex items-center space-x-1 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
-                <Keyboard className="h-3 w-3" />
-                <span>⌘K</span>
-              </div>
-            </Button>
-
             {/* External Links */}
             <div className="flex items-center space-x-2">
               {externalLinks.map(item => {

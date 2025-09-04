@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
 import {
   formatCompactNumber,
@@ -59,6 +59,7 @@ export default function NodesRankingChart({
   const [sortField, setSortField] = useState<SortField>("total_channels");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [searchTerm, setSearchTerm] = useState("");
+  const [pageInput, setPageInput] = useState<string>("1");
 
   // Capacity parsing utility
   const parseChannelCapacityToCKB = useCallback(
@@ -116,6 +117,7 @@ export default function NodesRankingChart({
 
   // Process nodes with additional stats
   const processedNodes = useMemo((): NodeWithStats[] => {
+    console.log(nodes.slice(0, 2));
     return nodes.map(node => {
       const announceDate = new Date(node.announce_timestamp);
       const now = new Date();
@@ -152,11 +154,6 @@ export default function NodesRankingChart({
           node.node_name.toLowerCase().includes(term) ||
           node.node_id.toLowerCase().includes(term) ||
           (node.city && node.city.toLowerCase().includes(term)) ||
-          node.totalChannels.toString().includes(term) ||
-          formatCompactNumber(node.totalCapacity)
-            .toLowerCase()
-            .includes(term) ||
-          node.auto_accept_min_ckb_funding_amount.includes(term) ||
           (node.addresses[0] && node.addresses[0].toLowerCase().includes(term))
       );
     }
@@ -184,8 +181,8 @@ export default function NodesRankingChart({
           bValue = (b.city || "").toLowerCase();
           break;
         case "auto_accept_min_ckb_funding_amount":
-          aValue = parseInt(a.auto_accept_min_ckb_funding_amount) || 0;
-          bValue = parseInt(b.auto_accept_min_ckb_funding_amount) || 0;
+          aValue = a.auto_accept_min_ckb_funding_amount || 0;
+          bValue = b.auto_accept_min_ckb_funding_amount || 0;
           break;
         case "announce_timestamp":
           aValue = new Date(a.announce_timestamp).getTime();
@@ -215,6 +212,11 @@ export default function NodesRankingChart({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentNodes = filteredAndSortedNodes.slice(startIndex, endIndex);
+
+  // Sync page input when currentPage changes
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
 
   // Handle sorting
   const handleSort = useCallback(
@@ -281,7 +283,7 @@ export default function NodesRankingChart({
           <div className="relative flex-1 max-w-md">
             <input
               type="text"
-              placeholder="Search nodes by name, ID, city, channels, capacity, auto accept, or address..."
+              placeholder="Search nodes by name, ID, city or address..."
               value={searchTerm}
               onChange={e => handleSearch(e.target.value)}
               className="w-full px-3 py-2 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -420,8 +422,7 @@ export default function NodesRankingChart({
                   <td className="p-3">
                     <div className="font-mono text-sm">
                       {formatCompactNumber(
-                        parseInt(node.auto_accept_min_ckb_funding_amount) /
-                          100000000
+                        node.auto_accept_min_ckb_funding_amount / 100000000
                       )}
                     </div>
                   </td>
@@ -515,6 +516,47 @@ export default function NodesRankingChart({
                     </Button>
                   );
                 })}
+              </div>
+
+              <div className="flex items-center gap-2 ml-2">
+                <span className="text-sm text-muted-foreground">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, totalPages)}
+                  value={pageInput}
+                  onChange={e =>
+                    setPageInput(e.target.value.replace(/[^0-9]/g, ""))
+                  }
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const num = Number(pageInput);
+                      if (!Number.isNaN(num) && num >= 1 && num <= totalPages) {
+                        setCurrentPage(num);
+                      }
+                    }
+                  }}
+                  className="w-16 px-2 py-1 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+                <span className="text-sm text-muted-foreground">
+                  of {Math.max(1, totalPages)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const num = Number(pageInput);
+                    if (!Number.isNaN(num)) {
+                      const clamped = Math.min(
+                        Math.max(1, num),
+                        Math.max(1, totalPages)
+                      );
+                      setCurrentPage(clamped);
+                    }
+                  }}
+                >
+                  Go
+                </Button>
               </div>
 
               <Button
