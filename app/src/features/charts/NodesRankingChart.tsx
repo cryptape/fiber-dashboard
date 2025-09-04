@@ -153,10 +153,6 @@ export default function NodesRankingChart({
           node.node_name.toLowerCase().includes(term) ||
           node.node_id.toLowerCase().includes(term) ||
           (node.city && node.city.toLowerCase().includes(term)) ||
-          node.totalChannels.toString().includes(term) ||
-          formatCompactNumber(node.totalCapacity)
-            .toLowerCase()
-            .includes(term) ||
           (node.addresses[0] && node.addresses[0].toLowerCase().includes(term))
       );
     }
@@ -281,7 +277,7 @@ export default function NodesRankingChart({
           <div className="relative flex-1 max-w-md">
             <input
               type="text"
-              placeholder="Search nodes by name, ID, city, channels, capacity, auto accept, or address..."
+              placeholder="Search nodes by name, ID, city or address..."
               value={searchTerm}
               onChange={e => handleSearch(e.target.value)}
               className="w-full px-3 py-2 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
