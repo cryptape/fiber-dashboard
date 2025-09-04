@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { generateMockData } from "@/test/data";
 import { RustNodeInfo, RustChannelInfo } from "@/lib/types";
-import ChannelMapChart from "@/features/charts/ChannelMapChart";
+import NodeMapChart from "@/features/charts/CityMapChart";
+import { APIUtils } from "@/lib/client";
 
 export default function ChannelOnMapTestPage() {
   const [nodes, setNodes] = useState<RustNodeInfo[]>([]);
@@ -18,8 +19,16 @@ export default function ChannelOnMapTestPage() {
 
     setNodes(mockData.nodes);
     setChannels(mockData.channels);
+    console.log(mockData.nodes);
     setLoading(false);
   }, []);
+
+  const cityNodes = APIUtils.calculateCityGeographicalDistribution(
+    nodes,
+    channels
+  );
+
+  const nodeLocations = APIUtils.getNodeLocations(nodes, channels);
 
   if (loading) {
     return (
@@ -43,9 +52,9 @@ export default function ChannelOnMapTestPage() {
       </div>
 
       <div className="bg-card rounded-lg border p-4">
-        <ChannelMapChart
-          nodes={nodes}
-          channels={channels}
+        <NodeMapChart
+          cityNodes={cityNodes}
+          nodeLocations={nodeLocations}
           height="600px"
           className="w-full"
         />
