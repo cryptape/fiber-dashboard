@@ -13,7 +13,7 @@ use crate::{
 };
 
 const SELECT_HOURLY_NODES_SQL: &str = "SELECT DISTINCT ON (node_id)
-  online_nodes_hourly.node_id as node_id,
+  {}.node_id as node_id,
   bucket AS last_seen_hour,
   node_name,
   addresses,
@@ -54,7 +54,7 @@ const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   {2}.args AS udt_args,
   {2}.auto_accept_amount AS udt_auto_accept_amount
 FROM {1}
-left join udt_infos on {1}.udt_type_script = {2}.id
+left join {2} on {1}.udt_type_script = {2}.id
 WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
