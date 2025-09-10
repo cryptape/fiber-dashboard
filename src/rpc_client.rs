@@ -12,7 +12,7 @@ use std::{
 use crate::types::{GraphChannelsParams, GraphChannelsResult, GraphNodesParams, GraphNodesResult};
 
 macro_rules! jsonrpc {
-    ($method:expr, $self:ident, $return:ty$(, $params:ident$(,)?)*) => {{
+    ($method:expr, $self:ident, $url:expr, $return:ty$(, $params:ident$(,)?)*) => {{
         let old = $self.id.fetch_add(1, Ordering::AcqRel);
         let data = format!(
             r#"{{"id": {}, "jsonrpc": "2.0", "method": "{}", "params": {}}}"#,
@@ -23,7 +23,7 @@ macro_rules! jsonrpc {
 
         let req_json: serde_json::Value = serde_json::from_str(&data).unwrap();
 
-        let c = $self.raw.post($self.ckb_uri.clone()).json(&req_json);
+        let c = $self.raw.post($url).json(&req_json);
         async {
             let resp = c
                 .send()
@@ -50,26 +50,23 @@ macro_rules! jsonrpc {
 #[derive(Clone)]
 pub struct RpcClient {
     raw: Client,
-    ckb_uri: Url,
     id: Arc<AtomicU64>,
 }
 
 impl RpcClient {
-    pub fn new(ckb_uri: &str) -> Self {
-        let ckb_uri = Url::parse(ckb_uri).expect("fiber uri, e.g. \"http://127.0.0.1:8227\"");
-
+    pub fn new() -> Self {
         RpcClient {
             raw: Client::new(),
-            ckb_uri,
             id: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub fn get_node_graph(
         &self,
+        url: Url,
         params: GraphNodesParams,
     ) -> impl Future<Output = Result<GraphNodesResult, io::Error>> {
-        let task = jsonrpc!("graph_nodes", self, GraphNodesResult, params);
+        let task = jsonrpc!("graph_nodes", self, url, GraphNodesResult, params);
         async {
             let res = task.await?;
             Ok(res)
@@ -78,9 +75,10 @@ impl RpcClient {
 
     pub fn get_channel_graph(
         &self,
+        url: Url,
         params: GraphChannelsParams,
     ) -> impl Future<Output = Result<GraphChannelsResult, io::Error>> {
-        let task = jsonrpc!("graph_channels", self, GraphChannelsResult, params);
+        let task = jsonrpc!("graph_channels", self, url, GraphChannelsResult, params);
         async {
             let res = task.await?;
             Ok(res)

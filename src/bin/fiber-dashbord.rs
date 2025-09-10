@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use fiber_dashbord_backend::{
     RpcClient, create_pg_pool, get_pg_pool, init_db,
     pg_write::{
@@ -7,6 +9,7 @@ use fiber_dashbord_backend::{
     types::{GraphChannelsParams, GraphNodesParams},
 };
 
+use reqwest::Url;
 use sqlx::{Row, types::chrono::Utc};
 
 fn main() {
@@ -65,21 +68,32 @@ async fn http_server() {
 }
 
 async fn timed_commit_states() {
-    let mainnet_rpc_url =
-        std::env::var("FIBER_MAINNET_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
-    let testnet_rpc_url =
-        std::env::var("FIBER_TESTNET_RPC_URL").unwrap_or("http://18.163.221.211:8227".to_string());
-    let mainnet_rpc = RpcClient::new(&mainnet_rpc_url);
-    let testnet_rpc = RpcClient::new(&testnet_rpc_url);
+    static MAINNET_FIBER_RPC_URL: LazyLock<Url> = LazyLock::new(|| {
+        Url::parse(
+            &std::env::var("FIBER_MAINNET_RPC_URL")
+                .unwrap_or("http://18.163.221.211:8227".to_string()),
+        )
+        .unwrap()
+    });
+    static TESTNET_FIBER_RPC_URL: LazyLock<Url> = LazyLock::new(|| {
+        Url::parse(
+            &std::env::var("FIBER_TESTNET_RPC_URL")
+                .unwrap_or("http://18.163.221.211:8227".to_string()),
+        )
+        .unwrap()
+    });
+
+    let rpc = RpcClient::new();
+
     let (mut testnet_init, mut mainnet_init) = (false, false);
     loop {
         for net in [
             fiber_dashbord_backend::Network::Mainnet,
             fiber_dashbord_backend::Network::Testnet,
         ] {
-            let rpc = match net {
-                fiber_dashbord_backend::Network::Mainnet => &mainnet_rpc,
-                fiber_dashbord_backend::Network::Testnet => &testnet_rpc,
+            let url = match net {
+                fiber_dashbord_backend::Network::Mainnet => MAINNET_FIBER_RPC_URL.clone(),
+                fiber_dashbord_backend::Network::Testnet => TESTNET_FIBER_RPC_URL.clone(),
             };
 
             let mut raw_nodes = Vec::new();
@@ -87,10 +101,13 @@ async fn timed_commit_states() {
 
             loop {
                 if let Ok(nodes) = rpc
-                    .get_node_graph(GraphNodesParams {
-                        limit: None,
-                        after: after_cursor.clone(),
-                    })
+                    .get_node_graph(
+                        url.clone(),
+                        GraphNodesParams {
+                            limit: None,
+                            after: after_cursor.clone(),
+                        },
+                    )
                     .await
                 {
                     let has_more = nodes.nodes.len() == 500;
@@ -112,10 +129,13 @@ async fn timed_commit_states() {
 
             loop {
                 if let Ok(channels) = rpc
-                    .get_channel_graph(GraphChannelsParams {
-                        limit: None,
-                        after: after_cursor.clone(),
-                    })
+                    .get_channel_graph(
+                        url.clone(),
+                        GraphChannelsParams {
+                            limit: None,
+                            after: after_cursor.clone(),
+                        },
+                    )
                     .await
                 {
                     let has_more = channels.channels.len() == 500;
