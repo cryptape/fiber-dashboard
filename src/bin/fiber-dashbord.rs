@@ -67,33 +67,39 @@ async fn http_server() {
     Server::new(listener).serve(service).await;
 }
 
-async fn timed_commit_states() {
-    static MAINNET_FIBER_RPC_URL: LazyLock<Url> = LazyLock::new(|| {
-        Url::parse(
-            &std::env::var("FIBER_MAINNET_RPC_URL")
-                .unwrap_or("http://18.163.221.211:8227".to_string()),
-        )
-        .unwrap()
-    });
-    static TESTNET_FIBER_RPC_URL: LazyLock<Url> = LazyLock::new(|| {
-        Url::parse(
-            &std::env::var("FIBER_TESTNET_RPC_URL")
-                .unwrap_or("http://18.163.221.211:8227".to_string()),
-        )
-        .unwrap()
-    });
+static MAINNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
+    std::env::var("FIBER_MAINNET_RPC_URL")
+        .map(|url| Url::parse(&url).unwrap())
+        .ok()
+});
+static TESTNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
+    std::env::var("FIBER_TESTNET_RPC_URL")
+        .map(|url| Url::parse(&url).unwrap())
+        .ok()
+});
 
+static NETS: LazyLock<Vec<fiber_dashbord_backend::Network>> = LazyLock::new(|| {
+    MAINNET_FIBER_RPC_URL
+        .as_ref()
+        .map(|_| fiber_dashbord_backend::Network::Mainnet)
+        .into_iter()
+        .chain(
+            TESTNET_FIBER_RPC_URL
+                .as_ref()
+                .map(|_| fiber_dashbord_backend::Network::Testnet),
+        )
+        .collect::<Vec<_>>()
+});
+
+async fn timed_commit_states() {
     let rpc = RpcClient::new();
 
     let (mut testnet_init, mut mainnet_init) = (false, false);
     loop {
-        for net in [
-            fiber_dashbord_backend::Network::Mainnet,
-            fiber_dashbord_backend::Network::Testnet,
-        ] {
+        for net in NETS.iter() {
             let url = match net {
-                fiber_dashbord_backend::Network::Mainnet => MAINNET_FIBER_RPC_URL.clone(),
-                fiber_dashbord_backend::Network::Testnet => TESTNET_FIBER_RPC_URL.clone(),
+                fiber_dashbord_backend::Network::Mainnet => MAINNET_FIBER_RPC_URL.clone().unwrap(),
+                fiber_dashbord_backend::Network::Testnet => TESTNET_FIBER_RPC_URL.clone().unwrap(),
             };
 
             let mut raw_nodes = Vec::new();
@@ -158,7 +164,7 @@ async fn timed_commit_states() {
             let mut udt_node_relations = Vec::new();
             for node in raw_nodes {
                 let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
-                    from_rpc_to_db_schema(node, net).await;
+                    from_rpc_to_db_schema(node, *net).await;
                 node_schemas.push(node_schema);
                 udt_infos.extend(udt_info);
                 udt_dep_relations.extend(udt_dep_relation);
@@ -167,7 +173,7 @@ async fn timed_commit_states() {
 
             let mut channel_schemas = Vec::with_capacity(raw_channels.len());
             for channel in raw_channels {
-                let channel_schema: ChannelInfoDBSchema = (channel, net).into();
+                let channel_schema: ChannelInfoDBSchema = (channel, *net).into();
                 channel_schemas.push(channel_schema);
             }
 
@@ -189,7 +195,7 @@ async fn timed_commit_states() {
                 &node_schemas,
                 &channel_schemas,
                 &now,
-                net,
+                *net,
             )
             .await
             .expect("Failed to insert batch");
@@ -235,9 +241,13 @@ async fn daily_commit() {
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * 60 * 4)).await;
         let pool = get_pg_pool();
-        daily_statistics(pool, Some(Utc::now() - chrono::Duration::days(20)))
-            .await
-            .unwrap();
+        daily_statistics(
+            pool,
+            Some(Utc::now() - chrono::Duration::days(20)),
+            NETS.iter(),
+        )
+        .await
+        .unwrap();
         log::info!("Daily statistics committed");
     }
 }
