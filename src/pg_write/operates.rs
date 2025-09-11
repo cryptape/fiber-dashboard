@@ -189,6 +189,7 @@ pub async fn insert_batch(
 pub async fn daily_statistics(
     pool: &Pool<Postgres>,
     start_time: Option<DateTime<Utc>>,
+    nets: impl Iterator<Item = &Network>,
 ) -> Result<(), sqlx::Error> {
     use sqlx::Row;
 
@@ -197,7 +198,7 @@ pub async fn daily_statistics(
     let end_time = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
     let start_time = start_time.unwrap_or(end_time - Duration::days(1));
 
-    for net in [Network::Mainnet, Network::Testnet] {
+    for net in nets {
         let nodes_count_sql = format!(
             "
     SELECT
