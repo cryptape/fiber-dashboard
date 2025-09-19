@@ -1,22 +1,34 @@
 use crate::{
+    CKB_MAINNET_RPC, CKB_TESTNET_RPC, RpcClient, get_pg_pool,
     ip_location::lookup_ipinfo,
     pg_write::{
         ChannelInfoDBSchema, Network, NodeInfoDBSchema, RelationCache, UdtInfos, UdtNodeRelation,
         UdtdepRelation, global_cache, global_cache_testnet,
     },
-    types::NodeInfo,
+    types::{
+        IndexerScriptSearchMode, MAINNET_COMMITMENT_CODE_HASH, NodeInfo, Order, ScriptType,
+        SearchKey, SearchKeyFilter, TESTNET_COMMITMENT_CODE_HASH, Tx, commitment_script,
+        funding_script,
+    },
 };
 
 use chrono::Duration;
-use ckb_jsonrpc_types::DepType;
-use faster_hex::hex_string;
+use ckb_jsonrpc_types::{BlockNumber, DepType, JsonBytes};
+use ckb_types::{H256, packed, prelude::*};
+use faster_hex::{hex_decode, hex_string};
 use multiaddr::{Multiaddr, Protocol};
+use serde::{Deserialize, Serialize};
 use sqlx::{
     Pool, Postgres,
     types::chrono::{DateTime, Utc},
 };
 
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+    vec,
+};
 
 pub async fn from_rpc_to_db_schema(
     node_info: NodeInfo,
@@ -367,6 +379,897 @@ fn summarize_data(
             }
         })
         .collect()
+}
+
+pub async fn channel_states_monitor(
+    rpc: RpcClient,
+    mut recv: tokio::sync::mpsc::Receiver<(Network, Vec<JsonBytes>)>,
+) {
+    let mut channel_states = {
+        use sqlx::Row;
+        let pool = get_pg_pool();
+        let mainnet_sql = "select channel_outpoint, funding_args, last_tx_hash, last_block_number, last_commitment_args, state from channel_states";
+        let testnet_sql = "select channel_outpoint, funding_args, last_tx_hash, last_block_number, last_commitment_args, state from channel_states_testnet";
+
+        let mainnet_states = sqlx::query(mainnet_sql)
+            .fetch_all(pool)
+            .await
+            .expect("failed to fetch mainnet channel states")
+            .iter()
+            .map(|row| {
+                let raw_outpoint = row.get::<String, _>("channel_outpoint");
+                let raw_funding_args = row.get::<String, _>("funding_args");
+                let raw_last_block_number = row.get::<String, _>("last_block_number");
+                let raw_last_commitment_args = row.get::<Option<String>, _>("last_commitment_args");
+                let raw_tx_hash = row.get::<String, _>("last_tx_hash");
+                let state = row.get::<String, _>("state");
+                let outpoint = {
+                    let mut buf = vec![0u8; raw_outpoint.len() / 2];
+                    hex_decode(raw_outpoint.as_bytes(), &mut buf).unwrap();
+                    JsonBytes::from_bytes(buf.into())
+                };
+                let funding_args = {
+                    let mut buf = vec![0u8; raw_funding_args.len() / 2];
+                    hex_decode(raw_funding_args.as_bytes(), &mut buf).unwrap();
+                    JsonBytes::from_bytes(buf.into())
+                };
+                let last_block_number = {
+                    let mut buf = [0u8; 8];
+                    hex_decode(raw_last_block_number.as_bytes(), &mut buf).unwrap();
+                    u64::from_le_bytes(buf)
+                };
+                let tx_hash = {
+                    let mut buf = [0u8; 32];
+                    hex_decode(raw_tx_hash.as_bytes(), &mut buf).unwrap();
+                    H256::from(buf)
+                };
+                match state.as_str() {
+                    "open" => (
+                        outpoint,
+                        ChannelState {
+                            state: State::Funding {
+                                funding_args,
+                                tx_hash,
+                                block_number: last_block_number.into(),
+                            },
+                            net: Network::Mainnet,
+                        },
+                    ),
+                    "commitment" => {
+                        let last_commitment_args = raw_last_commitment_args.as_ref().map(|s| {
+                            let mut buf = vec![0u8; s.len() / 2];
+                            hex_decode(s.as_bytes(), &mut buf).unwrap();
+                            JsonBytes::from_bytes(buf.into())
+                        });
+                        (
+                            outpoint,
+                            ChannelState {
+                                state: State::Commitment {
+                                    tx_hash,
+                                    block_number: last_block_number.into(),
+                                    commitment_args: last_commitment_args.unwrap(),
+                                },
+                                net: Network::Mainnet,
+                            },
+                        )
+                    }
+                    "closed" => (
+                        outpoint,
+                        ChannelState {
+                            state: State::Closed,
+                            net: Network::Mainnet,
+                        },
+                    ),
+                    _ => panic!("Unknown state: {}", state),
+                }
+            })
+            .collect::<Vec<_>>();
+        let testnet_states = sqlx::query(testnet_sql)
+            .fetch_all(pool)
+            .await
+            .expect("failed to fetch testnet channel states")
+            .iter()
+            .map(|row| {
+                let raw_outpoint = row.get::<String, _>("channel_outpoint");
+                let raw_funding_args = row.get::<String, _>("funding_args");
+                let raw_last_block_number = row.get::<String, _>("last_block_number");
+                let raw_last_commitment_args = row.get::<Option<String>, _>("last_commitment_args");
+                let raw_tx_hash = row.get::<String, _>("last_tx_hash");
+                let state = row.get::<String, _>("state");
+                let outpoint = {
+                    let mut buf = vec![0u8; raw_outpoint.len() / 2];
+                    hex_decode(raw_outpoint.as_bytes(), &mut buf).unwrap();
+                    JsonBytes::from_bytes(buf.into())
+                };
+                let funding_args = {
+                    let mut buf = vec![0u8; raw_funding_args.len() / 2];
+                    hex_decode(raw_funding_args.as_bytes(), &mut buf).unwrap();
+                    JsonBytes::from_bytes(buf.into())
+                };
+                let last_block_number = {
+                    let mut buf = [0u8; 8];
+                    hex_decode(raw_last_block_number.as_bytes(), &mut buf).unwrap();
+                    u64::from_le_bytes(buf)
+                };
+                let tx_hash = {
+                    let mut buf = [0u8; 32];
+                    hex_decode(raw_tx_hash.as_bytes(), &mut buf).unwrap();
+                    H256::from(buf)
+                };
+                match state.as_str() {
+                    "open" => (
+                        outpoint,
+                        ChannelState {
+                            state: State::Funding {
+                                funding_args,
+                                tx_hash,
+                                block_number: last_block_number.into(),
+                            },
+                            net: Network::Testnet,
+                        },
+                    ),
+                    "commitment" => {
+                        let last_commitment_args = raw_last_commitment_args.as_ref().map(|s| {
+                            let mut buf = vec![0u8; s.len() / 2];
+                            hex_decode(s.as_bytes(), &mut buf).unwrap();
+                            JsonBytes::from_bytes(buf.into())
+                        });
+                        (
+                            outpoint,
+                            ChannelState {
+                                state: State::Commitment {
+                                    tx_hash,
+                                    block_number: last_block_number.into(),
+                                    commitment_args: last_commitment_args.unwrap(),
+                                },
+                                net: Network::Testnet,
+                            },
+                        )
+                    }
+                    "closed" => (
+                        outpoint,
+                        ChannelState {
+                            state: State::Closed,
+                            net: Network::Testnet,
+                        },
+                    ),
+                    _ => panic!("Unknown state: {}", state),
+                }
+            })
+            .collect::<Vec<_>>();
+        ChannelStates {
+            channels: mainnet_states.into_iter().chain(testnet_states).collect(),
+        }
+    };
+
+    let mut internal = tokio::time::interval(std::time::Duration::from_secs(10 * 60));
+
+    loop {
+        tokio::select! {
+            _ = internal.tick() => {
+                log::info!("channel states updated");
+                channel_tx_update(&mut channel_states, &rpc).await;
+            }
+            Some((net, new)) = recv.recv() => {
+                let new = new.into_iter().filter_map(|op| {
+                    if channel_states.channels.contains_key(&op) {
+                        None
+                    } else {
+                        Some(op)
+                    }
+                }).collect::<Vec<_>>();
+                log::info!("new channels received: {}", new.len());
+                if !new.is_empty() {
+                    let groups = new_channels(net, new, &rpc).await;
+                    for group in groups {
+                        let (outpoint, state) = group.into_state();
+                        channel_states.channels.insert(outpoint, state);
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &RpcClient) {
+    let mut testnet = HashMap::new();
+    let mut mainnet = HashMap::new();
+
+    let (testnet_tip, mainnet_tip) = loop {
+        let testnet_tip = rpc.get_indexer_tip(CKB_TESTNET_RPC.clone()).await;
+        let mainnet_tip = rpc.get_indexer_tip(CKB_MAINNET_RPC.clone()).await;
+        if testnet_tip.is_ok() && mainnet_tip.is_ok() {
+            break (testnet_tip.unwrap(), mainnet_tip.unwrap());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    };
+
+    for (outpoint, state) in &mut channel_states.channels {
+        match state.state.clone() {
+            State::Closed => {}
+            State::Funding { funding_args, .. } => {
+                let url = match state.net {
+                    Network::Mainnet => CKB_MAINNET_RPC.clone(),
+                    Network::Testnet => CKB_TESTNET_RPC.clone(),
+                };
+                let txs = loop {
+                    let txs = rpc
+                        .get_transactions(
+                            url.clone(),
+                            SearchKey {
+                                script: funding_script(state.net, funding_args.clone()),
+                                script_type: ScriptType::Lock,
+                                script_search_mode: Some(IndexerScriptSearchMode::Exact),
+                                filter: None,
+                                with_data: Some(false),
+                                group_by_transaction: Some(true),
+                            },
+                            Order::Desc,
+                            100.into(),
+                            None,
+                        )
+                        .await;
+
+                    if txs.is_ok() {
+                        break txs.unwrap();
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                };
+                let code_hash = match state.net {
+                    Network::Mainnet => &*MAINNET_COMMITMENT_CODE_HASH,
+                    Network::Testnet => &*TESTNET_COMMITMENT_CODE_HASH,
+                };
+                if txs.objects.len() == 2 {
+                    if let Tx::Grouped(tc) = &txs.objects[0] {
+                        let new_tx = loop {
+                            let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
+                            if tx.is_ok() {
+                                break tx.unwrap().unwrap();
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        };
+
+                        let commitment_args: Option<JsonBytes> =
+                            new_tx.inner.outputs.iter().find_map(|output| {
+                                if &output.lock.code_hash == code_hash {
+                                    Some(output.lock.args.clone())
+                                } else {
+                                    None
+                                }
+                            });
+                        let s = match state.net {
+                            Network::Mainnet => &mut mainnet,
+                            Network::Testnet => &mut testnet,
+                        };
+                        match commitment_args {
+                            None => {
+                                state.state = State::Closed;
+                                s.entry(outpoint.clone())
+                                    .and_modify(|csu: &mut ChannelStateUpdate| {
+                                        csu.state = DBState::Closed;
+                                        csu.last_block_number = tc.block_number;
+                                        csu.txs.push((tc.tx_hash.clone(), tc.block_number, None));
+                                    })
+                                    .or_insert(ChannelStateUpdate {
+                                        outpoint: outpoint.clone(),
+                                        state: DBState::Closed,
+                                        last_block_number: tc.block_number,
+                                        last_commitment_args: None,
+                                        txs: vec![(tc.tx_hash.clone(), tc.block_number, None)],
+                                    });
+                            }
+                            Some(commitment_args) => {
+                                state.state = State::Commitment {
+                                    tx_hash: tc.tx_hash.clone(),
+                                    block_number: tc.block_number,
+                                    commitment_args: commitment_args.clone(),
+                                };
+                                s.entry(outpoint.clone())
+                                    .and_modify(|csu: &mut ChannelStateUpdate| {
+                                        csu.state = DBState::Commitment;
+                                        csu.last_block_number = tc.block_number;
+                                        csu.last_commitment_args = Some(commitment_args.clone());
+                                        csu.txs.push((
+                                            tc.tx_hash.clone(),
+                                            tc.block_number,
+                                            Some(commitment_args.clone()),
+                                        ));
+                                    })
+                                    .or_insert(ChannelStateUpdate {
+                                        outpoint: outpoint.clone(),
+                                        state: DBState::Commitment,
+                                        last_block_number: tc.block_number,
+                                        last_commitment_args: Some(commitment_args.clone()),
+                                        txs: vec![(
+                                            tc.tx_hash.clone(),
+                                            tc.block_number,
+                                            Some(commitment_args.clone()),
+                                        )],
+                                    });
+                            }
+                        }
+                    }
+                }
+
+                // Continue to retrieve commitment transactions
+                if let State::Commitment {
+                    tx_hash,
+                    block_number,
+                    commitment_args,
+                } = state.state.clone()
+                {
+                    commitment_branch(
+                        &rpc,
+                        state,
+                        outpoint,
+                        url,
+                        commitment_args,
+                        block_number,
+                        match state.net {
+                            Network::Mainnet => mainnet_tip.block_number,
+                            Network::Testnet => testnet_tip.block_number,
+                        },
+                        tx_hash,
+                        code_hash,
+                        match state.net {
+                            Network::Mainnet => &mut mainnet,
+                            Network::Testnet => &mut testnet,
+                        },
+                    )
+                    .await;
+                }
+            }
+            State::Commitment {
+                commitment_args,
+                block_number,
+                tx_hash,
+            } => {
+                let code_hash = match state.net {
+                    Network::Mainnet => &MAINNET_COMMITMENT_CODE_HASH,
+                    Network::Testnet => &TESTNET_COMMITMENT_CODE_HASH,
+                };
+                let url = match state.net {
+                    Network::Mainnet => CKB_MAINNET_RPC.clone(),
+                    Network::Testnet => CKB_TESTNET_RPC.clone(),
+                };
+                commitment_branch(
+                    &rpc,
+                    state,
+                    outpoint,
+                    url,
+                    commitment_args,
+                    block_number,
+                    match state.net {
+                        Network::Mainnet => mainnet_tip.block_number,
+                        Network::Testnet => testnet_tip.block_number,
+                    },
+                    tx_hash,
+                    code_hash,
+                    match state.net {
+                        Network::Mainnet => &mut mainnet,
+                        Network::Testnet => &mut testnet,
+                    },
+                )
+                .await;
+            }
+        }
+    }
+
+    if !mainnet.is_empty() || !testnet.is_empty() {
+        log::info!(
+            "channel states updated: testnet: {}, mainnet: {}",
+            testnet.len(),
+            mainnet.len()
+        );
+        let pool = get_pg_pool();
+        let mut conn = pool.begin().await.unwrap();
+        if !mainnet.is_empty() {
+            let updates = mainnet.values().collect::<Vec<_>>();
+            ChannelStateUpdate::state_sql(&updates, &mut conn, Network::Mainnet)
+                .await
+                .unwrap();
+            ChannelStateUpdate::txs_sql(&updates, &mut conn, Network::Mainnet)
+                .await
+                .unwrap();
+        }
+        if !testnet.is_empty() {
+            let updates = testnet.values().collect::<Vec<_>>();
+            ChannelStateUpdate::state_sql(&updates, &mut conn, Network::Testnet)
+                .await
+                .unwrap();
+            ChannelStateUpdate::txs_sql(&updates, &mut conn, Network::Testnet)
+                .await
+                .unwrap();
+        }
+        conn.commit().await.unwrap();
+    }
+}
+
+async fn commitment_branch(
+    rpc: &RpcClient,
+    state: &mut ChannelState,
+    outpoint: &JsonBytes,
+    url: reqwest::Url,
+    commitment_args: JsonBytes,
+    start: BlockNumber,
+    end: BlockNumber,
+    tx_hash: H256,
+    code_hash: &H256,
+    csus: &mut HashMap<JsonBytes, ChannelStateUpdate>,
+) {
+    let txs = loop {
+        let txs = rpc
+            .get_transactions(
+                url.clone(),
+                SearchKey {
+                    script: commitment_script(state.net, commitment_args.clone()),
+                    script_type: ScriptType::Lock,
+                    script_search_mode: Some(IndexerScriptSearchMode::Exact),
+                    filter: Some(SearchKeyFilter::block_range(start, end)),
+                    with_data: Some(false),
+                    group_by_transaction: Some(true),
+                },
+                Order::Asc,
+                100.into(),
+                None,
+            )
+            .await;
+        if txs.is_ok() {
+            break txs.unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    };
+
+    for tx in txs.objects {
+        if let Tx::Grouped(tc) = &tx {
+            if tc.tx_hash == tx_hash {
+                continue;
+            }
+
+            let new_tx = loop {
+                let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
+                if tx.is_ok() {
+                    break tx.unwrap().unwrap();
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            };
+            let commitment_args: Option<JsonBytes> =
+                new_tx.inner.outputs.iter().find_map(|output| {
+                    if &output.lock.code_hash == code_hash {
+                        Some(output.lock.args.clone())
+                    } else {
+                        None
+                    }
+                });
+            match commitment_args {
+                None => {
+                    state.state = State::Closed;
+                    csus.entry(outpoint.clone())
+                        .and_modify(|csu: &mut ChannelStateUpdate| {
+                            csu.state = DBState::Closed;
+                            csu.last_block_number = tc.block_number;
+                            csu.txs.push((tc.tx_hash.clone(), tc.block_number, None));
+                        })
+                        .or_insert(ChannelStateUpdate {
+                            outpoint: outpoint.clone(),
+                            state: DBState::Closed,
+                            last_block_number: tc.block_number,
+                            last_commitment_args: None,
+                            txs: vec![(tc.tx_hash.clone(), tc.block_number, None)],
+                        });
+                }
+                Some(commitment_args) => {
+                    state.state = State::Commitment {
+                        tx_hash: tc.tx_hash.clone(),
+                        block_number: tc.block_number,
+                        commitment_args: commitment_args.clone(),
+                    };
+                    csus.entry(outpoint.clone())
+                        .and_modify(|csu: &mut ChannelStateUpdate| {
+                            csu.state = DBState::Commitment;
+                            csu.last_block_number = tc.block_number;
+                            csu.last_commitment_args = Some(commitment_args.clone());
+                            csu.txs.push((
+                                tc.tx_hash.clone(),
+                                tc.block_number,
+                                Some(commitment_args.clone()),
+                            ));
+                        })
+                        .or_insert(ChannelStateUpdate {
+                            outpoint: outpoint.clone(),
+                            state: DBState::Commitment,
+                            last_block_number: tc.block_number,
+                            last_commitment_args: Some(commitment_args.clone()),
+                            txs: vec![(
+                                tc.tx_hash.clone(),
+                                tc.block_number,
+                                Some(commitment_args.clone()),
+                            )],
+                        });
+                }
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+enum State {
+    Funding {
+        tx_hash: H256,
+        block_number: BlockNumber,
+        funding_args: JsonBytes,
+    },
+    Commitment {
+        tx_hash: H256,
+        block_number: BlockNumber,
+        commitment_args: JsonBytes,
+    },
+    Closed,
+}
+struct ChannelState {
+    net: Network,
+    state: State,
+}
+
+struct ChannelStates {
+    channels: HashMap<JsonBytes, ChannelState>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum DBState {
+    #[serde(alias = "open")]
+    Open,
+    #[serde(alias = "commitment")]
+    Commitment,
+    #[serde(alias = "closed")]
+    Closed,
+}
+impl DBState {
+    pub fn to_sql(&self) -> &str {
+        match self {
+            DBState::Open => "open",
+            DBState::Commitment => "commitment",
+            DBState::Closed => "closed",
+        }
+    }
+}
+
+pub struct ChannelStateUpdate {
+    outpoint: JsonBytes,
+    state: DBState,
+    last_block_number: BlockNumber,
+    last_commitment_args: Option<JsonBytes>,
+    txs: Vec<(H256, BlockNumber, Option<JsonBytes>)>, // (tx_hash, block_number, commitment_args)
+}
+
+impl ChannelStateUpdate {
+    async fn state_sql(
+        updates: &[&ChannelStateUpdate],
+        conn: &mut sqlx::PgConnection,
+        net: Network,
+    ) -> Result<(), sqlx::Error> {
+        let sql = format!(
+            "update {} set last_tx_hash=$1, last_block_number=$2, last_commitment_args=$3, state=$4 where channel_outpoint=$5",
+            net.channel_states()
+        );
+        let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
+            sqlx::QueryBuilder::new(sql);
+        query_builder.push_values(updates.iter(), |mut b, cu| {
+            b.push_bind(hex_string(cu.txs.last().unwrap().0.as_bytes()))
+                .push_bind(hex_string(
+                    cu.last_block_number.value().to_le_bytes().as_ref(),
+                ))
+                .push_bind(
+                    cu.last_commitment_args
+                        .as_ref()
+                        .map(|args| hex_string(args.as_bytes())),
+                )
+                .push_bind(cu.state.to_sql())
+                .push_bind(hex_string(cu.outpoint.as_bytes()));
+        });
+        let query = query_builder.build();
+        let _ = query.execute(conn).await?;
+        Ok(())
+    }
+
+    async fn txs_sql(
+        updates: &[&ChannelStateUpdate],
+        conn: &mut sqlx::PgConnection,
+        net: Network,
+    ) -> Result<(), sqlx::Error> {
+        let sql = format!(
+            "insert into {} (channel_outpoint, tx_hash, block_number, commitment_args) ",
+            net.channel_txs()
+        );
+        let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
+            sqlx::QueryBuilder::new(sql);
+        let combin = updates
+            .iter()
+            .flat_map(|cu| std::iter::repeat(cu.outpoint.clone()).zip(cu.txs.iter()))
+            .map(|(outpoint, (tx_hash, block_number, args))| {
+                (outpoint, tx_hash, block_number, args)
+            });
+        query_builder.push_values(combin, |mut b, (outpoint, tx_hash, block_number, args)| {
+            b.push_bind(hex_string(outpoint.as_bytes()))
+                .push_bind(hex_string(tx_hash.as_bytes()))
+                .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                .push_bind(args.as_ref().map(|a| hex_string(a.as_bytes())));
+        });
+        let query = query_builder.build();
+        let _ = query.execute(conn).await?;
+        Ok(())
+    }
+}
+
+pub struct ChannelGroup {
+    net: Network,
+    outpoint: JsonBytes,
+    funding_args: JsonBytes,
+    last_block_number: BlockNumber,
+    last_commitment_args: Option<JsonBytes>,
+    state: DBState,
+    txs: Vec<(H256, BlockNumber, Option<JsonBytes>)>, // (tx_hash, block_number, commitment_args)
+}
+
+impl ChannelGroup {
+    fn into_state(self) -> (JsonBytes, ChannelState) {
+        (
+            self.outpoint,
+            ChannelState {
+                net: self.net,
+                state: match self.state {
+                    DBState::Open => State::Funding {
+                        tx_hash: self.txs[0].0.clone(),
+                        block_number: self.txs[0].1,
+                        funding_args: self.funding_args,
+                    },
+                    DBState::Commitment => State::Commitment {
+                        tx_hash: self.txs.last().unwrap().0.clone(),
+                        block_number: self.txs.last().unwrap().1,
+                        commitment_args: self.txs.last().unwrap().2.clone().unwrap(),
+                    },
+                    DBState::Closed => State::Closed,
+                },
+            },
+        )
+    }
+
+    async fn state_sql(
+        groups: &[ChannelGroup],
+        conn: &mut sqlx::PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        let sql = format!(
+            "insert into {} (channel_outpoint, funding_args, last_tx_hash, last_block_number, last_commitment_args, state) ",
+            groups[0].net.channel_states()
+        );
+
+        let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
+            sqlx::QueryBuilder::new(sql);
+        query_builder.push_values(groups.iter(), |mut b, cg| {
+            b.push_bind(hex_string(cg.outpoint.as_bytes()))
+                .push_bind(hex_string(cg.funding_args.as_bytes()))
+                .push_bind(hex_string(cg.txs.last().unwrap().0.as_bytes()))
+                .push_bind(hex_string(
+                    cg.last_block_number.value().to_le_bytes().as_ref(),
+                ))
+                .push_bind(
+                    cg.last_commitment_args
+                        .as_ref()
+                        .map(|args| hex_string(args.as_bytes())),
+                )
+                .push_bind(cg.state.to_sql());
+        });
+        let query = query_builder.build();
+        query.execute(conn).await?;
+        Ok(())
+    }
+
+    async fn txs_sql(
+        groups: &[ChannelGroup],
+        conn: &mut sqlx::PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        let sql = format!(
+            "insert into {} (channel_outpoint, tx_hash, block_number, commitment_args) ",
+            groups[0].net.channel_txs()
+        );
+        let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
+            sqlx::QueryBuilder::new(sql);
+        let combin = groups
+            .iter()
+            .flat_map(|cg| std::iter::repeat(cg.outpoint.clone()).zip(cg.txs.clone()))
+            .map(|(outpoint, (tx_hash, block_number, args))| {
+                (outpoint, tx_hash, block_number, args)
+            });
+        query_builder.push_values(combin, |mut b, (outpoint, tx_hash, block_number, args)| {
+            b.push_bind(hex_string(outpoint.as_bytes()))
+                .push_bind(hex_string(tx_hash.as_bytes()))
+                .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                .push_bind(args.as_ref().map(|a| hex_string(a.as_bytes())));
+        });
+        let query = query_builder.build();
+        query.execute(conn).await?;
+        Ok(())
+    }
+}
+
+pub async fn new_channels(
+    net: Network,
+    channels: Vec<JsonBytes>,
+    rpc: &RpcClient,
+) -> Vec<ChannelGroup> {
+    let mut groups = Vec::new();
+    let url = match net {
+        Network::Mainnet => CKB_MAINNET_RPC.clone(),
+        Network::Testnet => CKB_TESTNET_RPC.clone(),
+    };
+    let code_hash = match net {
+        Network::Mainnet => &*MAINNET_COMMITMENT_CODE_HASH,
+        Network::Testnet => &*TESTNET_COMMITMENT_CODE_HASH,
+    };
+    for outpoint in channels {
+        let raw_outpoint = packed::OutPoint::from_slice(outpoint.as_bytes()).unwrap();
+
+        let funding_tx = loop {
+            let tx = rpc
+                .get_transaction(url.clone(), &raw_outpoint.as_reader().tx_hash().unpack())
+                .await;
+            if tx.is_ok() {
+                break tx.unwrap().unwrap();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        };
+        let funding_args = funding_tx
+            .inner
+            .outputs
+            .get(Unpack::<u32>::unpack(&raw_outpoint.as_reader().index()) as usize)
+            .map(|output| output.lock.args.clone())
+            .unwrap();
+        let txs = loop {
+            let txs = rpc
+                .get_transactions(
+                    url.clone(),
+                    SearchKey {
+                        script: funding_script(net, funding_args.clone()),
+                        script_type: ScriptType::Lock,
+                        script_search_mode: Some(IndexerScriptSearchMode::Exact),
+                        filter: None,
+                        with_data: Some(false),
+                        group_by_transaction: Some(true),
+                    },
+                    Order::Asc,
+                    100.into(),
+                    None,
+                )
+                .await;
+
+            if txs.is_ok() {
+                break txs.unwrap();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        };
+
+        let mut group = ChannelGroup {
+            net,
+            outpoint,
+            funding_args: funding_args.clone(),
+            last_block_number: 0.into(),
+            last_commitment_args: None,
+            state: DBState::Open,
+            txs: vec![(funding_tx.hash.clone(), 0.into(), None)],
+        };
+        for tx in txs.objects {
+            if let Tx::Grouped(tc) = &tx {
+                if tc.tx_hash == funding_tx.hash {
+                    group.last_block_number = tc.block_number;
+                    group.txs[0].1 = tc.block_number;
+                    continue;
+                }
+                let new_tx = loop {
+                    let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
+                    if tx.is_ok() {
+                        break tx.unwrap().unwrap();
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                };
+                let commitment_args: Option<JsonBytes> =
+                    new_tx.inner.outputs.iter().find_map(|output| {
+                        if &output.lock.code_hash == code_hash {
+                            Some(output.lock.args.clone())
+                        } else {
+                            None
+                        }
+                    });
+                match commitment_args {
+                    None => {
+                        group.state = DBState::Closed;
+                        group.last_block_number = tc.block_number;
+                        group.txs.push((tc.tx_hash.clone(), tc.block_number, None));
+                    }
+                    Some(args) => {
+                        group.last_commitment_args = Some(args.clone());
+                        group.last_block_number = tc.block_number;
+                        group.state = DBState::Commitment;
+                        group
+                            .txs
+                            .push((tc.tx_hash.clone(), tc.block_number, Some(args)));
+                    }
+                }
+            }
+        }
+        if let Some(args) = group.last_commitment_args.clone() {
+            let txs = loop {
+                let txs = rpc
+                    .get_transactions(
+                        url.clone(),
+                        SearchKey {
+                            script: commitment_script(net, args.clone()),
+                            script_type: ScriptType::Lock,
+                            script_search_mode: Some(IndexerScriptSearchMode::Exact),
+                            filter: None,
+                            with_data: Some(false),
+                            group_by_transaction: Some(true),
+                        },
+                        Order::Asc,
+                        100.into(),
+                        None,
+                    )
+                    .await;
+                if txs.is_ok() {
+                    break txs.unwrap();
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            };
+            for tx in txs.objects {
+                if let Tx::Grouped(tc) = &tx {
+                    if tc.tx_hash == group.txs[1].0 {
+                        continue;
+                    }
+                    let new_tx = loop {
+                        let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
+                        if tx.is_ok() {
+                            break tx.unwrap().unwrap();
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    };
+                    let commitment_args: Option<JsonBytes> =
+                        new_tx.inner.outputs.iter().find_map(|output| {
+                            if &output.lock.code_hash == code_hash {
+                                Some(output.lock.args.clone())
+                            } else {
+                                None
+                            }
+                        });
+                    match commitment_args {
+                        None => {
+                            group.state = DBState::Closed;
+                            group.last_block_number = tc.block_number;
+                            group.txs.push((tc.tx_hash.clone(), tc.block_number, None));
+                        }
+                        Some(args) => {
+                            group.last_commitment_args = Some(args.clone());
+                            group.last_block_number = tc.block_number;
+                            group.state = DBState::Commitment;
+                            group
+                                .txs
+                                .push((tc.tx_hash.clone(), tc.block_number, Some(args)));
+                        }
+                    }
+                }
+            }
+        }
+        groups.push(group);
+    }
+
+    log::info!("new channels processed: {}", groups.len());
+    if !groups.is_empty() {
+        let pool = get_pg_pool();
+        let mut conn = pool.begin().await.unwrap();
+        ChannelGroup::state_sql(&groups, &mut conn).await.unwrap();
+        ChannelGroup::txs_sql(&groups, &mut conn).await.unwrap();
+        conn.commit().await.unwrap();
+    }
+    groups
 }
 
 pub fn multiaddr_to_socketaddr(addr: &Multiaddr) -> Option<SocketAddr> {

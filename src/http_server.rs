@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Network, get_pg_pool,
     pg_read::{
-        AnalysisParams, ChannelInfo, HourlyNodeInfo, query_analysis, query_analysis_hourly,
-        read_channels_hourly, read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
+        AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state, query_analysis,
+        query_analysis_hourly, query_channel_state, read_channels_hourly, read_channels_monthly,
+        read_nodes_hourly, read_nodes_monthly,
     },
+    pg_write::DBState,
 };
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -234,4 +236,56 @@ pub async fn analysis(req: &mut Request, _res: &mut Response) -> Result<String, 
         ))
     })?;
     Ok(capacitys)
+}
+
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+struct ChannelId {
+    channel_id: JsonBytes,
+    #[serde(default)]
+    net: Network,
+}
+
+#[handler]
+pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let channel_id = req.extract::<ChannelId>().await?;
+    let pool = get_pg_pool();
+    let state = query_channel_state(pool, channel_id.channel_id, channel_id.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query channel state: {}", e);
+            salvo::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to query channel state",
+            ))
+        })?;
+    Ok(state)
+}
+
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+struct ChannelByStateParams {
+    state: DBState,
+    page: usize,
+    #[serde(default)]
+    net: Network,
+}
+
+#[handler]
+pub async fn channel_by_state(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<ChannelByStateParams>().await?;
+    let pool = get_pg_pool();
+    let states = group_channel_by_state(pool, params.state, params.page, params.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query channels by state: {}", e);
+            salvo::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to query channels by state",
+            ))
+        })?;
+    Ok(states)
 }

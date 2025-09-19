@@ -9,6 +9,8 @@ http api default on 8080, method list:
 /channels_nearly_monthly?page=0&start=%Y-%m-%d&end=%Y-%m-%d start/end is optional
 /node_udt_infos?node_id=0x...
 /analysis_hourly
+/channel_state?channel_id=0x..
+/group_channel_by_state?state="open/commitment/closed"&page=0
 post /nodes_by_udt body={ udt: Script }
 post /analysis need json body
 ```

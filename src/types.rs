@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, serde_conv};
 
-use ckb_jsonrpc_types::{DepType, JsonBytes, OutPoint as OutPointWrapper, Script};
-use ckb_types::{H256, bytes::Bytes};
+use ckb_jsonrpc_types::{
+    BlockNumber, CellOutput, DepType, JsonBytes, OutPoint, Script, ScriptHashType, Uint32, Uint64,
+};
+use ckb_types::{H256, bytes::Bytes, h256};
 use multiaddr::MultiAddr;
+
+use crate::Network;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -78,7 +82,7 @@ pub struct UdtDep {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UdtCellDep {
     /// The out point of the cell dep.
-    pub out_point: OutPointWrapper,
+    pub out_point: OutPoint,
     /// The type of the cell dep.
     pub dep_type: DepType,
 }
@@ -177,3 +181,221 @@ uint_as_hex!(U128Hex, u128);
 uint_as_hex!(U64Hex, u64);
 uint_as_hex!(U32Hex, u32);
 uint_as_hex!(U16Hex, u16);
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+    Desc,
+    Asc,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Pagination<T> {
+    pub objects: Vec<T>,
+    pub last_cursor: JsonBytes,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum CellType {
+    Input,
+    Output,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TxWithCell {
+    pub tx_hash: H256,
+    pub block_number: BlockNumber,
+    pub tx_index: Uint32,
+    pub io_index: Uint32,
+    pub io_type: CellType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TxWithCells {
+    pub tx_hash: H256,
+    pub block_number: BlockNumber,
+    pub tx_index: Uint32,
+    pub cells: Vec<(CellType, Uint32)>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum Tx {
+    Ungrouped(TxWithCell),
+    Grouped(TxWithCells),
+}
+
+impl Tx {
+    pub fn tx_hash(&self) -> H256 {
+        match self {
+            Tx::Ungrouped(tx) => tx.tx_hash.clone(),
+            Tx::Grouped(tx) => tx.tx_hash.clone(),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum IndexerScriptSearchMode {
+    /// Mode `prefix` search script with prefix
+    Prefix,
+    /// Mode `exact` search script with exact match
+    Exact,
+}
+
+impl Default for IndexerScriptSearchMode {
+    fn default() -> Self {
+        Self::Prefix
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SearchKey {
+    pub script: Script,
+    pub script_type: ScriptType,
+    pub script_search_mode: Option<IndexerScriptSearchMode>,
+    pub filter: Option<SearchKeyFilter>,
+    pub with_data: Option<bool>,
+    pub group_by_transaction: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct SearchKeyFilter {
+    pub script: Option<Script>,
+    pub script_len_range: Option<[Uint64; 2]>,
+    pub output_data_len_range: Option<[Uint64; 2]>,
+    pub output_capacity_range: Option<[Uint64; 2]>,
+    pub block_range: Option<[BlockNumber; 2]>,
+}
+
+impl SearchKeyFilter {
+    pub fn block_range(start: BlockNumber, end: BlockNumber) -> Self {
+        Self {
+            script: None,
+            script_len_range: None,
+            output_data_len_range: None,
+            output_capacity_range: None,
+            block_range: Some([start, end]),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptType {
+    Lock,
+    Type,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Cell {
+    pub output: CellOutput,
+    pub output_data: Option<JsonBytes>,
+    pub out_point: OutPoint,
+    pub block_number: BlockNumber,
+    pub tx_index: Uint32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IndexerTip {
+    pub block_hash: H256,
+    pub block_number: BlockNumber,
+}
+
+pub fn funding_script(net: Network, args: JsonBytes) -> Script {
+    Script {
+        code_hash: match net {
+            Network::Mainnet => MAINNET_FUNDING_CODE_HASH.clone(),
+            Network::Testnet => TESTNET_FUNDING_CODE_HASH.clone(),
+        },
+        hash_type: ScriptHashType::Type,
+        args,
+    }
+}
+
+pub fn commitment_script(net: Network, args: JsonBytes) -> Script {
+    Script {
+        code_hash: match net {
+            Network::Mainnet => MAINNET_COMMITMENT_CODE_HASH.clone(),
+            Network::Testnet => TESTNET_COMMITMENT_CODE_HASH.clone(),
+        },
+        hash_type: ScriptHashType::Type,
+        args,
+    }
+}
+
+use std::{str::FromStr, sync::LazyLock};
+
+pub static MAINNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
+    std::env::var("MAINNET_FUNDING_CODE_HASH")
+        .ok()
+        .map(|s| {
+            let s = if s.len() < 2 {
+                &s
+            } else if &s[..2] == "0x" {
+                &s[2..]
+            } else {
+                &s
+            };
+            H256::from_slice(s.as_bytes()).ok()
+        })
+        .flatten()
+        .unwrap_or(h256!(
+            "0xe45b1f8f21bff23137035a3ab751d75b36a981deec3e7820194b9c042967f4f1"
+        ))
+});
+pub static TESTNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
+    std::env::var("TESTNET_FUNDING_CODE_HASH")
+        .ok()
+        .map(|s| {
+            let s = if s.len() < 2 {
+                &s
+            } else if &s[..2] == "0x" {
+                &s[2..]
+            } else {
+                &s
+            };
+            H256::from_str(s).ok()
+        })
+        .flatten()
+        .unwrap_or(h256!(
+            "0x6c67887fe201ee0c7853f1682c0b77c0e6214044c156c7558269390a8afa6d7c"
+        ))
+});
+pub static MAINNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
+    std::env::var("MAINNET_COMMITMENT_CODE_HASH")
+        .ok()
+        .map(|s| {
+            let s = if s.len() < 2 {
+                &s
+            } else if &s[..2] == "0x" {
+                &s[2..]
+            } else {
+                &s
+            };
+            H256::from_str(s).ok()
+        })
+        .flatten()
+        .unwrap_or(h256!(
+            "0x2d45c4d3ed3e942f1945386ee82a5d1b7e4bb16d7fe1ab015421174ab747406c"
+        ))
+});
+pub static TESTNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
+    std::env::var("TESTNET_COMMITMENT_CODE_HASH")
+        .ok()
+        .map(|s| {
+            let s = if s.len() < 2 {
+                &s
+            } else if &s[..2] == "0x" {
+                &s[2..]
+            } else {
+                &s
+            };
+            H256::from_str(s).ok()
+        })
+        .flatten()
+        .unwrap_or(h256!(
+            "0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8"
+        ))
+});

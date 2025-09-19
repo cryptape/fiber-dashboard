@@ -104,7 +104,7 @@ left join {2} on {1}.udt_type_script = {2}.id
 WHERE bucket >= $1::timestamp and bucket < $2::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
-const PAGE_SIZE: usize = 500;
+pub const PAGE_SIZE: usize = 500;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]

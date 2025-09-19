@@ -5,7 +5,7 @@ pub mod pg_write;
 mod rpc_client;
 pub mod types;
 
-pub use rpc_client::RpcClient;
+pub use rpc_client::{CKB_MAINNET_RPC, CKB_TESTNET_RPC, RpcClient};
 
 use std::env;
 
@@ -108,6 +108,20 @@ impl Network {
         match self {
             Network::Mainnet => "daily_summarized_data",
             Network::Testnet => "daily_summarized_data_testnet",
+        }
+    }
+
+    pub fn channel_states(&self) -> &str {
+        match self {
+            Network::Mainnet => "channel_states",
+            Network::Testnet => "channel_states_testnet",
+        }
+    }
+
+    pub fn channel_txs(&self) -> &str {
+        match self {
+            Network::Mainnet => "channel_txs",
+            Network::Testnet => "channel_txs_testnet",
         }
     }
 }
