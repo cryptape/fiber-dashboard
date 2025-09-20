@@ -79,6 +79,16 @@ pub async fn read_channels_monthly(
         })
 }
 
+pub async fn query_channel_info(
+    pool: &Pool<Postgres>,
+    outpoint: JsonBytes,
+    net: Network,
+) -> Result<Option<ChannelInfo>, sqlx::Error> {
+    HourlyChannelInfoDBRead::fetch_by_id(pool, outpoint, net)
+        .await
+        .map(|res| res.map(ChannelInfo::from))
+}
+
 pub async fn query_node_udt_relation(
     pool: &Pool<Postgres>,
     node_id: JsonBytes,

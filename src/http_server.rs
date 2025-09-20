@@ -7,8 +7,8 @@ use crate::{
     Network, get_pg_pool,
     pg_read::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state, query_analysis,
-        query_analysis_hourly, query_channel_state, read_channels_hourly, read_channels_monthly,
-        read_nodes_hourly, read_nodes_monthly,
+        query_analysis_hourly, query_channel_info, query_channel_state, read_channels_hourly,
+        read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
     },
     pg_write::DBState,
 };
@@ -260,6 +260,22 @@ pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<Str
             ))
         })?;
     Ok(state)
+}
+
+#[handler]
+pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let channel_id = req.extract::<ChannelId>().await?;
+    let pool = get_pg_pool();
+    let info = query_channel_info(pool, channel_id.channel_id, channel_id.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query channel info: {}", e);
+            salvo::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to query channel info",
+            ))
+        })?;
+    Ok(serde_json::json!({ "channel_info": info }).to_string())
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
