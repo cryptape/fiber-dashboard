@@ -20,15 +20,13 @@ use serde::{Deserialize, Serialize};
 pub static CKB_MAINNET_RPC: LazyLock<Url> = LazyLock::new(|| {
     std::env::var("CKB_MAINNET_RPC_URL")
         .ok()
-        .map(|url| Url::parse(&url).ok())
-        .flatten()
+        .and_then(|url| Url::parse(&url).ok())
         .unwrap_or(Url::parse("https://mainnet.ckb.dev").unwrap())
 });
 pub static CKB_TESTNET_RPC: LazyLock<Url> = LazyLock::new(|| {
     std::env::var("CKB_TESTNET_RPC_URL")
         .ok()
-        .map(|url| Url::parse(&url).ok())
-        .flatten()
+        .and_then(|url| Url::parse(&url).ok())
         .unwrap_or(Url::parse("https://testnet.ckb.dev").unwrap())
 });
 
@@ -72,6 +70,12 @@ macro_rules! jsonrpc {
 pub struct RpcClient {
     raw: Client,
     id: Arc<AtomicU64>,
+}
+
+impl Default for RpcClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RpcClient {

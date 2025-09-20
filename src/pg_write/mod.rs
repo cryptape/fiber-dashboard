@@ -88,11 +88,11 @@ pub async fn init_global_cache(pool: &Pool<Postgres>) {
 pub(crate) fn global_cache() -> &'static ArcSwap<RelationCache> {
     static GLOBAL_CACHE: LazyLock<ArcSwap<RelationCache>> =
         LazyLock::new(|| ArcSwap::new(Arc::new(RelationCache::default())));
-    &*GLOBAL_CACHE
+    &GLOBAL_CACHE
 }
 
 pub(crate) fn global_cache_testnet() -> &'static ArcSwap<RelationCache> {
     static GLOBAL_CACHE_TESTNET: LazyLock<ArcSwap<RelationCache>> =
         LazyLock::new(|| ArcSwap::new(Arc::new(RelationCache::default())));
-    &*GLOBAL_CACHE_TESTNET
+    &GLOBAL_CACHE_TESTNET
 }

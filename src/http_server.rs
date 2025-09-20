@@ -69,8 +69,7 @@ pub async fn list_nodes_hourly(
         .await
         .map_err(|e| {
             log::error!("Failed to read nodes: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to read nodes",
             ))
         })?;
@@ -103,8 +102,7 @@ pub async fn list_nodes_monthly(
     .await
     .map_err(|e| {
         log::error!("Failed to read nodes: {}", e);
-        salvo::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        salvo::Error::Io(std::io::Error::other(
             "Failed to read nodes",
         ))
     })?;
@@ -125,8 +123,7 @@ pub async fn list_channels_hourly(
         .await
         .map_err(|e| {
             log::error!("Failed to read channels: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to read channels",
             ))
         })?;
@@ -159,8 +156,7 @@ pub async fn list_channels_monthly(
     .await
     .map_err(|e| {
         log::error!("Failed to read channels: {}", e);
-        salvo::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        salvo::Error::Io(std::io::Error::other(
             "Failed to read channels",
         ))
     })?;
@@ -181,8 +177,7 @@ pub async fn node_udt_infos(
         .await
         .map_err(|e| {
             log::error!("Failed to query node UDT relation: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query node UDT relation",
             ))
         })?;
@@ -197,8 +192,7 @@ pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<Stri
         .await
         .map_err(|e| {
             log::error!("Failed to query nodes by UDT: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query nodes by UDT",
             ))
         })?;
@@ -216,8 +210,7 @@ pub async fn analysis_hourly(
         .await
         .map_err(|e| {
             log::error!("Failed to query channel capacity analysis: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query channel capacity analysis",
             ))
         })?;
@@ -230,8 +223,7 @@ pub async fn analysis(req: &mut Request, _res: &mut Response) -> Result<String, 
     let pool = get_pg_pool();
     let capacitys = query_analysis(pool, &params).await.map_err(|e| {
         log::error!("Failed to query channel capacity analysis: {}", e);
-        salvo::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        salvo::Error::Io(std::io::Error::other(
             "Failed to query channel capacity analysis",
         ))
     })?;
@@ -254,8 +246,7 @@ pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<Str
         .await
         .map_err(|e| {
             log::error!("Failed to query channel state: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query channel state",
             ))
         })?;
@@ -270,8 +261,7 @@ pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<Stri
         .await
         .map_err(|e| {
             log::error!("Failed to query channel info: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query channel info",
             ))
         })?;
@@ -298,8 +288,7 @@ pub async fn channel_by_state(
         .await
         .map_err(|e| {
             log::error!("Failed to query channels by state: {}", e);
-            salvo::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            salvo::Error::Io(std::io::Error::other(
                 "Failed to query channels by state",
             ))
         })?;

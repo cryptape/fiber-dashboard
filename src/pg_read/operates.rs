@@ -120,7 +120,7 @@ pub async fn query_node_udt_relation(
                     code_hash: {
                         let mut code_hash_bytes = [0u8; 32];
                         let code_hash_str: String = row.get("code_hash");
-                        faster_hex::hex_decode(&code_hash_str.as_bytes(), &mut code_hash_bytes)
+                        faster_hex::hex_decode(code_hash_str.as_bytes(), &mut code_hash_bytes)
                             .unwrap();
                         H256::from(code_hash_bytes)
                     },
@@ -137,7 +137,7 @@ pub async fn query_node_udt_relation(
                     args: {
                         let args_str: String = row.get("args");
                         let mut args_bytes = vec![0u8; args_str.len() / 2];
-                        faster_hex::hex_decode(&args_str.as_bytes(), &mut args_bytes).unwrap();
+                        faster_hex::hex_decode(args_str.as_bytes(), &mut args_bytes).unwrap();
                         JsonBytes::from_vec(args_bytes)
                     },
                 },
@@ -145,7 +145,7 @@ pub async fn query_node_udt_relation(
                     let amount: Option<String> = row.get("auto_accept_amount");
                     amount.map(|amt| {
                         let mut buf = [0u8; 16];
-                        faster_hex::hex_decode(&amt.as_bytes(), &mut buf).unwrap();
+                        faster_hex::hex_decode(amt.as_bytes(), &mut buf).unwrap();
                         u128::from_le_bytes(buf)
                     })
                 },
@@ -175,25 +175,18 @@ pub async fn query_node_udt_relation(
                     cell_dep: {
                         let outpoint_tx_hash: Option<String> = row.get("outpoint_tx_hash");
                         let outpoint_index: Option<String> = row.get("outpoint_index");
-                        if outpoint_tx_hash.is_some() && outpoint_index.is_some() {
-                            Some(UdtCellDep {
+                        match (outpoint_tx_hash, outpoint_index) {
+                            (Some(tx_hash), Some(index)) => Some(UdtCellDep {
                                 out_point: OutPointWrapper {
                                     tx_hash: {
                                         let mut buf = [0; 32];
-                                        faster_hex::hex_decode(
-                                            outpoint_tx_hash.unwrap().as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
+                                        faster_hex::hex_decode(tx_hash.as_bytes(), &mut buf)
+                                            .unwrap();
                                         H256::from(buf)
                                     },
                                     index: {
                                         let mut buf = [0; 4];
-                                        faster_hex::hex_decode(
-                                            outpoint_index.unwrap().as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
+                                        faster_hex::hex_decode(index.as_bytes(), &mut buf).unwrap();
                                         u32::from_le_bytes(buf).into()
                                     },
                                 },
@@ -202,44 +195,38 @@ pub async fn query_node_udt_relation(
                                     "dep_group" => DepType::DepGroup,
                                     _ => panic!("Unknown dep type"),
                                 },
-                            })
-                        } else {
-                            None
+                            }),
+                            _ => None,
                         }
                     },
                     type_id: {
                         let code_hash: Option<String> = row.get("code_hash");
-                        if code_hash.is_some() {
-                            Some(Script {
-                                code_hash: {
-                                    let mut buf = [0; 32];
-                                    faster_hex::hex_decode(code_hash.unwrap().as_bytes(), &mut buf)
-                                        .unwrap();
-                                    H256::from(buf)
-                                },
-                                hash_type: match row.get::<String, _>("hash_type").as_str() {
-                                    "type" => ckb_jsonrpc_types::ScriptHashType::Type,
-                                    "data" => ckb_jsonrpc_types::ScriptHashType::Data,
-                                    "data1" => ckb_jsonrpc_types::ScriptHashType::Data1,
-                                    "data2" => ckb_jsonrpc_types::ScriptHashType::Data2,
-                                    _ => panic!("Unknown hash type"),
-                                },
-                                args: {
-                                    let args = {
-                                        let mut buf = Vec::new();
-                                        faster_hex::hex_decode(
-                                            row.get::<String, _>("args").as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
-                                        buf
-                                    };
-                                    JsonBytes::from_vec(args)
-                                },
-                            })
-                        } else {
-                            None
-                        }
+                        code_hash.map(|code_hash| Script {
+                            code_hash: {
+                                let mut buf = [0; 32];
+                                faster_hex::hex_decode(code_hash.as_bytes(), &mut buf).unwrap();
+                                H256::from(buf)
+                            },
+                            hash_type: match row.get::<String, _>("hash_type").as_str() {
+                                "type" => ckb_jsonrpc_types::ScriptHashType::Type,
+                                "data" => ckb_jsonrpc_types::ScriptHashType::Data,
+                                "data1" => ckb_jsonrpc_types::ScriptHashType::Data1,
+                                "data2" => ckb_jsonrpc_types::ScriptHashType::Data2,
+                                _ => panic!("Unknown hash type"),
+                            },
+                            args: {
+                                let args = {
+                                    let mut buf = Vec::new();
+                                    faster_hex::hex_decode(
+                                        row.get::<String, _>("args").as_bytes(),
+                                        &mut buf,
+                                    )
+                                    .unwrap();
+                                    buf
+                                };
+                                JsonBytes::from_vec(args)
+                            },
+                        })
                     },
                 })
                 .collect::<Vec<_>>();
@@ -394,7 +381,7 @@ enum AnalysisField {
 }
 
 impl AnalysisField {
-    pub fn to_sql(&self) -> String {
+    pub fn to_sql(self) -> String {
         match self {
             AnalysisField::Channels => "channels_count".to_string(),
             AnalysisField::Nodes => "nodes_count".to_string(),

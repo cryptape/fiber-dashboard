@@ -330,7 +330,7 @@ use std::{str::FromStr, sync::LazyLock};
 pub static MAINNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
     std::env::var("MAINNET_FUNDING_CODE_HASH")
         .ok()
-        .map(|s| {
+        .and_then(|s| {
             let s = if s.len() < 2 {
                 &s
             } else if &s[..2] == "0x" {
@@ -340,7 +340,6 @@ pub static MAINNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
             };
             H256::from_slice(s.as_bytes()).ok()
         })
-        .flatten()
         .unwrap_or(h256!(
             "0xe45b1f8f21bff23137035a3ab751d75b36a981deec3e7820194b9c042967f4f1"
         ))
@@ -348,7 +347,7 @@ pub static MAINNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
 pub static TESTNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
     std::env::var("TESTNET_FUNDING_CODE_HASH")
         .ok()
-        .map(|s| {
+        .and_then(|s| {
             let s = if s.len() < 2 {
                 &s
             } else if &s[..2] == "0x" {
@@ -358,7 +357,6 @@ pub static TESTNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
             };
             H256::from_str(s).ok()
         })
-        .flatten()
         .unwrap_or(h256!(
             "0x6c67887fe201ee0c7853f1682c0b77c0e6214044c156c7558269390a8afa6d7c"
         ))
@@ -366,7 +364,7 @@ pub static TESTNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
 pub static MAINNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
     std::env::var("MAINNET_COMMITMENT_CODE_HASH")
         .ok()
-        .map(|s| {
+        .and_then(|s| {
             let s = if s.len() < 2 {
                 &s
             } else if &s[..2] == "0x" {
@@ -376,7 +374,6 @@ pub static MAINNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
             };
             H256::from_str(s).ok()
         })
-        .flatten()
         .unwrap_or(h256!(
             "0x2d45c4d3ed3e942f1945386ee82a5d1b7e4bb16d7fe1ab015421174ab747406c"
         ))
@@ -384,7 +381,7 @@ pub static MAINNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
 pub static TESTNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
     std::env::var("TESTNET_COMMITMENT_CODE_HASH")
         .ok()
-        .map(|s| {
+        .and_then(|s| {
             let s = if s.len() < 2 {
                 &s
             } else if &s[..2] == "0x" {
@@ -394,7 +391,6 @@ pub static TESTNET_COMMITMENT_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
             };
             H256::from_str(s).ok()
         })
-        .flatten()
         .unwrap_or(h256!(
             "0x740dee83f87c6f309824d8fd3fbdd3c8380ee6fc9acc90b1a748438afcdf81d8"
         ))
