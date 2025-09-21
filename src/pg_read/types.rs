@@ -104,7 +104,7 @@ left join {2} on {1}.udt_type_script = {2}.id
 WHERE bucket >= $1::timestamp and bucket < $2::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
-const PAGE_SIZE: usize = 500;
+pub const PAGE_SIZE: usize = 500;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -427,6 +427,52 @@ impl HourlyChannelInfoDBRead {
             .await
     }
 
+    pub async fn fetch_by_id(
+        pool: &Pool<Postgres>,
+        outpoint: JsonBytes,
+        net: Network,
+    ) -> Result<Option<Self>, sqlx::Error> {
+        let channel_info = net.channel_infos();
+        let udt_info = net.udt_infos();
+        let sql = format!(
+            "SELECT channel_outpoint,
+                time as last_seen_hour,
+                node1,
+                node2,
+                capacity,
+                chain_hash,
+                created_timestamp,
+                update_of_node1_timestamp,
+                update_of_node1_enabled,
+                update_of_node1_outbound_liquidity,
+                update_of_node1_tlc_expiry_delta,
+                update_of_node1_tlc_minimum_value,
+                update_of_node1_fee_rate,
+                update_of_node2_timestamp,
+                update_of_node2_enabled,
+                update_of_node2_outbound_liquidity,
+                update_of_node2_tlc_expiry_delta,
+                update_of_node2_tlc_minimum_value,
+                update_of_node2_fee_rate,
+                {udt_info}.name AS udt_name,
+                {udt_info}.code_hash AS udt_code_hash,
+                {udt_info}.hash_type AS udt_hash_type,
+                {udt_info}.args AS udt_args,
+                {udt_info}.auto_accept_amount AS udt_auto_accept_amount
+            FROM {channel_info}
+            left join {udt_info} on {channel_info}.udt_type_script = {udt_info}.id
+            WHERE channel_outpoint = $1
+            ORDER BY last_seen_hour DESC
+            LIMIT 1",
+        );
+
+        let res = sqlx::query_as::<_, Self>(&sql)
+            .bind(faster_hex::hex_string(outpoint.as_bytes()))
+            .fetch_optional(pool)
+            .await?;
+
+        Ok(res)
+    }
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,

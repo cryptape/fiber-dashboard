@@ -8,8 +8,10 @@ use sqlx::{Pool, Postgres, Row};
 
 use crate::{
     Network,
-    pg_read::{ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead},
-    pg_write::{global_cache, global_cache_testnet},
+    pg_read::{
+        ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead, PAGE_SIZE,
+    },
+    pg_write::{DBState, global_cache, global_cache_testnet},
     types::{U64Hex, U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
@@ -77,6 +79,16 @@ pub async fn read_channels_monthly(
         })
 }
 
+pub async fn query_channel_info(
+    pool: &Pool<Postgres>,
+    outpoint: JsonBytes,
+    net: Network,
+) -> Result<Option<ChannelInfo>, sqlx::Error> {
+    HourlyChannelInfoDBRead::fetch_by_id(pool, outpoint, net)
+        .await
+        .map(|res| res.map(ChannelInfo::from))
+}
+
 pub async fn query_node_udt_relation(
     pool: &Pool<Postgres>,
     node_id: JsonBytes,
@@ -108,7 +120,7 @@ pub async fn query_node_udt_relation(
                     code_hash: {
                         let mut code_hash_bytes = [0u8; 32];
                         let code_hash_str: String = row.get("code_hash");
-                        faster_hex::hex_decode(&code_hash_str.as_bytes(), &mut code_hash_bytes)
+                        faster_hex::hex_decode(code_hash_str.as_bytes(), &mut code_hash_bytes)
                             .unwrap();
                         H256::from(code_hash_bytes)
                     },
@@ -125,7 +137,7 @@ pub async fn query_node_udt_relation(
                     args: {
                         let args_str: String = row.get("args");
                         let mut args_bytes = vec![0u8; args_str.len() / 2];
-                        faster_hex::hex_decode(&args_str.as_bytes(), &mut args_bytes).unwrap();
+                        faster_hex::hex_decode(args_str.as_bytes(), &mut args_bytes).unwrap();
                         JsonBytes::from_vec(args_bytes)
                     },
                 },
@@ -133,7 +145,7 @@ pub async fn query_node_udt_relation(
                     let amount: Option<String> = row.get("auto_accept_amount");
                     amount.map(|amt| {
                         let mut buf = [0u8; 16];
-                        faster_hex::hex_decode(&amt.as_bytes(), &mut buf).unwrap();
+                        faster_hex::hex_decode(amt.as_bytes(), &mut buf).unwrap();
                         u128::from_le_bytes(buf)
                     })
                 },
@@ -163,25 +175,18 @@ pub async fn query_node_udt_relation(
                     cell_dep: {
                         let outpoint_tx_hash: Option<String> = row.get("outpoint_tx_hash");
                         let outpoint_index: Option<String> = row.get("outpoint_index");
-                        if outpoint_tx_hash.is_some() && outpoint_index.is_some() {
-                            Some(UdtCellDep {
+                        match (outpoint_tx_hash, outpoint_index) {
+                            (Some(tx_hash), Some(index)) => Some(UdtCellDep {
                                 out_point: OutPointWrapper {
                                     tx_hash: {
                                         let mut buf = [0; 32];
-                                        faster_hex::hex_decode(
-                                            outpoint_tx_hash.unwrap().as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
+                                        faster_hex::hex_decode(tx_hash.as_bytes(), &mut buf)
+                                            .unwrap();
                                         H256::from(buf)
                                     },
                                     index: {
                                         let mut buf = [0; 4];
-                                        faster_hex::hex_decode(
-                                            outpoint_index.unwrap().as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
+                                        faster_hex::hex_decode(index.as_bytes(), &mut buf).unwrap();
                                         u32::from_le_bytes(buf).into()
                                     },
                                 },
@@ -190,44 +195,38 @@ pub async fn query_node_udt_relation(
                                     "dep_group" => DepType::DepGroup,
                                     _ => panic!("Unknown dep type"),
                                 },
-                            })
-                        } else {
-                            None
+                            }),
+                            _ => None,
                         }
                     },
                     type_id: {
                         let code_hash: Option<String> = row.get("code_hash");
-                        if code_hash.is_some() {
-                            Some(Script {
-                                code_hash: {
-                                    let mut buf = [0; 32];
-                                    faster_hex::hex_decode(code_hash.unwrap().as_bytes(), &mut buf)
-                                        .unwrap();
-                                    H256::from(buf)
-                                },
-                                hash_type: match row.get::<String, _>("hash_type").as_str() {
-                                    "type" => ckb_jsonrpc_types::ScriptHashType::Type,
-                                    "data" => ckb_jsonrpc_types::ScriptHashType::Data,
-                                    "data1" => ckb_jsonrpc_types::ScriptHashType::Data1,
-                                    "data2" => ckb_jsonrpc_types::ScriptHashType::Data2,
-                                    _ => panic!("Unknown hash type"),
-                                },
-                                args: {
-                                    let args = {
-                                        let mut buf = Vec::new();
-                                        faster_hex::hex_decode(
-                                            row.get::<String, _>("args").as_bytes(),
-                                            &mut buf,
-                                        )
-                                        .unwrap();
-                                        buf
-                                    };
-                                    JsonBytes::from_vec(args)
-                                },
-                            })
-                        } else {
-                            None
-                        }
+                        code_hash.map(|code_hash| Script {
+                            code_hash: {
+                                let mut buf = [0; 32];
+                                faster_hex::hex_decode(code_hash.as_bytes(), &mut buf).unwrap();
+                                H256::from(buf)
+                            },
+                            hash_type: match row.get::<String, _>("hash_type").as_str() {
+                                "type" => ckb_jsonrpc_types::ScriptHashType::Type,
+                                "data" => ckb_jsonrpc_types::ScriptHashType::Data,
+                                "data1" => ckb_jsonrpc_types::ScriptHashType::Data1,
+                                "data2" => ckb_jsonrpc_types::ScriptHashType::Data2,
+                                _ => panic!("Unknown hash type"),
+                            },
+                            args: {
+                                let args = {
+                                    let mut buf = Vec::new();
+                                    faster_hex::hex_decode(
+                                        row.get::<String, _>("args").as_bytes(),
+                                        &mut buf,
+                                    )
+                                    .unwrap();
+                                    buf
+                                };
+                                JsonBytes::from_vec(args)
+                            },
+                        })
                     },
                 })
                 .collect::<Vec<_>>();
@@ -382,7 +381,7 @@ enum AnalysisField {
 }
 
 impl AnalysisField {
-    pub fn to_sql(&self) -> String {
+    pub fn to_sql(self) -> String {
         match self {
             AnalysisField::Channels => "channels_count".to_string(),
             AnalysisField::Nodes => "nodes_count".to_string(),
@@ -527,4 +526,160 @@ pub async fn query_analysis(
     }
     results.series = tables;
     Ok(serde_json::to_string(&results).unwrap())
+}
+
+pub async fn query_channel_state(
+    pool: &Pool<Postgres>,
+    outpoint: JsonBytes,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let states = net.channel_states();
+    let txs = net.channel_txs();
+    let sql = format!(
+        r#"
+        select {states}.funding_args, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.commitment_args 
+        from {states} 
+        join {txs} on {txs}.channel_outpoint = {states}.channel_outpoint 
+        where {states}.channel_outpoint = $1
+    "#,
+    );
+    let mut funding_args: JsonBytes = JsonBytes::default();
+    let mut state: String = String::new();
+    let mut rows = sqlx::query(&sql)
+        .bind(faster_hex::hex_string(outpoint.as_bytes()))
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            if funding_args.is_empty() {
+                let raw: String = row.get("funding_args");
+                let mut buf = vec![0u8; raw.len() / 2];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                funding_args = JsonBytes::from_vec(buf);
+            }
+            if state.is_empty() {
+                state = row.get("state");
+            }
+
+            let raw_tx_hash: String = row.get("tx_hash");
+            let raw_block_number: String = row.get("block_number");
+            let raw_commitment_args: Option<String> = row.get("commitment_args");
+            let tx_hash = format!("0x{}", raw_tx_hash);
+            let block_number = format!("0x{}", raw_block_number);
+            let commitment_args = raw_commitment_args.map(|args| format!("0x{}", args));
+            (tx_hash, block_number, commitment_args)
+        })
+        .collect::<Vec<_>>();
+
+    let to_u64 = |s: &str| -> u64 {
+        let s = s.trim_start_matches("0x");
+        let mut buf = [0u8; 8];
+        faster_hex::hex_decode(s.as_bytes(), &mut buf).unwrap();
+        u64::from_le_bytes(buf)
+    };
+    rows.sort_unstable_by(|a, b| to_u64(&a.1).cmp(&to_u64(&b.1)));
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Txs {
+        tx_hash: String,
+        block_number: String,
+        commitment_args: Option<String>,
+    }
+    #[derive(Serialize, Deserialize, Debug)]
+    struct TxState {
+        funding_args: JsonBytes,
+        state: String,
+        txs: Vec<Txs>,
+    }
+
+    let res = TxState {
+        funding_args,
+        state,
+        txs: rows
+            .into_iter()
+            .map(|(tx_hash, block_number, commitment_args)| Txs {
+                tx_hash,
+                block_number,
+                commitment_args,
+            })
+            .collect(),
+    };
+
+    Ok(serde_json::to_string(&res).unwrap())
+}
+
+pub async fn group_channel_by_state(
+    pool: &Pool<Postgres>,
+    state: DBState,
+    page: usize,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let offset = page.saturating_mul(PAGE_SIZE);
+    let sql = format!(
+        r#"
+        select channel_outpoint, funding_args, last_block_number, last_tx_hash, last_commitment_args
+        from {}
+        where state = $1 LIMIT {} OFFSET {}
+    "#,
+        net.channel_states(),
+        PAGE_SIZE,
+        offset
+    );
+    let rows = sqlx::query(&sql)
+        .bind(state.to_sql())
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let channel_outpoint: String = row.get("channel_outpoint");
+            let funding_args: String = row.get("funding_args");
+            let last_block_number: String = row.get("last_block_number");
+            let last_tx_hash: String = row.get("last_tx_hash");
+            let last_commitment_args: Option<String> = row.get("last_commitment_args");
+            (
+                format!("0x{}", channel_outpoint),
+                format!("0x{}", funding_args),
+                format!("0x{}", last_block_number),
+                format!("0x{}", last_tx_hash),
+                last_commitment_args.map(|arg| format!("0x{}", arg)),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct State {
+        channel_outpoint: String,
+        funding_args: String,
+        last_block_number: String,
+        last_tx_hash: String,
+        last_commitment_args: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct ChannelState {
+        list: Vec<State>,
+        next_page: usize,
+    }
+    let res = ChannelState {
+        list: rows
+            .into_iter()
+            .map(
+                |(
+                    channel_outpoint,
+                    funding_args,
+                    last_block_number,
+                    last_tx_hash,
+                    last_commitment_args,
+                )| State {
+                    channel_outpoint,
+                    funding_args,
+                    last_block_number,
+                    last_tx_hash,
+                    last_commitment_args,
+                },
+            )
+            .collect(),
+        next_page: page.saturating_add(1),
+    };
+    Ok(serde_json::to_string(&res).unwrap())
 }

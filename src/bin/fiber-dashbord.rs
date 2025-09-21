@@ -1,10 +1,10 @@
-use std::sync::LazyLock;
+use std::{sync::LazyLock, vec};
 
 use fiber_dashbord_backend::{
     RpcClient, create_pg_pool, get_pg_pool, init_db,
     pg_write::{
-        ChannelInfoDBSchema, daily_statistics, from_rpc_to_db_schema, init_global_cache,
-        insert_batch,
+        ChannelInfoDBSchema, channel_states_monitor, daily_statistics, from_rpc_to_db_schema,
+        init_global_cache, insert_batch,
     },
     types::{GraphChannelsParams, GraphNodesParams},
 };
@@ -35,8 +35,9 @@ fn main() {
 
 async fn http_server() {
     use fiber_dashbord_backend::http_server::{
-        analysis, analysis_hourly, list_channels_hourly, list_channels_monthly, list_nodes_hourly,
-        list_nodes_monthly, node_udt_infos, nodes_by_udt,
+        analysis, analysis_hourly, channel_by_state, channel_info, channel_state,
+        list_channels_hourly, list_channels_monthly, list_nodes_hourly, list_nodes_monthly,
+        node_udt_infos, nodes_by_udt,
     };
     use salvo::{
         Listener, Router, Server, Service, conn::TcpListener, cors::AllowOrigin, cors::Cors,
@@ -56,7 +57,10 @@ async fn http_server() {
         .push(Router::with_path("nodes_nearly_monthly").get(list_nodes_monthly))
         .push(Router::with_path("channels_nearly_monthly").get(list_channels_monthly))
         .push(Router::with_path("analysis_hourly").get(analysis_hourly))
-        .push(Router::with_path("analysis").post(analysis));
+        .push(Router::with_path("analysis").post(analysis))
+        .push(Router::with_path("channel_state").get(channel_state))
+        .push(Router::with_path("group_channel_by_state").get(channel_by_state))
+        .push(Router::with_path("channel_info").get(channel_info));
 
     let service = Service::new(router).hoop(cors);
     let http_port = std::env::var("HTTP_PORT").unwrap_or("8000".to_string());
@@ -93,7 +97,9 @@ static NETS: LazyLock<Vec<fiber_dashbord_backend::Network>> = LazyLock::new(|| {
 
 async fn timed_commit_states() {
     let rpc = RpcClient::new();
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
 
+    tokio::spawn(channel_states_monitor(rpc.clone(), rx));
     let (mut testnet_init, mut mainnet_init) = (false, false);
     loop {
         for net in NETS.iter() {
@@ -172,6 +178,15 @@ async fn timed_commit_states() {
             }
 
             let mut channel_schemas = Vec::with_capacity(raw_channels.len());
+            tx.send((
+                *net,
+                raw_channels
+                    .iter()
+                    .map(|c| c.channel_outpoint.clone())
+                    .collect::<Vec<_>>(),
+            ))
+            .await
+            .expect("Failed to send channel outpoints to monitor");
             for channel in raw_channels {
                 let channel_schema: ChannelInfoDBSchema = (channel, *net).into();
                 channel_schemas.push(channel_schema);

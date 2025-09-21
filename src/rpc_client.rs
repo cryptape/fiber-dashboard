@@ -4,12 +4,31 @@ use std::{
     future::Future,
     io,
     sync::{
-        Arc,
+        Arc, LazyLock,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use crate::types::{GraphChannelsParams, GraphChannelsResult, GraphNodesParams, GraphNodesResult};
+use crate::types::{
+    Cell, GraphChannelsParams, GraphChannelsResult, GraphNodesParams, GraphNodesResult, IndexerTip,
+    Order, Pagination, SearchKey, Tx,
+};
+use ckb_jsonrpc_types::{JsonBytes, TransactionView, TxStatus, Uint32};
+use ckb_types::H256;
+use serde::{Deserialize, Serialize};
+
+pub static CKB_MAINNET_RPC: LazyLock<Url> = LazyLock::new(|| {
+    std::env::var("CKB_MAINNET_RPC_URL")
+        .ok()
+        .and_then(|url| Url::parse(&url).ok())
+        .unwrap_or(Url::parse("https://mainnet.ckb.dev").unwrap())
+});
+pub static CKB_TESTNET_RPC: LazyLock<Url> = LazyLock::new(|| {
+    std::env::var("CKB_TESTNET_RPC_URL")
+        .ok()
+        .and_then(|url| Url::parse(&url).ok())
+        .unwrap_or(Url::parse("https://testnet.ckb.dev").unwrap())
+});
 
 macro_rules! jsonrpc {
     ($method:expr, $self:ident, $url:expr, $return:ty$(, $params:ident$(,)?)*) => {{
@@ -53,10 +72,19 @@ pub struct RpcClient {
     id: Arc<AtomicU64>,
 }
 
+impl Default for RpcClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RpcClient {
     pub fn new() -> Self {
         RpcClient {
-            raw: Client::new(),
+            raw: Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .unwrap(),
             id: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -83,5 +111,74 @@ impl RpcClient {
             let res = task.await?;
             Ok(res)
         }
+    }
+
+    pub fn get_transaction(
+        &self,
+        url: Url,
+        hash: &H256,
+    ) -> impl Future<Output = Result<Option<TransactionView>, io::Error>> {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+        struct TransactionWithStatusResponse {
+            /// The transaction.
+            pub transaction: Option<TransactionView>,
+            /// The Transaction status.
+            pub tx_status: TxStatus,
+        }
+        let task = jsonrpc!(
+            "get_transaction",
+            self,
+            url,
+            TransactionWithStatusResponse,
+            hash
+        );
+        async {
+            let res = task.await?;
+            Ok(res.transaction)
+        }
+    }
+
+    pub fn get_transactions(
+        &self,
+        url: Url,
+        search_key: SearchKey,
+        order: Order,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> impl Future<Output = Result<Pagination<Tx>, io::Error>> {
+        jsonrpc!(
+            "get_transactions",
+            self,
+            url,
+            Pagination<Tx>,
+            search_key,
+            order,
+            limit,
+            after
+        )
+    }
+
+    pub fn get_cells(
+        &self,
+        url: Url,
+        search_key: SearchKey,
+        order: Order,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> impl Future<Output = Result<Pagination<Cell>, io::Error>> {
+        jsonrpc!(
+            "get_cells",
+            self,
+            url,
+            Pagination<Cell>,
+            search_key,
+            order,
+            limit,
+            after
+        )
+    }
+
+    pub fn get_indexer_tip(&self, url: Url) -> impl Future<Output = Result<IndexerTip, io::Error>> {
+        jsonrpc!("get_indexer_tip", self, url, IndexerTip)
     }
 }

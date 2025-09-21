@@ -252,14 +252,14 @@ impl ChannelInfoDBSchema {
                 .push_bind(&channel.chain_hash)
                 .push_bind(channel.udt_type_script.as_ref())
                 .push_bind(channel.created_timestamp)
-                .push_bind(&channel.update_of_node1_timestamp)
-                .push_bind(&channel.update_of_node1_enabled)
+                .push_bind(channel.update_of_node1_timestamp)
+                .push_bind(channel.update_of_node1_enabled)
                 .push_bind(&channel.update_of_node1_outbound_liquidity)
                 .push_bind(&channel.update_of_node1_tlc_expiry_delta)
                 .push_bind(&channel.update_of_node1_tlc_minimum_value)
                 .push_bind(&channel.update_of_node1_fee_rate)
-                .push_bind(&channel.update_of_node2_timestamp)
-                .push_bind(&channel.update_of_node2_enabled)
+                .push_bind(channel.update_of_node2_timestamp)
+                .push_bind(channel.update_of_node2_enabled)
                 .push_bind(&channel.update_of_node2_outbound_liquidity)
                 .push_bind(&channel.update_of_node2_tlc_expiry_delta)
                 .push_bind(&channel.update_of_node2_tlc_minimum_value)
@@ -274,7 +274,7 @@ impl ChannelInfoDBSchema {
 impl From<(ChannelInfo, Network)> for ChannelInfoDBSchema {
     fn from((channel_info, net): (ChannelInfo, Network)) -> Self {
         Self {
-            channel_outpoint: hex_string(&channel_info.channel_outpoint.as_bytes()),
+            channel_outpoint: hex_string(channel_info.channel_outpoint.as_bytes()),
             node1: String::from_utf8(channel_info.node1.to_vec()).unwrap(),
             node2: String::from_utf8(channel_info.node2.to_vec()).unwrap(),
             capacity: hex_string(channel_info.capacity.to_le_bytes().as_ref()),
