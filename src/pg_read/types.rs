@@ -182,6 +182,38 @@ impl HourlyNodeInfoDBRead {
             .await
     }
 
+    pub async fn fetch_by_id(
+        pool: &Pool<Postgres>,
+        node_id: JsonBytes,
+        net: Network,
+    ) -> Result<Option<Self>, sqlx::Error> {
+        let sql = format!(
+            "SELECT node_id,
+                time as last_seen_hour,
+                node_name,
+                addresses,
+                announce_timestamp,
+                chain_hash,
+                auto_accept_min_ckb_funding_amount,
+                country,
+                city,
+                region,
+                loc
+            FROM {}
+            WHERE node_id = $1
+            ORDER BY last_seen_hour DESC
+            LIMIT 1",
+            net.node_infos()
+        );
+
+        let res = sqlx::query_as::<_, Self>(&sql)
+            .bind(faster_hex::hex_string(node_id.as_bytes()))
+            .fetch_optional(pool)
+            .await?;
+
+        Ok(res)
+    }
+
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         page: usize,
