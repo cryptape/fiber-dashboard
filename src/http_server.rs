@@ -7,8 +7,8 @@ use crate::{
     Network, get_pg_pool,
     pg_read::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state, query_analysis,
-        query_analysis_hourly, query_channel_info, query_channel_state, read_channels_hourly,
-        read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
+        query_analysis_hourly, query_channel_info, query_channel_state, query_node_info,
+        read_channels_hourly, read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
     },
     pg_write::DBState,
 };
@@ -69,9 +69,7 @@ pub async fn list_nodes_hourly(
         .await
         .map_err(|e| {
             log::error!("Failed to read nodes: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to read nodes",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to read nodes"))
         })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
@@ -102,9 +100,7 @@ pub async fn list_nodes_monthly(
     .await
     .map_err(|e| {
         log::error!("Failed to read nodes: {}", e);
-        salvo::Error::Io(std::io::Error::other(
-            "Failed to read nodes",
-        ))
+        salvo::Error::Io(std::io::Error::other("Failed to read nodes"))
     })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
@@ -123,9 +119,7 @@ pub async fn list_channels_hourly(
         .await
         .map_err(|e| {
             log::error!("Failed to read channels: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to read channels",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to read channels"))
         })?;
     Ok(serde_json::to_string(&ChannelPage {
         next_page: channels.1,
@@ -156,9 +150,7 @@ pub async fn list_channels_monthly(
     .await
     .map_err(|e| {
         log::error!("Failed to read channels: {}", e);
-        salvo::Error::Io(std::io::Error::other(
-            "Failed to read channels",
-        ))
+        salvo::Error::Io(std::io::Error::other("Failed to read channels"))
     })?;
     Ok(serde_json::to_string(&ChannelPage {
         next_page: channels.1,
@@ -177,11 +169,22 @@ pub async fn node_udt_infos(
         .await
         .map_err(|e| {
             log::error!("Failed to query node UDT relation: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query node UDT relation",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to query node UDT relation"))
         })?;
     Ok(serde_json::to_string(&udt_infos)?)
+}
+
+#[handler]
+pub async fn node_info(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let node_id = req.extract::<NodeId>().await?;
+    let pool = get_pg_pool();
+    let info = query_node_info(pool, node_id.node_id, node_id.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query node info: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to query node info"))
+        })?;
+    Ok(serde_json::json!({ "node_info": info }).to_string())
 }
 
 #[handler]
@@ -192,9 +195,7 @@ pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<Stri
         .await
         .map_err(|e| {
             log::error!("Failed to query nodes by UDT: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query nodes by UDT",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to query nodes by UDT"))
         })?;
     Ok(serde_json::json!({ "nodes": nodes }).to_string())
 }
@@ -246,9 +247,7 @@ pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<Str
         .await
         .map_err(|e| {
             log::error!("Failed to query channel state: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query channel state",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to query channel state"))
         })?;
     Ok(state)
 }
@@ -261,9 +260,7 @@ pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<Stri
         .await
         .map_err(|e| {
             log::error!("Failed to query channel info: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query channel info",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to query channel info"))
         })?;
     Ok(serde_json::json!({ "channel_info": info }).to_string())
 }
@@ -288,9 +285,7 @@ pub async fn channel_by_state(
         .await
         .map_err(|e| {
             log::error!("Failed to query channels by state: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query channels by state",
-            ))
+            salvo::Error::Io(std::io::Error::other("Failed to query channels by state"))
         })?;
     Ok(states)
 }

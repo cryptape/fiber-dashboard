@@ -47,6 +47,16 @@ pub async fn read_nodes_monthly(
         })
 }
 
+pub async fn query_node_info(
+    pool: &Pool<Postgres>,
+    node_id: JsonBytes,
+    net: Network,
+) -> Result<Option<HourlyNodeInfo>, sqlx::Error> {
+    HourlyNodeInfoDBRead::fetch_by_id(pool, node_id, net)
+        .await
+        .map(|res| res.map(HourlyNodeInfo::from))
+}
+
 pub async fn read_channels_hourly(
     pool: &Pool<Postgres>,
     page: usize,
