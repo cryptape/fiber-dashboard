@@ -559,7 +559,7 @@ pub async fn channel_states_monitor(
                         Some(op)
                     }
                 }).collect::<Vec<_>>();
-                log::info!("new channels received: {}", new.len());
+                log::info!("{:?}, new channels received: {}", net, new.len());
                 if !new.is_empty() {
                     let groups = new_channels(net, new, &rpc).await;
                     for group in groups {
@@ -1263,7 +1263,7 @@ pub async fn new_channels(
         groups.push(group);
     }
 
-    log::info!("new channels processed: {}", groups.len());
+    log::info!("{:?}, new channels processed: {}", net, groups.len());
     if !groups.is_empty() {
         let pool = get_pg_pool();
         let mut conn = pool.begin().await.unwrap();

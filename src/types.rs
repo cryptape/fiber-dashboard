@@ -338,7 +338,7 @@ pub static MAINNET_FUNDING_CODE_HASH: LazyLock<H256> = LazyLock::new(|| {
             } else {
                 &s
             };
-            H256::from_slice(s.as_bytes()).ok()
+            H256::from_str(s).ok()
         })
         .unwrap_or(h256!(
             "0xe45b1f8f21bff23137035a3ab751d75b36a981deec3e7820194b9c042967f4f1"
