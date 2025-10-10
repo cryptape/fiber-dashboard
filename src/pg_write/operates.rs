@@ -5,6 +5,7 @@ use crate::{
         ChannelInfoDBSchema, Network, NodeInfoDBSchema, RelationCache, UdtInfos, UdtNodeRelation,
         UdtdepRelation, global_cache, global_cache_testnet,
     },
+    rpc_client::{CKB_MAINNET_RPC_BEARER_TOKEN, CKB_TESTNET_RPC_BEARER_TOKEN},
     types::{
         IndexerScriptSearchMode, MAINNET_COMMITMENT_CODE_HASH, NodeInfo, Order, ScriptType,
         SearchKey, SearchKeyFilter, TESTNET_COMMITMENT_CODE_HASH, Tx, commitment_script,
@@ -383,7 +384,7 @@ fn summarize_data(
 }
 
 pub async fn channel_states_monitor(
-    rpc: RpcClient,
+    mut rpc: RpcClient,
     mut recv: tokio::sync::mpsc::Receiver<(Network, Vec<JsonBytes>)>,
 ) {
     let mut channel_states = {
@@ -549,7 +550,7 @@ pub async fn channel_states_monitor(
         tokio::select! {
             _ = internal.tick() => {
                 log::info!("channel states updated");
-                channel_tx_update(&mut channel_states, &rpc).await;
+                channel_tx_update(&mut channel_states, &mut rpc).await;
             }
             Some((net, new)) = recv.recv() => {
                 let new = new.into_iter().filter_map(|op| {
@@ -572,13 +573,19 @@ pub async fn channel_states_monitor(
     }
 }
 
-async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &RpcClient) {
+async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClient) {
     let mut testnet = HashMap::new();
     let mut mainnet = HashMap::new();
 
     let (testnet_tip, mainnet_tip) = loop {
-        let testnet_tip = rpc.get_indexer_tip(CKB_TESTNET_RPC.clone()).await;
-        let mainnet_tip = rpc.get_indexer_tip(CKB_MAINNET_RPC.clone()).await;
+        let testnet_tip = {
+            rpc.set_bearer_token(CKB_TESTNET_RPC_BEARER_TOKEN.clone());
+            rpc.get_indexer_tip(CKB_TESTNET_RPC.clone()).await
+        };
+        let mainnet_tip = {
+            rpc.set_bearer_token(CKB_MAINNET_RPC_BEARER_TOKEN.clone());
+            rpc.get_indexer_tip(CKB_MAINNET_RPC.clone()).await
+        };
         if let (Ok(testnet_tip), Ok(mainnet_tip)) = (testnet_tip, mainnet_tip) {
             break (testnet_tip, mainnet_tip);
         }
@@ -590,8 +597,14 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &RpcClient) 
             State::Closed => {}
             State::Funding { funding_args, .. } => {
                 let url = match state.net {
-                    Network::Mainnet => CKB_MAINNET_RPC.clone(),
-                    Network::Testnet => CKB_TESTNET_RPC.clone(),
+                    Network::Mainnet => {
+                        rpc.set_bearer_token(CKB_MAINNET_RPC_BEARER_TOKEN.clone());
+                        CKB_MAINNET_RPC.clone()
+                    }
+                    Network::Testnet => {
+                        rpc.set_bearer_token(CKB_TESTNET_RPC_BEARER_TOKEN.clone());
+                        CKB_TESTNET_RPC.clone()
+                    }
                 };
                 let txs = loop {
                     let txs = rpc
@@ -730,8 +743,14 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &RpcClient) 
                     Network::Testnet => &TESTNET_COMMITMENT_CODE_HASH,
                 };
                 let url = match state.net {
-                    Network::Mainnet => CKB_MAINNET_RPC.clone(),
-                    Network::Testnet => CKB_TESTNET_RPC.clone(),
+                    Network::Mainnet => {
+                        rpc.set_bearer_token(CKB_MAINNET_RPC_BEARER_TOKEN.clone());
+                        CKB_MAINNET_RPC.clone()
+                    }
+                    Network::Testnet => {
+                        rpc.set_bearer_token(CKB_TESTNET_RPC_BEARER_TOKEN.clone());
+                        CKB_TESTNET_RPC.clone()
+                    }
                 };
                 commitment_branch(
                     rpc,

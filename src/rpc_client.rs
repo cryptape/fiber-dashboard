@@ -23,12 +23,16 @@ pub static CKB_MAINNET_RPC: LazyLock<Url> = LazyLock::new(|| {
         .and_then(|url| Url::parse(&url).ok())
         .unwrap_or(Url::parse("https://mainnet.ckb.dev").unwrap())
 });
+pub static CKB_MAINNET_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("CKB_MAINNET_RPC_BEARER_TOKEN").ok());
 pub static CKB_TESTNET_RPC: LazyLock<Url> = LazyLock::new(|| {
     std::env::var("CKB_TESTNET_RPC_URL")
         .ok()
         .and_then(|url| Url::parse(&url).ok())
         .unwrap_or(Url::parse("https://testnet.ckb.dev").unwrap())
 });
+pub static CKB_TESTNET_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("CKB_TESTNET_RPC_BEARER_TOKEN").ok());
 
 macro_rules! jsonrpc {
     ($method:expr, $self:ident, $url:expr, $return:ty$(, $params:ident$(,)?)*) => {{
@@ -43,6 +47,11 @@ macro_rules! jsonrpc {
         let req_json: serde_json::Value = serde_json::from_str(&data).unwrap();
 
         let c = $self.raw.post($url).json(&req_json);
+        let c = if let Some(token) = &$self.bearer_token {
+            c.bearer_auth(token)
+        } else {
+            c
+        };
         async {
             let resp = c
                 .send()
@@ -70,6 +79,7 @@ macro_rules! jsonrpc {
 pub struct RpcClient {
     raw: Client,
     id: Arc<AtomicU64>,
+    bearer_token: Option<String>,
 }
 
 impl Default for RpcClient {
@@ -86,7 +96,12 @@ impl RpcClient {
                 .build()
                 .unwrap(),
             id: Arc::new(AtomicU64::new(0)),
+            bearer_token: None,
         }
+    }
+
+    pub fn set_bearer_token(&mut self, token: Option<String>) {
+        self.bearer_token = token;
     }
 
     pub fn get_node_graph(

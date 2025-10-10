@@ -14,10 +14,16 @@ use sqlx::{Row, types::chrono::Utc};
 
 fn main() {
     env_logger::init();
-    std::panic::set_hook(Box::new(|info| {
-        log::error!("Panic occurred: {:?}", info);
-        std::process::exit(1);
-    }));
+    if std::env::var("ALLOW_EXIT_ON_PANIC")
+        .unwrap_or_default()
+        .parse()
+        .unwrap_or(true)
+    {
+        std::panic::set_hook(Box::new(|info| {
+            log::error!("Panic occurred: {:?}", info);
+            std::process::exit(1);
+        }));
+    }
 
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -77,11 +83,15 @@ static MAINNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
         .map(|url| Url::parse(&url).unwrap())
         .ok()
 });
+static MAINNET_FIBER_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("FIBER_MAINNET_RPC_BEARER_TOKEN").ok());
 static TESTNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
     std::env::var("FIBER_TESTNET_RPC_URL")
         .map(|url| Url::parse(&url).unwrap())
         .ok()
 });
+static TESTNET_FIBER_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("FIBER_TESTNET_RPC_BEARER_TOKEN").ok());
 
 static NETS: LazyLock<Vec<fiber_dashbord_backend::Network>> = LazyLock::new(|| {
     MAINNET_FIBER_RPC_URL
@@ -97,7 +107,7 @@ static NETS: LazyLock<Vec<fiber_dashbord_backend::Network>> = LazyLock::new(|| {
 });
 
 async fn timed_commit_states() {
-    let rpc = RpcClient::new();
+    let mut rpc = RpcClient::new();
     let (tx, rx) = tokio::sync::mpsc::channel(8);
 
     tokio::spawn(channel_states_monitor(rpc.clone(), rx));
@@ -105,8 +115,14 @@ async fn timed_commit_states() {
     loop {
         for net in NETS.iter() {
             let url = match net {
-                fiber_dashbord_backend::Network::Mainnet => MAINNET_FIBER_RPC_URL.clone().unwrap(),
-                fiber_dashbord_backend::Network::Testnet => TESTNET_FIBER_RPC_URL.clone().unwrap(),
+                fiber_dashbord_backend::Network::Mainnet => {
+                    rpc.set_bearer_token(MAINNET_FIBER_RPC_BEARER_TOKEN.clone());
+                    MAINNET_FIBER_RPC_URL.clone().unwrap()
+                }
+                fiber_dashbord_backend::Network::Testnet => {
+                    rpc.set_bearer_token(TESTNET_FIBER_RPC_BEARER_TOKEN.clone());
+                    TESTNET_FIBER_RPC_URL.clone().unwrap()
+                }
             };
 
             let mut raw_nodes = Vec::new();
