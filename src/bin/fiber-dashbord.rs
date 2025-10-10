@@ -132,7 +132,7 @@ async fn timed_commit_states() {
 
                     after_cursor = Some(nodes.last_cursor);
                 } else {
-                    log::warn!("Failed to get node graph");
+                    log::warn!("Failed to get {:?}'s node graph", net);
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
@@ -160,7 +160,7 @@ async fn timed_commit_states() {
 
                     after_cursor = Some(channels.last_cursor);
                 } else {
-                    log::warn!("Failed to get channel graph");
+                    log::warn!("Failed to get {:?}'s channel graph", net);
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }

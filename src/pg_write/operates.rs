@@ -951,27 +951,37 @@ impl ChannelStateUpdate {
         conn: &mut sqlx::PgConnection,
         net: Network,
     ) -> Result<(), sqlx::Error> {
+        if updates.is_empty() {
+            return Ok(());
+        }
+
         let sql = format!(
-            "update {} set last_tx_hash=$1, last_block_number=$2, last_commitment_args=$3, state=$4 where channel_outpoint=$5",
+            "UPDATE {} SET 
+                last_tx_hash = $1,
+                last_block_number = $2,
+                last_commitment_args = $3,
+                state = $4
+            WHERE channel_outpoint = $5",
             net.channel_states()
         );
-        let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
-            sqlx::QueryBuilder::new(sql);
-        query_builder.push_values(updates.iter(), |mut b, cu| {
-            b.push_bind(hex_string(cu.txs.last().unwrap().0.as_bytes()))
-                .push_bind(hex_string(
+
+        for cu in updates {
+            sqlx::query(&sql)
+                .bind(hex_string(cu.txs.last().unwrap().0.as_bytes()))
+                .bind(hex_string(
                     cu.last_block_number.value().to_le_bytes().as_ref(),
                 ))
-                .push_bind(
+                .bind(
                     cu.last_commitment_args
                         .as_ref()
                         .map(|args| hex_string(args.as_bytes())),
                 )
-                .push_bind(cu.state.to_sql())
-                .push_bind(hex_string(cu.outpoint.as_bytes()));
-        });
-        let query = query_builder.build();
-        let _ = query.execute(conn).await?;
+                .bind(cu.state.to_sql())
+                .bind(hex_string(cu.outpoint.as_bytes()))
+                .execute(&mut *conn)
+                .await?;
+        }
+
         Ok(())
     }
 
@@ -980,6 +990,10 @@ impl ChannelStateUpdate {
         conn: &mut sqlx::PgConnection,
         net: Network,
     ) -> Result<(), sqlx::Error> {
+        if updates.is_empty() {
+            return Ok(());
+        }
+
         let sql = format!(
             "insert into {} (channel_outpoint, tx_hash, block_number, commitment_args) ",
             net.channel_txs()
@@ -992,12 +1006,15 @@ impl ChannelStateUpdate {
             .map(|(outpoint, (tx_hash, block_number, args))| {
                 (outpoint, tx_hash, block_number, args)
             });
-        query_builder.push_values(combin, |mut b, (outpoint, tx_hash, block_number, args)| {
-            b.push_bind(hex_string(outpoint.as_bytes()))
-                .push_bind(hex_string(tx_hash.as_bytes()))
-                .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
-                .push_bind(args.as_ref().map(|a| hex_string(a.as_bytes())));
-        });
+        query_builder.push_values(
+            combin.take(65535 / 4),
+            |mut b, (outpoint, tx_hash, block_number, args)| {
+                b.push_bind(hex_string(outpoint.as_bytes()))
+                    .push_bind(hex_string(tx_hash.as_bytes()))
+                    .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                    .push_bind(args.as_ref().map(|a| hex_string(a.as_bytes())));
+            },
+        );
         let query = query_builder.build();
         let _ = query.execute(conn).await?;
         Ok(())
