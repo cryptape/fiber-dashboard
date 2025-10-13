@@ -18,6 +18,7 @@ import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { SwipeableKpiCards } from "./SwipeableKpiCards";
 import NetworkGraphChart from "../../charts/NetworkGraphChart";
 import NodesRankingChart from "../../charts/NodesRankingChart";
+import ChannelsByState from "./ChannelsByState";
 
 export default function Dashboard() {
   const { apiClient, currentNetwork } = useNetwork();
@@ -89,6 +90,9 @@ export default function Dashboard() {
       </Card>
 
       <NodesRankingChart nodes={nodes || []} channels={channels || []} />
+
+      {/* Channels by State */}
+      <ChannelsByState />
 
       {/* Channels On World Map */}
       <Card className="card-zed card-zed-hover group">
