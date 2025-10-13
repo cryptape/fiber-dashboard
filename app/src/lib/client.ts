@@ -23,6 +23,15 @@ import {
   TimeSeriesData,
   AnalysisRequestParams,
   HistoryAnalysisResponse,
+  ChannelState,
+  ChannelStateInfo,
+  ChannelStateInfoSchema,
+  ChannelInfoResponse,
+  ChannelInfoResponseSchema,
+  NodeInfoResponse,
+  NodeInfoResponseSchema,
+  GroupChannelsByStateResponse,
+  GroupChannelsByStateResponseSchema,
 } from "./types";
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
@@ -151,6 +160,41 @@ export class APIClient {
       }
     );
     return response;
+  }
+
+  async getChannelState(channelId: string): Promise<ChannelStateInfo> {
+    return this.apiRequest<ChannelStateInfo>(
+      `/channel_state?channel_id=${encodeURIComponent(channelId)}`,
+      undefined,
+      ChannelStateInfoSchema
+    );
+  }
+
+  async getGroupChannelsByState(
+    state: ChannelState,
+    page: number = 0
+  ): Promise<GroupChannelsByStateResponse> {
+    return this.apiRequest<GroupChannelsByStateResponse>(
+      `/group_channel_by_state?state="${state}"&page=${page}`,
+      undefined,
+      GroupChannelsByStateResponseSchema
+    );
+  }
+
+  async getChannelInfo(channelId: string): Promise<ChannelInfoResponse> {
+    return this.apiRequest<ChannelInfoResponse>(
+      `/channel_info?channel_id=${encodeURIComponent(channelId)}`,
+      undefined,
+      ChannelInfoResponseSchema
+    );
+  }
+
+  async getNodeInfo(nodeId: string): Promise<NodeInfoResponse> {
+    return this.apiRequest<NodeInfoResponse>(
+      `/node_info?node_id=${encodeURIComponent(nodeId)}`,
+      undefined,
+      NodeInfoResponseSchema
+    );
   }
 
   async fetchAllActiveNodes(): Promise<RustNodeInfo[]> {

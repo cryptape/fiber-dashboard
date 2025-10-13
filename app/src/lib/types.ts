@@ -241,3 +241,33 @@ export interface HistoryAnalysisResponse {
   series: HistoryAnalysisSeries[];
   meta: HistoryAnalysisMeta;
 }
+
+// Channel state types
+export type ChannelState = "open" | "commitment" | "closed";
+
+export const ChannelStateInfoSchema = z.object({
+  channel_id: z.string(),
+  state: z.string(),
+  // Add other fields as needed based on backend response
+});
+
+export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
+
+// Channel info response (single channel)
+export const ChannelInfoResponseSchema = RustChannelInfoSchema;
+export type ChannelInfoResponse = z.infer<typeof ChannelInfoResponseSchema>;
+
+// Node info response (single node)
+export const NodeInfoResponseSchema = RustNodeInfoSchema;
+export type NodeInfoResponse = z.infer<typeof NodeInfoResponseSchema>;
+
+// Group channels by state response
+export const GroupChannelsByStateResponseSchema = z.object({
+  next_page: z.number(),
+  channels: z.array(RustChannelInfoSchema),
+  state: z.string(),
+});
+
+export type GroupChannelsByStateResponse = z.infer<
+  typeof GroupChannelsByStateResponseSchema
+>;
