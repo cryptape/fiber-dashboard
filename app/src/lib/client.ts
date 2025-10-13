@@ -210,7 +210,7 @@ export class APIClient {
     page: number = 0
   ): Promise<GroupChannelsByStateResponse> {
     return this.apiRequest<GroupChannelsByStateResponse>(
-      `/group_channel_by_state?state="${state}"&page=${page}`,
+      `/group_channel_by_state?state=${state}&page=${page}`,
       undefined,
       GroupChannelsByStateResponseSchema
     );

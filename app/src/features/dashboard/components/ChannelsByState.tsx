@@ -12,7 +12,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ArrowRight, Zap, Clock, X } from "lucide-react";
-import { ChannelState, RustChannelInfo } from "@/lib/types";
+import { ChannelState, BasicChannelInfo } from "@/lib/types";
 import { formatCompactNumber } from "@/lib/utils";
 import { useChannelsByState } from "../hooks/useChannels";
 
@@ -28,6 +28,9 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
     selectedState,
     0
   );
+
+  console.log("ChannelsByState data:", channelsData);
+  console.log("ChannelsByState isLoading:", isLoading);
 
   const handleChannelClick = (channelId: string) => {
     router.push(`/channel/${encodeURIComponent(channelId)}`);
@@ -67,6 +70,9 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
   };
 
   const states: ChannelState[] = ["open", "commitment", "closed"];
+
+  console.log("Rendering with channelsData:", channelsData);
+  console.log("List length:", channelsData?.list?.length);
 
   return (
     <Card className={`card-zed card-zed-hover group ${className}`}>
@@ -114,8 +120,8 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
           </div>
         ) : (
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {channelsData?.channels && channelsData.channels.length > 0 ? (
-              channelsData.channels.map((channel: RustChannelInfo) => (
+            {channelsData?.list && channelsData.list.length > 0 ? (
+              channelsData.list.map((channel: BasicChannelInfo) => (
                 <div
                   key={channel.channel_outpoint}
                   className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group/item"
@@ -136,13 +142,11 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
                         </span>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Capacity: {formatCompactNumber(channel.capacity)} CKB
+                        Last Block:{" "}
+                        {formatCompactNumber(channel.last_block_number)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Created:{" "}
-                        {new Date(
-                          parseInt(channel.created_timestamp) * 1000
-                        ).toLocaleDateString()}
+                        TX Hash: {formatChannelId(channel.last_tx_hash)}
                       </div>
                     </div>
                     <Button

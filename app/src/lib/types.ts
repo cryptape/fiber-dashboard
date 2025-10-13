@@ -262,12 +262,21 @@ export const NodeInfoResponseSchema = RustNodeInfoSchema;
 export type NodeInfoResponse = z.infer<typeof NodeInfoResponseSchema>;
 
 // Group channels by state response
-export const GroupChannelsByStateResponseSchema = z.object({
-  next_page: z.number(),
-  channels: z.array(RustChannelInfoSchema),
-  state: z.string(),
+// Basic channel info returned by group_channel_by_state API
+export const BasicChannelInfoSchema = z.object({
+  channel_outpoint: z.string(),
+  funding_args: z.string(),
+  last_block_number: z.string(),
+  last_tx_hash: z.string(),
+  last_commitment_args: z.string().nullable(),
 });
 
+export const GroupChannelsByStateResponseSchema = z.object({
+  next_page: z.number(),
+  list: z.array(BasicChannelInfoSchema),
+});
+
+export type BasicChannelInfo = z.infer<typeof BasicChannelInfoSchema>;
 export type GroupChannelsByStateResponse = z.infer<
   typeof GroupChannelsByStateResponseSchema
 >;
