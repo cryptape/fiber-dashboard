@@ -23,6 +23,9 @@ function ChannelDetailContent() {
   const channelId = decodeURIComponent(params.channelId as string);
   const { apiClient, currentNetwork } = useNetwork();
 
+  console.log("ChannelDetailContent - channelId:", channelId);
+  console.log("ChannelDetailContent - currentNetwork:", currentNetwork);
+
   const {
     data: channelInfo,
     isLoading: channelLoading,
@@ -34,24 +37,35 @@ function ChannelDetailContent() {
     retry: 3,
   });
 
-  const { data: channelState, isLoading: stateLoading } = useQuery({
+  console.log("ChannelDetailContent - channelInfo:", channelInfo);
+  console.log("ChannelDetailContent - channelLoading:", channelLoading);
+  console.log("ChannelDetailContent - channelError:", channelError);
+
+  const {
+    data: channelState,
+    isLoading: stateLoading,
+    error: stateError,
+  } = useQuery({
     queryKey: ["channel-state", channelId, currentNetwork],
     queryFn: () => apiClient.getChannelState(channelId),
     enabled: !!channelId,
     retry: 3,
   });
 
-  const { data: node1Info } = useQuery({
+  const { data: node1Info, error: node1Error } = useQuery({
     queryKey: ["node-info", channelInfo?.node1, currentNetwork],
     queryFn: () => apiClient.getNodeInfo(channelInfo!.node1),
     enabled: !!channelInfo?.node1,
   });
 
-  const { data: node2Info } = useQuery({
+  const { data: node2Info, error: node2Error } = useQuery({
     queryKey: ["node-info", channelInfo?.node2, currentNetwork],
     queryFn: () => apiClient.getNodeInfo(channelInfo!.node2),
     enabled: !!channelInfo?.node2,
   });
+
+  // Check for any errors
+  const hasError = channelError || stateError || node1Error || node2Error;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -90,7 +104,13 @@ function ChannelDetailContent() {
     return `${nodeId.slice(0, 12)}...${nodeId.slice(-12)}`;
   };
 
-  if (channelError) {
+  if (hasError) {
+    console.log("ChannelDetailContent - showing error UI, errors:", {
+      channelError,
+      stateError,
+      node1Error,
+      node2Error,
+    });
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
@@ -109,6 +129,13 @@ function ChannelDetailContent() {
               <p className="text-muted-foreground">
                 The channel with ID {channelId} could not be found or is not
                 accessible.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Error:{" "}
+                {channelError?.message ||
+                  node1Error?.message ||
+                  node2Error?.message ||
+                  "Unknown error"}
               </p>
             </CardContent>
           </Card>
@@ -151,6 +178,10 @@ function ChannelDetailContent() {
               </div>
             ) : channelInfo ? (
               <>
+                {console.log(
+                  "ChannelDetailContent - rendering channelInfo:",
+                  channelInfo
+                )}
                 {/* Channel State and ID */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">

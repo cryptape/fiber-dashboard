@@ -66,8 +66,22 @@ export class APIClient {
       }
 
       const json = await response.json();
+      console.log(`API response for ${endpoint}:`, json);
+
+      // Check if this is an error response
+      if (
+        json &&
+        typeof json === "object" &&
+        "success" in json &&
+        json.success === false
+      ) {
+        console.log("API returned error response:", json);
+        throw new Error(json.message || "API returned error");
+      }
+
       if (schema) {
-        return schema.parse(json);
+        const parsed = schema.parse(json);
+        return parsed;
       }
       return json as T;
     } catch (error) {
@@ -163,11 +177,32 @@ export class APIClient {
   }
 
   async getChannelState(channelId: string): Promise<ChannelStateInfo> {
-    return this.apiRequest<ChannelStateInfo>(
-      `/channel_state?channel_id=${encodeURIComponent(channelId)}`,
-      undefined,
-      ChannelStateInfoSchema
+    console.log("getChannelState called with channelId:", channelId);
+    const rawResponse = await this.apiRequest<any>(
+      `/channel_state?channel_id=${encodeURIComponent(channelId)}`
     );
+    console.log("getChannelState raw response:", rawResponse);
+
+    // The API returns { funding_args, state, txs } but we need { channel_id, state }
+    if (
+      rawResponse &&
+      typeof rawResponse === "object" &&
+      "state" in rawResponse
+    ) {
+      console.log("Mapping channel_state response to expected format");
+      const mappedResponse = {
+        channel_id: channelId,
+        state: rawResponse.state,
+      };
+      const result = ChannelStateInfoSchema.parse(mappedResponse);
+      console.log("getChannelState parsed result:", result);
+      return result;
+    }
+
+    // Fallback: try to parse directly (if API changes)
+    const result = ChannelStateInfoSchema.parse(rawResponse);
+    console.log("getChannelState parsed result (direct):", result);
+    return result;
   }
 
   async getGroupChannelsByState(
@@ -182,19 +217,55 @@ export class APIClient {
   }
 
   async getChannelInfo(channelId: string): Promise<ChannelInfoResponse> {
-    return this.apiRequest<ChannelInfoResponse>(
-      `/channel_info?channel_id=${encodeURIComponent(channelId)}`,
-      undefined,
-      ChannelInfoResponseSchema
+    console.log("getChannelInfo called with channelId:", channelId);
+    const rawResponse = await this.apiRequest<any>(
+      `/channel_info?channel_id=${encodeURIComponent(channelId)}`
     );
+    console.log("getChannelInfo raw response:", rawResponse);
+
+    // The API returns { channel_info: { ...actual channel data... } }
+    if (
+      rawResponse &&
+      typeof rawResponse === "object" &&
+      "channel_info" in rawResponse
+    ) {
+      console.log("Unwrapping channel_info from response");
+      const channelData = rawResponse.channel_info;
+      const result = ChannelInfoResponseSchema.parse(channelData);
+      console.log("getChannelInfo parsed result:", result);
+      return result;
+    }
+
+    // Fallback: try to parse directly
+    const result = ChannelInfoResponseSchema.parse(rawResponse);
+    console.log("getChannelInfo parsed result (direct):", result);
+    return result;
   }
 
   async getNodeInfo(nodeId: string): Promise<NodeInfoResponse> {
-    return this.apiRequest<NodeInfoResponse>(
-      `/node_info?node_id=${encodeURIComponent(nodeId)}`,
-      undefined,
-      NodeInfoResponseSchema
+    console.log("getNodeInfo called with nodeId:", nodeId);
+    const rawResponse = await this.apiRequest<any>(
+      `/node_info?node_id=${encodeURIComponent(nodeId)}`
     );
+    console.log("getNodeInfo raw response:", rawResponse);
+
+    // The API returns { node_info: { ...actual node data... } }
+    if (
+      rawResponse &&
+      typeof rawResponse === "object" &&
+      "node_info" in rawResponse
+    ) {
+      console.log("Unwrapping node_info from response");
+      const nodeData = rawResponse.node_info;
+      const result = NodeInfoResponseSchema.parse(nodeData);
+      console.log("getNodeInfo parsed result:", result);
+      return result;
+    }
+
+    // Fallback: try to parse directly
+    const result = NodeInfoResponseSchema.parse(rawResponse);
+    console.log("getNodeInfo parsed result (direct):", result);
+    return result;
   }
 
   async fetchAllActiveNodes(): Promise<RustNodeInfo[]> {
