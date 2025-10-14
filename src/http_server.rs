@@ -234,7 +234,7 @@ pub async fn analysis(req: &mut Request, _res: &mut Response) -> Result<String, 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
 struct ChannelId {
-    channel_id: JsonBytes,
+    channel_outpoint: JsonBytes,
     #[serde(default)]
     net: Network,
 }
@@ -243,7 +243,7 @@ struct ChannelId {
 pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
     let channel_id = req.extract::<ChannelId>().await?;
     let pool = get_pg_pool();
-    let state = query_channel_state(pool, channel_id.channel_id, channel_id.net)
+    let state = query_channel_state(pool, channel_id.channel_outpoint, channel_id.net)
         .await
         .map_err(|e| {
             log::error!("Failed to query channel state: {}", e);
@@ -256,7 +256,7 @@ pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<Str
 pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
     let channel_id = req.extract::<ChannelId>().await?;
     let pool = get_pg_pool();
-    let info = query_channel_info(pool, channel_id.channel_id, channel_id.net)
+    let info = query_channel_info(pool, channel_id.channel_outpoint, channel_id.net)
         .await
         .map_err(|e| {
             log::error!("Failed to query channel info: {}", e);
