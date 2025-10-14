@@ -46,6 +46,7 @@ create table channel_txs (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
+    witness_args TEXT,
     commitment_args TEXT
 );
 
@@ -246,6 +247,7 @@ create table channel_txs_testnet (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states_testnet(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
+    witness_args TEXT,
     commitment_args TEXT
 );
 

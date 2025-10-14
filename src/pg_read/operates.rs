@@ -547,7 +547,7 @@ pub async fn query_channel_state(
     let txs = net.channel_txs();
     let sql = format!(
         r#"
-        select {states}.funding_args, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.commitment_args 
+        select {states}.funding_args, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.witness_args, {txs}.commitment_args
         from {states} 
         join {txs} on {txs}.channel_outpoint = {states}.channel_outpoint 
         where {states}.channel_outpoint = $1
@@ -573,11 +573,13 @@ pub async fn query_channel_state(
 
             let raw_tx_hash: String = row.get("tx_hash");
             let raw_block_number: String = row.get("block_number");
+            let raw_witness_args: Option<String> = row.get("witness_args");
             let raw_commitment_args: Option<String> = row.get("commitment_args");
             let tx_hash = format!("0x{}", raw_tx_hash);
             let block_number = format!("0x{}", raw_block_number);
+            let witness_args = raw_witness_args.map(|args| format!("0x{}", args));
             let commitment_args = raw_commitment_args.map(|args| format!("0x{}", args));
-            (tx_hash, block_number, commitment_args)
+            (tx_hash, block_number, witness_args, commitment_args)
         })
         .collect::<Vec<_>>();
 
@@ -593,6 +595,7 @@ pub async fn query_channel_state(
     struct Txs {
         tx_hash: String,
         block_number: String,
+        witness_args: Option<String>,
         commitment_args: Option<String>,
     }
     #[derive(Serialize, Deserialize, Debug)]
@@ -607,11 +610,14 @@ pub async fn query_channel_state(
         state,
         txs: rows
             .into_iter()
-            .map(|(tx_hash, block_number, commitment_args)| Txs {
-                tx_hash,
-                block_number,
-                commitment_args,
-            })
+            .map(
+                |(tx_hash, block_number, witness_args, commitment_args)| Txs {
+                    tx_hash,
+                    block_number,
+                    witness_args,
+                    commitment_args,
+                },
+            )
             .collect(),
     };
 
