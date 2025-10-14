@@ -189,10 +189,12 @@ export class APIClient {
     );
     console.log("getChannelState raw response:", rawResponse);
 
-    // The API returns { funding_args, state, txs } but we need { channel_id, state }
+    // Include all fields from the API response
     const mappedResponse = {
       channel_id: channelId,
+      funding_args: rawResponse.funding_args,
       state: rawResponse.state,
+      txs: rawResponse.txs,
     };
     return ChannelStateInfoSchema.parse(mappedResponse);
   }

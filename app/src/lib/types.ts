@@ -245,14 +245,6 @@ export interface HistoryAnalysisResponse {
 // Channel state types
 export type ChannelState = "open" | "commitment" | "closed";
 
-export const ChannelStateInfoSchema = z.object({
-  channel_id: z.string(),
-  state: z.string(),
-  // Add other fields as needed based on backend response
-});
-
-export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
-
 // Channel info response (single channel)
 export const ChannelInfoResponseSchema = RustChannelInfoSchema;
 export type ChannelInfoResponse = z.infer<typeof ChannelInfoResponseSchema>;
@@ -276,6 +268,15 @@ export const ChannelStateTxSchema = z.object({
   block_number: z.string(),
   commitment_args: z.string().nullable(),
 });
+
+export const ChannelStateInfoSchema = z.object({
+  channel_id: z.string(),
+  funding_args: z.string(),
+  state: z.string(),
+  txs: z.array(ChannelStateTxSchema),
+});
+
+export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
 
 export const ChannelStateApiResponseSchema = z.object({
   funding_args: z.string(),
