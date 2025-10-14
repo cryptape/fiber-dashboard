@@ -96,12 +96,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <NodesRankingChart
-        nodes={nodes || []}
-        channels={channels || []}
-        onNodeClick={handleNodeClick}
-      />
-
       {/* Channels by State */}
       <ChannelsByState />
 
@@ -129,6 +123,12 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <NodesRankingChart
+        nodes={nodes || []}
+        channels={channels || []}
+        onNodeClick={handleNodeClick}
+      />
 
       {/* City Map Chart */}
       <Card className="card-zed card-zed-hover group">
