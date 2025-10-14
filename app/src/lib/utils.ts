@@ -40,33 +40,47 @@ export function u128LittleEndianToDecimal(hex: string): bigint {
   return BigInt("0x" + reversedHex);
 }
 
-/**
- * Formats a number to a compact string with k/m/b suffixes
- * @param value - The number or string to format
- * @param precision - Number of decimal places (default: 1, null for no decimals)
- * @returns Formatted string (e.g., "1.2k", "3.4m", "2.1b")
- */
 export function formatCompactNumber(
-  value: number | string,
+  value: number | string | bigint,
   precision: number | null = 1
 ): string {
+  let processedValue: number | bigint;
+
   // Handle string input
   if (typeof value === "string") {
-    // Try to extract number from string (e.g., "1,234.56" -> 1234.56)
-    const cleanValue = value.replace(/,/g, "");
-    const numberValue = parseFloat(cleanValue);
+    // Check if it's a hex string
+    if (value.startsWith("0x")) {
+      try {
+        processedValue = hexToDecimal(value);
+      } catch {
+        return value; // Return original string if hex conversion fails
+      }
+    } else {
+      // Try to extract number from string (e.g., "1,234.56" -> 1234.56)
+      const cleanValue = value.replace(/,/g, "");
+      const numberValue = parseFloat(cleanValue);
 
-    if (isNaN(numberValue)) {
-      return value; // Return original string if not a valid number
+      if (isNaN(numberValue)) {
+        return value; // Return original string if not a valid number
+      }
+
+      processedValue = numberValue; // Continue with number processing
     }
-
-    value = numberValue; // Continue with number processing
+  } else {
+    processedValue = value;
   }
 
-  if (value === 0) return "0";
+  // Convert bigint to number for formatting
+  if (typeof processedValue === "bigint") {
+    processedValue = Number(processedValue);
+  }
 
-  const absValue = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
+  const numValue = processedValue as number;
+
+  if (numValue === 0) return "0";
+
+  const absValue = Math.abs(numValue);
+  const sign = numValue < 0 ? "-" : "";
 
   // Helper function to format with precision
   const formatWithPrecision = (num: number): string => {
