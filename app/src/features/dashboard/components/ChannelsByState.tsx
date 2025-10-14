@@ -49,8 +49,8 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
   console.log("ChannelsByState data:", channelsData);
   console.log("ChannelsByState isLoading:", isLoading);
 
-  const handleChannelClick = (channelId: string) => {
-    router.push(`/channel/${encodeURIComponent(channelId)}`);
+  const handleChannelClick = (channelOutpoint: string) => {
+    router.push(`/channel/${encodeURIComponent(channelOutpoint)}`);
   };
 
   const getStateIcon = (state: ChannelState) => {
