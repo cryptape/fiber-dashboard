@@ -29,6 +29,23 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
     0
   );
 
+  // Fetch counts for all states
+  const { data: openCount } = useChannelsByState("open", 0);
+  const { data: commitmentCount } = useChannelsByState("commitment", 0);
+  const { data: closedCount } = useChannelsByState("closed", 0);
+
+  const getStateCount = (state: ChannelState) => {
+    const data =
+      state === "open"
+        ? openCount
+        : state === "commitment"
+          ? commitmentCount
+          : closedCount;
+    const count = data?.list?.length || 0;
+    const hasMore = (data?.next_page || 0) > 1;
+    return hasMore ? `${count}+` : count.toString();
+  };
+
   console.log("ChannelsByState data:", channelsData);
   console.log("ChannelsByState isLoading:", isLoading);
 
@@ -99,6 +116,9 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
             >
               {getStateIcon(state)}
               {state}
+              <span className="text-xs opacity-75">
+                ({getStateCount(state)})
+              </span>
             </Button>
           ))}
         </div>
@@ -124,44 +144,41 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
               channelsData.list.map((channel: BasicChannelInfo) => (
                 <div
                   key={channel.channel_outpoint}
-                  className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group/item"
+                  className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group/item"
                   onClick={() => handleChannelClick(channel.channel_outpoint)}
                 >
-                  <div className="flex justify-between items-center">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        {getStateIcon(selectedState)}
-                        <Badge
-                          variant={getStateBadgeVariant(selectedState)}
-                          className="capitalize"
-                        >
-                          {selectedState}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {formatChannelId(channel.channel_outpoint)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {getStateIcon(selectedState)}
+                      <Badge
+                        variant={getStateBadgeVariant(selectedState)}
+                        className="capitalize text-xs"
+                      >
+                        {selectedState}
+                      </Badge>
+                      <span className="text-sm font-mono text-muted-foreground truncate">
+                        {formatChannelId(channel.channel_outpoint)}
+                      </span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
                         Last Block:{" "}
                         {Number(
                           u64LittleEndianToDecimal(channel.last_block_number)
                         ).toLocaleString()}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        TX Hash: {formatChannelId(channel.last_tx_hash)}
-                      </div>
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                        Last TX: {formatChannelId(channel.last_tx_hash)}
+                      </span>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover/item:opacity-100 transition-opacity"
+                      className="opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0"
                       onClick={e => {
                         e.stopPropagation();
                         handleChannelClick(channel.channel_outpoint);
                       }}
                     >
-                      View Details
-                      <ArrowRight className="h-4 w-4 ml-2" />
+                      <ArrowRight className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
