@@ -86,6 +86,12 @@ export function formatCompactNumber(
     } else {
       // Try to extract number from string (e.g., "1,234.56" -> 1234.56)
       const cleanValue = value.replace(/,/g, "");
+
+      // Check if the string contains only numeric characters, decimal point, and minus sign
+      if (!/^[-]?\d*\.?\d*$/.test(cleanValue)) {
+        return value; // Return original string if it contains non-numeric characters
+      }
+
       const numberValue = parseFloat(cleanValue);
 
       if (isNaN(numberValue)) {
