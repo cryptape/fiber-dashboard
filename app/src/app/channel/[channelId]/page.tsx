@@ -15,7 +15,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { Separator } from "@/shared/components/ui/separator";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
-import { formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber, hexToDecimal } from "@/lib/utils";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 
 function ChannelDetailContent() {
@@ -231,7 +231,7 @@ function ChannelDetailContent() {
                     <span className="text-sm font-medium">Created</span>
                     <p className="text-sm text-muted-foreground">
                       {new Date(
-                        parseInt(channelInfo.created_timestamp) * 1000
+                        Number(hexToDecimal(channelInfo.created_timestamp))
                       ).toLocaleString()}
                     </p>
                   </div>
@@ -239,9 +239,7 @@ function ChannelDetailContent() {
                   <div className="space-y-1">
                     <span className="text-sm font-medium">Last Commit</span>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(
-                        parseInt(channelInfo.commit_timestamp) * 1000
-                      ).toLocaleString()}
+                      {new Date(channelInfo.commit_timestamp).toLocaleString()}
                     </p>
                   </div>
                 </div>
