@@ -183,7 +183,7 @@ export class APIClient {
   async getChannelState(channelId: string): Promise<ChannelStateInfo> {
     console.log("getChannelState called with channelId:", channelId);
     const rawResponse = await this.apiRequest<ChannelStateApiResponse>(
-      `/channel_state?channel_id=${encodeURIComponent(channelId)}`,
+      `/channel_state?channel_outpoint=${encodeURIComponent(channelId)}`,
       undefined,
       ChannelStateApiResponseSchema
     );
@@ -213,7 +213,7 @@ export class APIClient {
   async getChannelInfo(channelId: string): Promise<ChannelInfoResponse> {
     console.log("getChannelInfo called with channelId:", channelId);
     const rawResponse = await this.apiRequest<ChannelInfoApiResponse>(
-      `/channel_info?channel_id=${encodeURIComponent(channelId)}`,
+      `/channel_info?channel_outpoint=${encodeURIComponent(channelId)}`,
       undefined,
       ChannelInfoApiResponseSchema
     );

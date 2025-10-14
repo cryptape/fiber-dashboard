@@ -25,10 +25,10 @@ import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 function ChannelDetailContent() {
   const router = useRouter();
   const params = useParams();
-  const channelId = decodeURIComponent(params.channelId as string);
+  const channelOutpoint = decodeURIComponent(params.channelOutpoint as string);
   const { apiClient, currentNetwork } = useNetwork();
 
-  console.log("ChannelDetailContent - channelId:", channelId);
+  console.log("ChannelDetailContent - channelOutpoint:", channelOutpoint);
   console.log("ChannelDetailContent - currentNetwork:", currentNetwork);
 
   const {
@@ -36,9 +36,9 @@ function ChannelDetailContent() {
     isLoading: channelLoading,
     error: channelError,
   } = useQuery({
-    queryKey: ["channel-info", channelId, currentNetwork],
-    queryFn: () => apiClient.getChannelInfo(channelId),
-    enabled: !!channelId,
+    queryKey: ["channel-info", channelOutpoint, currentNetwork],
+    queryFn: () => apiClient.getChannelInfo(channelOutpoint),
+    enabled: !!channelOutpoint,
     retry: 3,
   });
 
@@ -51,9 +51,9 @@ function ChannelDetailContent() {
     isLoading: stateLoading,
     error: stateError,
   } = useQuery({
-    queryKey: ["channel-state", channelId, currentNetwork],
-    queryFn: () => apiClient.getChannelState(channelId),
-    enabled: !!channelId,
+    queryKey: ["channel-state", channelOutpoint, currentNetwork],
+    queryFn: () => apiClient.getChannelState(channelOutpoint),
+    enabled: !!channelOutpoint,
     retry: 3,
   });
 
@@ -132,8 +132,8 @@ function ChannelDetailContent() {
             <CardContent className="p-8 text-center">
               <h2 className="text-xl font-semibold mb-2">Channel Not Found</h2>
               <p className="text-muted-foreground">
-                The channel with ID {channelId} could not be found or is not
-                accessible.
+                The channel with outpoint {channelOutpoint} could not be found
+                or is not accessible.
               </p>
               <p className="text-sm text-muted-foreground mt-2">
                 Error:{" "}
