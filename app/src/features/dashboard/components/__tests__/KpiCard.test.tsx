@@ -8,7 +8,8 @@ describe("KpiCard", () => {
     render(<KpiCard title="Total Capacity" value="15,420.5 BTC" />);
 
     expect(screen.getByText("Total Capacity")).toBeInTheDocument();
-    expect(screen.getByText("15,420.5 BTC")).toBeInTheDocument();
+    expect(screen.getByText("15.4k")).toBeInTheDocument();
+    expect(screen.getByText("BTC")).toBeInTheDocument();
   });
 
   it("renders with positive change", () => {
@@ -44,6 +45,7 @@ describe("KpiCard", () => {
     );
 
     expect(screen.getByText("Network Growth")).toBeInTheDocument();
-    expect(screen.getByText("12.5%")).toBeInTheDocument();
+    expect(screen.getByText("12.5")).toBeInTheDocument();
+    expect(screen.getByText("%")).toBeInTheDocument();
   });
 });

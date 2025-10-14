@@ -23,6 +23,19 @@ import {
   TimeSeriesData,
   AnalysisRequestParams,
   HistoryAnalysisResponse,
+  ChannelState,
+  ChannelStateInfo,
+  ChannelStateInfoSchema,
+  ChannelInfoResponse,
+  NodeInfoResponse,
+  ChannelInfoApiResponse,
+  ChannelInfoApiResponseSchema,
+  NodeInfoApiResponse,
+  NodeInfoApiResponseSchema,
+  ChannelStateApiResponse,
+  ChannelStateApiResponseSchema,
+  GroupChannelsByStateResponse,
+  GroupChannelsByStateResponseSchema,
 } from "./types";
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
@@ -57,8 +70,22 @@ export class APIClient {
       }
 
       const json = await response.json();
+      console.log(`API response for ${endpoint}:`, json);
+
+      // Check if this is an error response
+      if (
+        json &&
+        typeof json === "object" &&
+        "success" in json &&
+        json.success === false
+      ) {
+        console.log("API returned error response:", json);
+        throw new Error(json.message || "API returned error");
+      }
+
       if (schema) {
-        return schema.parse(json);
+        const parsed = schema.parse(json);
+        return parsed;
       }
       return json as T;
     } catch (error) {
@@ -151,6 +178,60 @@ export class APIClient {
       }
     );
     return response;
+  }
+
+  async getChannelState(channelId: string): Promise<ChannelStateInfo> {
+    console.log("getChannelState called with channelId:", channelId);
+    const rawResponse = await this.apiRequest<ChannelStateApiResponse>(
+      `/channel_state?channel_id=${encodeURIComponent(channelId)}`,
+      undefined,
+      ChannelStateApiResponseSchema
+    );
+    console.log("getChannelState raw response:", rawResponse);
+
+    // The API returns { funding_args, state, txs } but we need { channel_id, state }
+    const mappedResponse = {
+      channel_id: channelId,
+      state: rawResponse.state,
+    };
+    return ChannelStateInfoSchema.parse(mappedResponse);
+  }
+
+  async getGroupChannelsByState(
+    state: ChannelState,
+    page: number = 0
+  ): Promise<GroupChannelsByStateResponse> {
+    return this.apiRequest<GroupChannelsByStateResponse>(
+      `/group_channel_by_state?state=${state}&page=${page}`,
+      undefined,
+      GroupChannelsByStateResponseSchema
+    );
+  }
+
+  async getChannelInfo(channelId: string): Promise<ChannelInfoResponse> {
+    console.log("getChannelInfo called with channelId:", channelId);
+    const rawResponse = await this.apiRequest<ChannelInfoApiResponse>(
+      `/channel_info?channel_id=${encodeURIComponent(channelId)}`,
+      undefined,
+      ChannelInfoApiResponseSchema
+    );
+    console.log("getChannelInfo raw response:", rawResponse);
+
+    // The API returns { channel_info: { ...actual channel data... } }
+    return rawResponse.channel_info;
+  }
+
+  async getNodeInfo(nodeId: string): Promise<NodeInfoResponse> {
+    console.log("getNodeInfo called with nodeId:", nodeId);
+    const rawResponse = await this.apiRequest<NodeInfoApiResponse>(
+      `/node_info?node_id=${encodeURIComponent(nodeId)}`,
+      undefined,
+      NodeInfoApiResponseSchema
+    );
+    console.log("getNodeInfo raw response:", rawResponse);
+
+    // The API returns { node_info: { ...actual node data... } }
+    return rawResponse.node_info;
   }
 
   async fetchAllActiveNodes(): Promise<RustNodeInfo[]> {

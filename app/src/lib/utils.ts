@@ -41,32 +41,80 @@ export function u128LittleEndianToDecimal(hex: string): bigint {
 }
 
 /**
- * Formats a number to a compact string with k/m/b suffixes
- * @param value - The number or string to format
- * @param precision - Number of decimal places (default: 1, null for no decimals)
- * @returns Formatted string (e.g., "1.2k", "3.4m", "2.1b")
+ * Converts a u64 little-endian hex string to a decimal value
+ * The hex string represents 8 bytes in little-endian order
+ * @param hex - Hex string like "0xb4821e0100000000"
+ * @returns BigInt representing the decimal value
  */
-export function formatCompactNumber(
-  value: number | string,
-  precision: number | null = 1
-): string {
-  // Handle string input
-  if (typeof value === "string") {
-    // Try to extract number from string (e.g., "1,234.56" -> 1234.56)
-    const cleanValue = value.replace(/,/g, "");
-    const numberValue = parseFloat(cleanValue);
+export function u64LittleEndianToDecimal(hex: string): bigint {
+  // Remove 0x prefix if present
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
 
-    if (isNaN(numberValue)) {
-      return value; // Return original string if not a valid number
-    }
+  // Ensure the hex string is 16 characters (8 bytes) by padding with zeros
+  const paddedHex = cleanHex.padStart(16, "0");
 
-    value = numberValue; // Continue with number processing
+  // Split into bytes and reverse (little-endian to big-endian)
+  const bytes: number[] = [];
+  for (let i = 0; i < paddedHex.length; i += 2) {
+    bytes.push(parseInt(paddedHex.substr(i, 2), 16));
   }
 
-  if (value === 0) return "0";
+  // Reverse the bytes to convert from little-endian to big-endian
+  bytes.reverse();
 
-  const absValue = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
+  // Convert back to hex string
+  const reversedHex = bytes.map(b => b.toString(16).padStart(2, "0")).join("");
+
+  return BigInt("0x" + reversedHex);
+}
+
+export function formatCompactNumber(
+  value: number | string | bigint,
+  precision: number | null = 1
+): string {
+  let processedValue: number | bigint;
+
+  // Handle string input
+  if (typeof value === "string") {
+    // Check if it's a hex string
+    if (value.startsWith("0x")) {
+      try {
+        processedValue = hexToDecimal(value);
+      } catch {
+        return value; // Return original string if hex conversion fails
+      }
+    } else {
+      // Try to extract number from string (e.g., "1,234.56" -> 1234.56)
+      const cleanValue = value.replace(/,/g, "");
+
+      // Check if the string contains only numeric characters, decimal point, and minus sign
+      if (!/^[-]?\d*\.?\d*$/.test(cleanValue)) {
+        return value; // Return original string if it contains non-numeric characters
+      }
+
+      const numberValue = parseFloat(cleanValue);
+
+      if (isNaN(numberValue)) {
+        return value; // Return original string if not a valid number
+      }
+
+      processedValue = numberValue; // Continue with number processing
+    }
+  } else {
+    processedValue = value;
+  }
+
+  // Convert bigint to number for formatting
+  if (typeof processedValue === "bigint") {
+    processedValue = Number(processedValue);
+  }
+
+  const numValue = processedValue as number;
+
+  if (numValue === 0) return "0";
+
+  const absValue = Math.abs(numValue);
+  const sign = numValue < 0 ? "-" : "";
 
   // Helper function to format with precision
   const formatWithPrecision = (num: number): string => {

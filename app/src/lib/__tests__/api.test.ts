@@ -38,7 +38,7 @@ describe("API Functions", () => {
 
   describe("API Request with net parameter", () => {
     it("adds net parameter to API requests", async () => {
-      const mockResponse = { nodes: [], total: 0 };
+      const mockResponse = { nodes: [], next_page: 1 };
       (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
@@ -56,7 +56,7 @@ describe("API Functions", () => {
 
   describe("Historical data with date parameters", () => {
     it("adds start and end parameters to historical nodes request", async () => {
-      const mockResponse = { nodes: [], total: 0 };
+      const mockResponse = { nodes: [], next_page: 1 };
       (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
@@ -73,7 +73,34 @@ describe("API Functions", () => {
   });
 
   describe("fetchDashboardData", () => {
-    it("returns mock data when no real API is configured", async () => {
+    it("returns dashboard data when API calls succeed", async () => {
+      // Mock all the API calls that fetchDashboardData makes
+      const mockNodesResponse = { nodes: [], next_page: 1 };
+      const mockChannelsResponse = { channels: [], next_page: 1 };
+      const mockAnalysisResponse = {
+        total_capacity: "1000000000",
+        max_capacity: "1000000",
+        min_capacity: "1000",
+        avg_capacity: "500000",
+        median_capacity: "400000",
+        total_nodes: "100",
+        channel_len: "50",
+      };
+
+      (fetch as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockNodesResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockChannelsResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockAnalysisResponse,
+        });
+
       const apiClient = new APIClient();
       const data = await apiClient.fetchDashboardData();
 
@@ -82,13 +109,23 @@ describe("API Functions", () => {
       expect(data).toHaveProperty("ispRankings");
     });
 
-    it("returns mock data when real API fails", async () => {
-      (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    it("throws error when API calls fail", async () => {
+      // Mock all fetch calls to reject since fetchDashboardData makes multiple API calls
+      (fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error("API Error")
       );
 
+      // Suppress console.error logs during this test
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
       const apiClient = new APIClient();
-      await apiClient.fetchDashboardData();
+
+      await expect(apiClient.fetchDashboardData()).rejects.toThrow();
+
+      // Restore console.error
+      consoleErrorSpy.mockRestore();
     });
   });
 });

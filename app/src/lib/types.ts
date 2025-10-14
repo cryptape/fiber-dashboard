@@ -241,3 +241,65 @@ export interface HistoryAnalysisResponse {
   series: HistoryAnalysisSeries[];
   meta: HistoryAnalysisMeta;
 }
+
+// Channel state types
+export type ChannelState = "open" | "commitment" | "closed";
+
+export const ChannelStateInfoSchema = z.object({
+  channel_id: z.string(),
+  state: z.string(),
+  // Add other fields as needed based on backend response
+});
+
+export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
+
+// Channel info response (single channel)
+export const ChannelInfoResponseSchema = RustChannelInfoSchema;
+export type ChannelInfoResponse = z.infer<typeof ChannelInfoResponseSchema>;
+
+// Node info response (single node)
+export const NodeInfoResponseSchema = RustNodeInfoSchema;
+export type NodeInfoResponse = z.infer<typeof NodeInfoResponseSchema>;
+
+// API response wrappers (actual API response format)
+export const ChannelInfoApiResponseSchema = z.object({
+  channel_info: ChannelInfoResponseSchema,
+});
+
+export const NodeInfoApiResponseSchema = z.object({
+  node_info: NodeInfoResponseSchema,
+});
+
+export const ChannelStateApiResponseSchema = z.object({
+  funding_args: z.string(),
+  state: z.string(),
+  txs: z.unknown(), // We don't use txs in the mapping
+});
+
+export type ChannelInfoApiResponse = z.infer<
+  typeof ChannelInfoApiResponseSchema
+>;
+export type NodeInfoApiResponse = z.infer<typeof NodeInfoApiResponseSchema>;
+export type ChannelStateApiResponse = z.infer<
+  typeof ChannelStateApiResponseSchema
+>;
+
+// Group channels by state response
+// Basic channel info returned by group_channel_by_state API
+export const BasicChannelInfoSchema = z.object({
+  channel_outpoint: z.string(),
+  funding_args: z.string(),
+  last_block_number: z.string(),
+  last_tx_hash: z.string(),
+  last_commitment_args: z.string().nullable(),
+});
+
+export const GroupChannelsByStateResponseSchema = z.object({
+  next_page: z.number(),
+  list: z.array(BasicChannelInfoSchema),
+});
+
+export type BasicChannelInfo = z.infer<typeof BasicChannelInfoSchema>;
+export type GroupChannelsByStateResponse = z.infer<
+  typeof GroupChannelsByStateResponseSchema
+>;

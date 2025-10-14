@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { queryKeys } from "../hooks/useDashboard";
 import CityMapChart from "../../charts/CityMapChart";
 import ChannelMapChart from "../../charts/ChannelMapChart";
@@ -18,9 +19,16 @@ import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { SwipeableKpiCards } from "./SwipeableKpiCards";
 import NetworkGraphChart from "../../charts/NetworkGraphChart";
 import NodesRankingChart from "../../charts/NodesRankingChart";
+import ChannelsByState from "./ChannelsByState";
+import { RustNodeInfo } from "@/lib/types";
 
 export default function Dashboard() {
+  const router = useRouter();
   const { apiClient, currentNetwork } = useNetwork();
+
+  const handleNodeClick = (node: RustNodeInfo) => {
+    router.push(`/node/${encodeURIComponent(node.node_id)}`);
+  };
 
   const { data: kpiData, isLoading: kpiLoading } = useQuery({
     queryKey: [...queryKeys.kpis, currentNetwork],
@@ -88,7 +96,8 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <NodesRankingChart nodes={nodes || []} channels={channels || []} />
+      {/* Channels by State */}
+      <ChannelsByState />
 
       {/* Channels On World Map */}
       <Card className="card-zed card-zed-hover group">
@@ -114,6 +123,12 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <NodesRankingChart
+        nodes={nodes || []}
+        channels={channels || []}
+        onNodeClick={handleNodeClick}
+      />
 
       {/* City Map Chart */}
       <Card className="card-zed card-zed-hover group">
