@@ -110,13 +110,22 @@ describe("API Functions", () => {
     });
 
     it("throws error when API calls fail", async () => {
-      (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      // Mock all fetch calls to reject since fetchDashboardData makes multiple API calls
+      (fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error("API Error")
       );
+
+      // Suppress console.error logs during this test
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       const apiClient = new APIClient();
 
       await expect(apiClient.fetchDashboardData()).rejects.toThrow();
+
+      // Restore console.error
+      consoleErrorSpy.mockRestore();
     });
   });
 });

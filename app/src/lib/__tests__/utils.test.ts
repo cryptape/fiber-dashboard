@@ -1,4 +1,4 @@
-/// <reference types="vitest" />
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { formatCompactNumber } from "../utils";
 
 describe("formatCompactNumber", () => {
