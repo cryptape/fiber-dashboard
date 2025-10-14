@@ -261,6 +261,29 @@ export type ChannelInfoResponse = z.infer<typeof ChannelInfoResponseSchema>;
 export const NodeInfoResponseSchema = RustNodeInfoSchema;
 export type NodeInfoResponse = z.infer<typeof NodeInfoResponseSchema>;
 
+// API response wrappers (actual API response format)
+export const ChannelInfoApiResponseSchema = z.object({
+  channel_info: ChannelInfoResponseSchema,
+});
+
+export const NodeInfoApiResponseSchema = z.object({
+  node_info: NodeInfoResponseSchema,
+});
+
+export const ChannelStateApiResponseSchema = z.object({
+  funding_args: z.string(),
+  state: z.string(),
+  txs: z.unknown(), // We don't use txs in the mapping
+});
+
+export type ChannelInfoApiResponse = z.infer<
+  typeof ChannelInfoApiResponseSchema
+>;
+export type NodeInfoApiResponse = z.infer<typeof NodeInfoApiResponseSchema>;
+export type ChannelStateApiResponse = z.infer<
+  typeof ChannelStateApiResponseSchema
+>;
+
 // Group channels by state response
 // Basic channel info returned by group_channel_by_state API
 export const BasicChannelInfoSchema = z.object({
