@@ -15,7 +15,11 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { Separator } from "@/shared/components/ui/separator";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
-import { formatCompactNumber, hexToDecimal } from "@/lib/utils";
+import {
+  formatCompactNumber,
+  hexToDecimal,
+  u64LittleEndianToDecimal,
+} from "@/lib/utils";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 
 function ChannelDetailContent() {
@@ -265,6 +269,100 @@ function ChannelDetailContent() {
                 </div>
               </>
             ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Channel Transactions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Clock className="h-5 w-5 text-primary" />
+              </div>
+              Channel Transactions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stateLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : channelState?.txs && channelState.txs.length > 0 ? (
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  {channelState.txs.length} transaction
+                  {channelState.txs.length !== 1 ? "s" : ""} found
+                </div>
+                <div className="space-y-3">
+                  {channelState.txs.map((tx, index) => (
+                    <div
+                      key={tx.tx_hash}
+                      className="border rounded-lg p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          Transaction {index + 1}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          Block #{u64LittleEndianToDecimal(tx.block_number)}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            Transaction Hash
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                              {tx.tx_hash}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyToClipboard(tx.tx_hash)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {tx.commitment_args && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              Commitment Args
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                                {tx.commitment_args}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  copyToClipboard(tx.commitment_args!)
+                                }
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
+                  No transactions found for this channel
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

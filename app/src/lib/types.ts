@@ -245,14 +245,6 @@ export interface HistoryAnalysisResponse {
 // Channel state types
 export type ChannelState = "open" | "commitment" | "closed";
 
-export const ChannelStateInfoSchema = z.object({
-  channel_id: z.string(),
-  state: z.string(),
-  // Add other fields as needed based on backend response
-});
-
-export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
-
 // Channel info response (single channel)
 export const ChannelInfoResponseSchema = RustChannelInfoSchema;
 export type ChannelInfoResponse = z.infer<typeof ChannelInfoResponseSchema>;
@@ -270,11 +262,29 @@ export const NodeInfoApiResponseSchema = z.object({
   node_info: NodeInfoResponseSchema,
 });
 
-export const ChannelStateApiResponseSchema = z.object({
+// Channel state transaction info
+export const ChannelStateTxSchema = z.object({
+  tx_hash: z.string(),
+  block_number: z.string(),
+  commitment_args: z.string().nullable(),
+});
+
+export const ChannelStateInfoSchema = z.object({
+  channel_id: z.string(),
   funding_args: z.string(),
   state: z.string(),
-  txs: z.unknown(), // We don't use txs in the mapping
+  txs: z.array(ChannelStateTxSchema),
 });
+
+export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
+
+export const ChannelStateApiResponseSchema = z.object({
+  funding_args: z.string(),
+  state: z.enum(["open", "commitment", "closed"]),
+  txs: z.array(ChannelStateTxSchema),
+});
+
+export type ChannelStateTx = z.infer<typeof ChannelStateTxSchema>;
 
 export type ChannelInfoApiResponse = z.infer<
   typeof ChannelInfoApiResponseSchema
