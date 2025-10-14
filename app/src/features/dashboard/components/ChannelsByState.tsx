@@ -13,7 +13,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { ArrowRight, Zap, Clock, X } from "lucide-react";
 import { ChannelState, BasicChannelInfo } from "@/lib/types";
-import { formatCompactNumber } from "@/lib/utils";
+import { u64LittleEndianToDecimal } from "@/lib/utils";
 import { useChannelsByState } from "../hooks/useChannels";
 
 interface ChannelsByStateProps {
@@ -143,7 +143,9 @@ export default function ChannelsByState({ className }: ChannelsByStateProps) {
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Last Block:{" "}
-                        {formatCompactNumber(channel.last_block_number)}
+                        {Number(
+                          u64LittleEndianToDecimal(channel.last_block_number)
+                        ).toLocaleString()}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         TX Hash: {formatChannelId(channel.last_tx_hash)}

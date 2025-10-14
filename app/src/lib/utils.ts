@@ -40,6 +40,34 @@ export function u128LittleEndianToDecimal(hex: string): bigint {
   return BigInt("0x" + reversedHex);
 }
 
+/**
+ * Converts a u64 little-endian hex string to a decimal value
+ * The hex string represents 8 bytes in little-endian order
+ * @param hex - Hex string like "0xb4821e0100000000"
+ * @returns BigInt representing the decimal value
+ */
+export function u64LittleEndianToDecimal(hex: string): bigint {
+  // Remove 0x prefix if present
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+
+  // Ensure the hex string is 16 characters (8 bytes) by padding with zeros
+  const paddedHex = cleanHex.padStart(16, "0");
+
+  // Split into bytes and reverse (little-endian to big-endian)
+  const bytes: number[] = [];
+  for (let i = 0; i < paddedHex.length; i += 2) {
+    bytes.push(parseInt(paddedHex.substr(i, 2), 16));
+  }
+
+  // Reverse the bytes to convert from little-endian to big-endian
+  bytes.reverse();
+
+  // Convert back to hex string
+  const reversedHex = bytes.map(b => b.toString(16).padStart(2, "0")).join("");
+
+  return BigInt("0x" + reversedHex);
+}
+
 export function formatCompactNumber(
   value: number | string | bigint,
   precision: number | null = 1
