@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { formatCompactNumber } from "../utils";
 
 describe("formatCompactNumber", () => {

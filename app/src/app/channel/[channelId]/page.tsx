@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowLeft, Copy, Zap, Clock, X, Users } from "lucide-react";
@@ -19,6 +19,7 @@ import { formatCompactNumber, hexToDecimal } from "@/lib/utils";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 
 function ChannelDetailContent() {
+  const router = useRouter();
   const params = useParams();
   const channelId = decodeURIComponent(params.channelId as string);
   const { apiClient, currentNetwork } = useNetwork();
@@ -293,6 +294,17 @@ function ChannelDetailContent() {
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() =>
+                          router.push(
+                            `/node/${encodeURIComponent(node1Info.node_id)}`
+                          )
+                        }
+                      >
+                        View Details
+                      </Button>
                     </div>
                   </div>
 
@@ -342,6 +354,17 @@ function ChannelDetailContent() {
                         onClick={() => copyToClipboard(node2Info.node_id)}
                       >
                         <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() =>
+                          router.push(
+                            `/node/${encodeURIComponent(node2Info.node_id)}`
+                          )
+                        }
+                      >
+                        View Details
                       </Button>
                     </div>
                   </div>

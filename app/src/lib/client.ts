@@ -178,6 +178,7 @@ export class APIClient {
 
   async getChannelState(channelId: string): Promise<ChannelStateInfo> {
     console.log("getChannelState called with channelId:", channelId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawResponse = await this.apiRequest<any>(
       `/channel_state?channel_id=${encodeURIComponent(channelId)}`
     );
@@ -218,6 +219,7 @@ export class APIClient {
 
   async getChannelInfo(channelId: string): Promise<ChannelInfoResponse> {
     console.log("getChannelInfo called with channelId:", channelId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawResponse = await this.apiRequest<any>(
       `/channel_info?channel_id=${encodeURIComponent(channelId)}`
     );
@@ -244,6 +246,7 @@ export class APIClient {
 
   async getNodeInfo(nodeId: string): Promise<NodeInfoResponse> {
     console.log("getNodeInfo called with nodeId:", nodeId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawResponse = await this.apiRequest<any>(
       `/node_info?node_id=${encodeURIComponent(nodeId)}`
     );
