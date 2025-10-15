@@ -138,3 +138,14 @@ export function formatCompactNumber(
     return `${sign}${absValue.toFixed(Math.min(precision, 2))}`;
   }
 }
+
+export function buildTransactionLinkUrl(
+  txHash: string,
+  network: "mainnet" | "testnet"
+): string {
+  const baseUrl =
+    network === "mainnet"
+      ? "https://explorer.nervos.org"
+      : "https://testnet.explorer.nervos.org";
+  return `${baseUrl}/transaction/${txHash}`;
+}

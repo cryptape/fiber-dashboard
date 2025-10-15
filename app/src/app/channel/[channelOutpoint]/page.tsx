@@ -19,6 +19,7 @@ import {
   formatCompactNumber,
   hexToDecimal,
   u64LittleEndianToDecimal,
+  buildTransactionLinkUrl,
 } from "@/lib/utils";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 
@@ -316,9 +317,17 @@ function ChannelDetailContent() {
                             Transaction Hash
                           </span>
                           <div className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                            <Link
+                              href={buildTransactionLinkUrl(
+                                tx.tx_hash,
+                                currentNetwork
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md hover:bg-muted/80 transition-colors"
+                            >
                               {tx.tx_hash}
-                            </code>
+                            </Link>
                             <Button
                               variant="outline"
                               size="sm"
