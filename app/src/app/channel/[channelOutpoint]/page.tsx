@@ -350,6 +350,28 @@ function ChannelDetailContent() {
                             </div>
                           </div>
                         )}
+
+                        {tx.witness_args && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              Witness Args
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                                {tx.witness_args}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  copyToClipboard(tx.witness_args!)
+                                }
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
