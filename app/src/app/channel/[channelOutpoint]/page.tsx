@@ -19,6 +19,7 @@ import {
   formatCompactNumber,
   hexToDecimal,
   u64LittleEndianToDecimal,
+  buildTransactionLinkUrl,
 } from "@/lib/utils";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 
@@ -316,9 +317,17 @@ function ChannelDetailContent() {
                             Transaction Hash
                           </span>
                           <div className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                            <Link
+                              href={buildTransactionLinkUrl(
+                                tx.tx_hash,
+                                currentNetwork
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md hover:bg-muted/80 transition-colors"
+                            >
                               {tx.tx_hash}
-                            </code>
+                            </Link>
                             <Button
                               variant="outline"
                               size="sm"
@@ -343,6 +352,28 @@ function ChannelDetailContent() {
                                 size="sm"
                                 onClick={() =>
                                   copyToClipboard(tx.commitment_args!)
+                                }
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {tx.witness_args && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              Witness Args
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs bg-muted px-2 py-1 rounded break-all max-w-md">
+                                {tx.witness_args}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  copyToClipboard(tx.witness_args!)
                                 }
                               >
                                 <Copy className="h-3 w-3" />

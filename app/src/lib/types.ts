@@ -266,6 +266,7 @@ export const NodeInfoApiResponseSchema = z.object({
 export const ChannelStateTxSchema = z.object({
   tx_hash: z.string(),
   block_number: z.string(),
+  witness_args: z.string().nullable(),
   commitment_args: z.string().nullable(),
 });
 
