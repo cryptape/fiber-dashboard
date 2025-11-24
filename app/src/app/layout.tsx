@@ -1,21 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
-import "./globals.css";
-import { Navbar, Footer } from "@/shared/components/layout";
+import { Inter, Space_Grotesk } from "next/font/google";
+import "./style.css";
+import {  FooterNew, NavBarNew } from "@/shared/components/layout";
 import { NetworkProvider } from "@/features/networks/context/NetworkContext";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const inter = Inter({
   variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
@@ -39,12 +34,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased min-h-screen bg-background text-foreground flex flex-col`}
+        className={`${inter.variable} ${spaceGrotesk.variable} antialiased min-h-screen bg-background text-foreground flex flex-col`}
       >
         <NetworkProvider>
-          <Navbar />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <NavBarNew />
+          <main className="flex-1 container mt-[60px] md:mt-[72px] py-10">{children}</main>
+          <FooterNew />
         </NetworkProvider>
       </body>
     </html>

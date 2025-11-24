@@ -1,0 +1,448 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+/* @import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css"; */
+
+:root {
+  /* Text - Light Mode */
+  --text-primary: #0f0f10;
+  --text-secondary: #626377;
+  --text-tertiary: #88899e;
+  --text-on: #ffffff;
+
+  /* Surface - Light Mode */
+  --surface-layer: rgba(255, 255, 255, 0.3);
+  --surface-layer-hover: rgba(255, 255, 255, 0.6);
+  --surface-popover: #ffffff;
+  --surface-inverse: #0f0f10;
+
+  /* Border - Light Mode */
+  --border-default: #d9d9d9;
+  --card-border: linear-gradient(165deg, #FFF -10.07%, rgba(255, 255, 255, 0.00) 89.61%);
+
+  /* Functional - Light Mode */
+  --success-text: #208c73;
+  --success-bg: #edfefa;
+  --success-border: #d4eee8;
+
+  --error-text: #b34846;
+  --error-bg: #feeded;
+  --error-border: #ebcfce;
+
+  /* Palette - Light Mode */
+  --purple: #7459e6;
+  --yellow: #fab83d;
+  --blue: #59abe6;
+
+  /* Typography — Families */
+  --font-primary: var(
+    --font-inter,
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial
+  );
+  --font-space-grotesk: var(
+    --font-space-grotesk,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial
+  );
+  --font-mono: var(
+    --font-geist-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace
+  );
+
+  /* Typography — Sizes */
+  --font-size-10: 10px;
+  --font-size-12: 12px;
+  --font-size-14: 14px;
+  --font-size-16: 16px;
+  --font-size-18: 18px;
+  --font-size-20: 20px;
+  --font-size-22: 22px;
+  --font-size-24: 24px;
+  --font-size-28: 28px;
+  --font-size-32: 32px;
+
+  /* Typography — Weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Typography — Line heights */
+  --line-100: 100%;
+  --line-120: 120%;
+  --line-140: 140%;
+
+  /* Typography — Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+
+  /* Layout — Spacing */
+  --spacing-mobile: 16px;
+  --spacing-tablet: 40px;
+  --spacing-desktop: 80px;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Text - Dark Mode */
+    /* --text-primary: #ffffff;
+    --text-secondary: #88899e;
+    --text-tertiary: #626377;
+    --text-on: #ffffff; */
+
+    /* Surface - Dark Mode */
+    /* --surface-layer: rgba(17, 13, 41, 0.3);
+    --surface-layer-hover: rgba(17, 13, 41, 0.6);
+    --surface-popover: #13172b;
+    --surface-inverse: #ffffff; */
+
+    /* Border - Dark Mode */
+    /* --border-default: #d9d9d9; */
+
+    /* Functional - Dark Mode */
+    /* --success-text: #70d2bb;
+    --success-bg: #053429;
+    --success-border: #197361;
+
+    --error-text: #ce7e7d;
+    --error-bg: #400a09;
+    --error-border: #6d1514; */
+
+    /* Palette - Dark Mode */
+    /* --purple: #8593f8;
+    --yellow: #fab83d;
+    --blue: #87e9ff; */
+  }
+}
+
+/* Utilities — Colors */
+@layer utilities {
+  .text-primary {
+    color: var(--text-primary);
+  }
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+  .text-tertiary {
+    color: var(--text-tertiary);
+  }
+  .text-on {
+    color: var(--text-on);
+  }
+
+  .bg-layer {
+    background-color: var(--surface-layer);
+  }
+  .bg-layer-hover {
+    background-color: var(--surface-layer-hover);
+  }
+  .bg-popover {
+    background-color: var(--surface-popover);
+  }
+  .bg-inverse {
+    background-color: var(--surface-inverse);
+  }
+
+  .border {
+    border-color: var(--border-default);
+  }
+  .border-color{
+       border-color: var(--border-default);
+ 
+  }
+
+  .text-success {
+    color: var(--success-text);
+  }
+  .bg-success {
+    background-color: var(--success-bg);
+  }
+  .border-success {
+    border-color: var(--success-border);
+  }
+
+  .text-error {
+    color: var(--error-text);
+  }
+  .bg-error {
+    background-color: var(--error-bg);
+  }
+  .border-error {
+    border-color: var(--error-border);
+  }
+
+  .text-purple {
+    color: var(--purple);
+  }
+  .text-yellow {
+    color: var(--yellow);
+  }
+  .text-blue {
+    color: var(--blue);
+  }
+
+  .bg-purple {
+    background-color: var(--purple);
+  }
+  .bg-yellow {
+    background-color: var(--yellow);
+  }
+  .bg-blue {
+    background-color: var(--blue);
+  }
+  .bg-border{
+    background-color: var(--border-default);
+  }
+}
+
+/* Utilities — Typography */
+@layer utilities {
+  /* H1: 32px/28px/24px, Semibold, line-height: 100% */
+  .type-h1 {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-32);
+    font-weight: var(--weight-semibold);
+    line-height: var(--line-100);
+  }
+
+  @media (max-width: 1024px) {
+    .type-h1 {
+      font-size: var(--font-size-28);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .type-h1 {
+      font-size: var(--font-size-24);
+    }
+  }
+
+  /* H2: 24px/22px/20px, Semibold, line-height: 120% */
+  .type-h2 {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-24);
+    font-weight: var(--weight-semibold);
+    line-height: var(--line-120);
+  }
+
+  @media (max-width: 1024px) {
+    .type-h2 {
+      font-size: var(--font-size-22);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .type-h2 {
+      font-size: var(--font-size-20);
+    }
+  }
+
+  /* H3: 18px/16px/16px, Semibold, line-height: 120% */
+  .type-h3 {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-18);
+    font-weight: var(--weight-semibold);
+    line-height: var(--line-120);
+  }
+
+  @media (max-width: 1024px) {
+    .type-h3 {
+      font-size: var(--font-size-16);
+    }
+  }
+
+  /* Subheader: 16px/14px/14px, Semibold, line-height: 140% */
+  .type-subheader {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-16);
+    font-weight: var(--weight-semibold);
+    line-height: var(--line-140);
+  }
+
+  @media (max-width: 1024px) {
+    .type-subheader {
+      font-size: var(--font-size-14);
+    }
+  }
+
+  /* Body: 14px all sizes, Regular, line-height: 140% */
+  .type-body {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-14);
+    font-weight: var(--weight-regular);
+    line-height: var(--line-140);
+  }
+
+  /* Label (all caps): 12px all sizes, Medium, line-height: 120% */
+  .type-label {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-12);
+    font-weight: var(--weight-medium);
+    line-height: var(--line-120);
+    text-transform: uppercase;
+  }
+
+  /* Caption: 12px/12px/10px, Medium, line-height: 120% */
+  .type-caption {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-12);
+    font-weight: var(--weight-medium);
+    line-height: var(--line-120);
+  }
+
+  @media (max-width: 768px) {
+    .type-caption {
+      font-size: var(--font-size-10);
+    }
+  }
+
+  /* Button1: 16px/14px/14px, Medium, line-height: 120% */
+  .type-button1 {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-16);
+    font-weight: var(--weight-medium);
+    line-height: var(--line-120);
+  }
+
+  @media (max-width: 1024px) {
+    .type-button1 {
+      font-size: var(--font-size-14);
+    }
+  }
+
+  /* Button2: 12px all sizes, Medium, line-height: 120% */
+  .type-button2 {
+    font-family: var(--font-primary);
+    font-size: var(--font-size-12);
+    font-weight: var(--weight-medium);
+    line-height: var(--line-120);
+  }
+
+  /* Mono */
+  .type-mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-14);
+    line-height: var(--line-140);
+  }
+
+  /* Space Grotesk - for branding/headings */
+  .font-space-grotesk {
+    font-family: var(--font-space-grotesk);
+  }
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background:
+      linear-gradient(117deg, #f1f4f7 0%, #f1f4f7 50%, #f7e9bc 100%), #fff;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
+  /* @media (prefers-color-scheme: dark) {
+    body {
+      background: #0f0f10;
+    }
+  } */
+
+  /* Smooth scrolling */
+  /* html {
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+  }
+
+  ::-webkit-scrollbar-thumb {
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+  } */
+}
+
+/* Custom Container */
+.container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--spacing-mobile);
+  padding-right: var(--spacing-mobile);
+  max-width: none !important;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding-left: var(--spacing-tablet);
+    padding-right: var(--spacing-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-left: var(--spacing-desktop);
+    padding-right: var(--spacing-desktop);
+  }
+}
+
+@media (min-width: 1440px) {
+  .container {
+    max-width: 1440px !important;
+    padding-left: var(--spacing-desktop);
+    padding-right: var(--spacing-desktop);
+  }
+}
+
+/* Glass Card - 毛玻璃卡片样式 */
+.glass-card {
+  /* position: relative; */
+  background: var(--surface-layer, rgba(255, 255, 255, 0.30));
+  backdrop-filter: blur(2px);
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  background: var(--card-border);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  border-radius: inherit;
+}
+

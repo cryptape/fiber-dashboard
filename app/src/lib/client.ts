@@ -240,7 +240,6 @@ export class APIClient {
     const allNodes: RustNodeInfo[] = [];
     let page = 0;
     let hasMore = true;
-    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
@@ -248,8 +247,14 @@ export class APIClient {
         const nodes = response.nodes || [];
         allNodes.push(...nodes);
 
-        hasMore = nodes.length === PAGE_SIZE;
-        page++;
+        // 使用后端返回的 next_page 控制分页
+        const nextPage = response.next_page;
+        // 如果没有数据或 next_page 不合法，停止分页
+        if (nodes.length === 0 || typeof nextPage !== "number" || nextPage <= page) {
+          hasMore = false;
+        } else {
+          page = nextPage;
+        }
       } catch (error) {
         console.error(`Failed to fetch ${page} active nodes:`, error);
         break;
@@ -263,7 +268,6 @@ export class APIClient {
     const allChannels: RustChannelInfo[] = [];
     let page = 0;
     let hasMore = true;
-    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
@@ -271,8 +275,14 @@ export class APIClient {
         const channels = response.channels || [];
         allChannels.push(...channels);
 
-        hasMore = channels.length === PAGE_SIZE;
-        page++;
+        // 使用后端返回的 next_page 控制分页
+        const nextPage = response.next_page;
+        // 如果没有数据或 next_page 不合法，停止分页
+        if (channels.length === 0 || typeof nextPage !== "number" || nextPage <= page) {
+          hasMore = false;
+        } else {
+          page = nextPage;
+        }
       } catch (error) {
         console.error(`Failed to fetch ${page} active channels:`, error);
         break;
@@ -368,6 +378,59 @@ export class APIClient {
       minChannelCapacity,
       medianChannelCapacity,
     };
+  }
+
+  async fetchKpiDataByTimeRange(
+    timeRange: "hourly" | "monthly" | "yearly"
+  ): Promise<KpiData> {
+    if (timeRange === "hourly") {
+      // Use active analysis for hourly data
+      return this.fetchKpiData();
+    } else {
+      // Use history analysis for monthly/yearly data
+      // monthly: 最近3个月, yearly: 最近2年
+      const range = timeRange === "monthly" ? "3M" : "2Y";
+      const historyAnalysis = await this.getHistoryAnalysis({
+        range,
+        interval: "day", // 后端目前只支持day级别的interval
+        fields: ["capacity", "channels", "nodes"],
+      });
+
+      const capacitySeries = historyAnalysis.series.find(
+        s => s.name === "Capacity"
+      );
+      const channelsSeries = historyAnalysis.series.find(
+        s => s.name === "Channels"
+      );
+      const nodesSeries = historyAnalysis.series.find(
+        s => s.name === "Nodes"
+      );
+
+      // Get the last data point
+      const lastCapacityPoint =
+        capacitySeries &&
+        capacitySeries.points[capacitySeries.points.length - 1];
+      const lastChannelsPoint =
+        channelsSeries &&
+        channelsSeries.points[channelsSeries.points.length - 1];
+      const lastNodesPoint =
+        nodesSeries && nodesSeries.points[nodesSeries.points.length - 1];
+
+      // Capacity aggregation: [sum, avg, min, max, median]
+      const capAgg = lastCapacityPoint
+        ? lastCapacityPoint[1]
+        : ["0", "0", "0", "0", "0"];
+
+      return {
+        totalCapacity: APIUtils.parseChannelCapacityToCKB(capAgg[0]),
+        averageChannelCapacity: APIUtils.parseChannelCapacityToCKB(capAgg[1]),
+        minChannelCapacity: APIUtils.parseChannelCapacityToCKB(capAgg[2]),
+        maxChannelCapacity: APIUtils.parseChannelCapacityToCKB(capAgg[3]),
+        medianChannelCapacity: APIUtils.parseChannelCapacityToCKB(capAgg[4]),
+        totalChannels: lastChannelsPoint ? lastChannelsPoint[1] : 0,
+        totalNodes: lastNodesPoint ? lastNodesPoint[1] : 0,
+      };
+    }
   }
 
   async fetchChannelCapacityHistoryTimeSeries() {
@@ -482,6 +545,71 @@ export class APIClient {
     };
   }
 
+  async fetchTimeSeriesDataByTimeRange(
+    timeRange: "hourly" | "monthly" | "yearly"
+  ) {
+    // Map timeRange to API range parameter
+    // hourly: 最近1个月的数据（API支持的最短时间范围）
+    // monthly: 最近3个月的数据
+    // yearly: 最近3年的数据
+    const rangeMap = {
+      hourly: "1M" as const,
+      monthly: "3M" as const,
+      yearly: "2Y" as const, // 使用2Y获取最近2年数据
+    };
+
+    const range = rangeMap[timeRange];
+    const historyAnalysis = await this.getHistoryAnalysis({
+      range,
+      interval: "day", // 后端目前只支持day级别的interval
+      fields: ["capacity", "channels", "nodes"],
+    });
+
+    const capacitySeries = historyAnalysis.series.find(
+      s => s.name === "Capacity"
+    );
+    const channelsSeries = historyAnalysis.series.find(
+      s => s.name === "Channels"
+    );
+    const nodesSeries = historyAnalysis.series.find(s => s.name === "Nodes");
+
+    // Convert capacity series (using sum aggregation)
+    const capacityTimeSeries: TimeSeriesData[] =
+      capacitySeries?.points.map(point => ({
+        timestamp: point[0],
+        value: APIUtils.parseChannelCapacityToCKB(point[1][0]), // sum
+      })) || [];
+
+    // Convert channels series
+    const channelsTimeSeries: TimeSeriesData[] =
+      channelsSeries?.points.map(point => ({
+        timestamp: point[0],
+        value: point[1],
+      })) || [];
+
+    // Convert nodes series
+    const nodesTimeSeries: TimeSeriesData[] =
+      nodesSeries?.points.map(point => ({
+        timestamp: point[0],
+        value: point[1],
+      })) || [];
+
+    return {
+      capacity: {
+        label: "Total capacity",
+        data: capacityTimeSeries,
+      },
+      channels: {
+        label: "Total channels",
+        data: channelsTimeSeries,
+      },
+      nodes: {
+        label: "Total active nodes",
+        data: nodesTimeSeries,
+      },
+    };
+  }
+
   async fetchDashboardData(): Promise<DashboardData> {
     const [nodes, channels, channelCapacities] = await Promise.all([
       this.fetchAllActiveNodes(),
@@ -521,6 +649,40 @@ export class APIClient {
       nodeLocations,
       ispRankings,
     };
+  }
+
+  async fetchTopNodesByCapacity(
+    limit: number = 3,
+    timeRange: "hourly" | "monthly" = "hourly",
+    start?: string,
+    end?: string
+  ) {
+    const [nodes, channels] = await Promise.all(
+      timeRange === "hourly"
+        ? [
+            this.fetchAllActiveNodes(),
+            this.fetchAllActiveChannels(),
+          ]
+        : [
+            this.fetchAllHistoricalNodes(start, end),
+            this.fetchAllHistoricalChannels(start, end),
+          ]
+    );
+
+    const nodesWithInfo = APIUtils.getNodeChannelInfoFromChannels(
+      nodes,
+      channels
+    );
+
+    // 按总容量降序排序，取前 limit 个
+    return nodesWithInfo
+      .sort((a, b) => b.totalCapacity - a.totalCapacity)
+      .slice(0, limit)
+      .map(node => ({
+        id: node.node_id,
+        node_id: node.node_id,
+        capacity: node.totalCapacity,
+      }));
   }
 
   async fetchHistoricalDashboardData(
@@ -642,14 +804,14 @@ export class APIUtils {
         const capacityInCKB = APIUtils.parseChannelCapacityToCKB(
           channel.capacity
         );
-        // Distribute capacity equally between both nodes
+        // Add full channel capacity to both nodes
         nodeCapacity.set(
           channel.node1,
-          (nodeCapacity.get(channel.node1) || 0) + capacityInCKB / 2
+          (nodeCapacity.get(channel.node1) || 0) + capacityInCKB
         );
         nodeCapacity.set(
           channel.node2,
-          (nodeCapacity.get(channel.node2) || 0) + capacityInCKB / 2
+          (nodeCapacity.get(channel.node2) || 0) + capacityInCKB
         );
 
         // Count channels for each node
@@ -667,9 +829,7 @@ export class APIUtils {
     });
 
     return nodes.map(node => {
-      const totalCapacity =
-        Math.round(Math.max(0, nodeCapacity.get(node.node_id) || 0) * 100) /
-        100;
+      const totalCapacity = Math.max(0, nodeCapacity.get(node.node_id) || 0);
       const totalChannels = nodeChannelCount.get(node.node_id) || 0;
 
       return {
@@ -709,7 +869,7 @@ export class APIUtils {
       nodeToCountry.set(node.node_id, node.country || "Unknown");
     });
 
-    // country -> capacity
+    // node_id -> capacity
     const capacityByCountry = new Map<string, number>();
     channels.forEach(channel => {
       try {
@@ -895,7 +1055,7 @@ export class APIUtils {
       }
     };
 
-    // node_id -> 容量映射
+    // node_id -> capacity mapping
     const nodeCapacity = new Map<string, number>();
     channels.forEach(channel => {
       try {

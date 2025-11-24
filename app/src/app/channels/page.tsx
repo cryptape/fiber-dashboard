@@ -5,7 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/features/dashboard/hooks/useDashboard";
 // import Dashboard from "@/features/dashboard/components/Dashboard";
 import { Skeleton } from "@/shared/components/ui/skeleton";
-import { DashboardNew } from "@/features/dashboard/components/DashboardNew";
+import { Channels } from "@/features/channels/components/Channels";
 
 export default function DashboardPage() {
   return (
@@ -15,7 +15,7 @@ export default function DashboardPage() {
         {/* Dashboard Content */}
         <Suspense fallback={<DashboardSkeleton />}>
           {/* <Dashboard /> */}
-          <DashboardNew />
+          <Channels />
         </Suspense>
       {/* </section> */}
     </QueryClientProvider>

@@ -1,0 +1,22 @@
+/* NavBar Fixed */
+.navbar-fixed {
+  position: fixed;
+  top: 12px;
+  left: var(--spacing-mobile);
+  right: var(--spacing-mobile);
+}
+
+@media (min-width: 768px) {
+  .navbar-fixed {
+    top: 24px;
+    left: var(--spacing-tablet);
+    right: var(--spacing-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .navbar-fixed {
+    left: var(--spacing-desktop);
+    right: var(--spacing-desktop);
+  }
+}

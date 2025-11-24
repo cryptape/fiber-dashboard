@@ -1,0 +1,28 @@
+/* Chevron Down Icon */
+.chevron-down {
+  width: 8px;
+  height: 4px;
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  outline: solid 1.6px var(--text-primary);
+  outline-offset: -0.8px;
+  clip-path: polygon(0 0, 50% 100%, 100% 0, 85% 0, 50% 70%, 15% 0);
+}
+
+/* Chevron Up Icon */
+.chevron-up {
+  width: 10px;
+  height: 8px;
+  position: absolute;
+  left: 2.67px;
+  top: 4px;
+  outline: solid 1.6px var(--text-primary);
+  outline-offset: -0.8px;
+  clip-path: polygon(50% 0, 0 100%, 15% 100%, 50% 30%, 85% 100%, 100% 100%);
+}
+
+/* Select Option Hover */
+.select-option:hover {
+  background-color: var(--surface-layer-hover);
+}

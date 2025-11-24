@@ -15,9 +15,11 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@fontsource/iosevka": "5.1.0",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.85.0",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
