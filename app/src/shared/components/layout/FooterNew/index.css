@@ -1,0 +1,29 @@
+/* Footer Responsive */
+.footer-responsive {
+  padding: 20px var(--spacing-mobile);
+  border-radius: 16px 16px 0 0;
+}
+
+@media (min-width: 768px) {
+  .footer-responsive {
+    padding: 40px var(--spacing-tablet);
+    border-radius: 40px 40px 0 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer-responsive {
+    padding: 40px var(--spacing-desktop);
+    border-radius: 40px 40px 0 0;
+  }
+}
+
+/* Footer Brand Title */
+.footer-brand-title {
+  font-family: var(--font-space-grotesk);
+  font-size: 22px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+  letter-spacing: -1.1px;
+}
