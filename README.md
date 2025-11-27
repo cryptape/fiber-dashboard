@@ -11,7 +11,7 @@ http api default on 8080, method list:
 /analysis_hourly
 /channel_state?channel_outpoint=0x..
 /group_channel_by_state?state=open/commitment/closed&page=0
-/channel_count_by_state?state=open/commitment/closed
+/channel_count_by_state
 /channel_info?channel_outpoint=0x..
 /node_info?node_id=0x..
 /channel_capacity_distribution

@@ -7,7 +7,7 @@ use crate::{
     Network, get_pg_pool,
     pg_read::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state,
-        grout_channel_count_by_state, query_analysis, query_analysis_hourly,
+        group_channel_count_by_state, query_analysis, query_analysis_hourly,
         query_channel_capacity_distribution, query_channel_info, query_channel_state,
         query_node_info, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
         read_nodes_monthly,
@@ -297,9 +297,9 @@ pub async fn channel_count_by_state(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req.extract::<ChannelByStateParams>().await?;
+    let params = req.extract::<NetworkInfo>().await?;
     let pool = get_pg_pool();
-    let counts = grout_channel_count_by_state(pool, params.state, params.net)
+    let counts = group_channel_count_by_state(pool, params.net)
         .await
         .map_err(|e| {
             log::error!("Failed to count channels by state: {}", e);

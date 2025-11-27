@@ -746,30 +746,27 @@ pub async fn group_channel_by_state(
     Ok(serde_json::to_string(&res).unwrap())
 }
 
-pub async fn grout_channel_count_by_state(
+pub async fn group_channel_count_by_state(
     pool: &Pool<Postgres>,
-    state: DBState,
     net: Network,
 ) -> Result<String, sqlx::Error> {
     let sql = format!(
         r#"
-        select count(*) from {}
-        where state = $1
+        select state, count(*) from {} group by state
     "#,
         net.channel_states()
     );
-    let count: i64 = sqlx::query(&sql)
-        .bind(state.to_sql())
-        .fetch_one(pool)
+    let res = sqlx::query(&sql)
+        .fetch_all(pool)
         .await?
-        .get(0);
-    #[derive(Serialize, Deserialize, Debug)]
-    struct Count {
-        count: usize,
-    }
-    let res = Count {
-        count: count as usize,
-    };
+        .into_iter()
+        .map(|row| {
+            let state: String = row.get("state");
+            let count: i64 = row.get("count");
+            (state, count)
+        })
+        .collect::<HashMap<_, _>>();
+
     Ok(serde_json::to_string(&res).unwrap())
 }
 
