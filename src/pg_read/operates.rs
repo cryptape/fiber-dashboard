@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use ckb_jsonrpc_types::{DepType, JsonBytes, OutPoint as OutPointWrapper, Script};
 use ckb_types::H256;
@@ -547,7 +547,7 @@ pub async fn query_channel_state(
     let txs = net.channel_txs();
     let sql = format!(
         r#"
-        select {states}.funding_args, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.witness_args, {txs}.commitment_args
+        select {states}.funding_args, {states}.capacity, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.timestamp,{txs}.witness_args, {txs}.commitment_args
         from {states} 
         join {txs} on {txs}.channel_outpoint = {states}.channel_outpoint 
         where {states}.channel_outpoint = $1
@@ -555,6 +555,7 @@ pub async fn query_channel_state(
     );
     let mut funding_args: JsonBytes = JsonBytes::default();
     let mut state: String = String::new();
+    let mut capacity: String = String::new();
     let mut rows = sqlx::query(&sql)
         .bind(faster_hex::hex_string(outpoint.as_bytes()))
         .fetch_all(pool)
@@ -570,16 +571,29 @@ pub async fn query_channel_state(
             if state.is_empty() {
                 state = row.get("state");
             }
+            if capacity.is_empty() {
+                let raw: String = row.get("capacity");
+                capacity = format!("0x{}", raw);
+            }
 
             let raw_tx_hash: String = row.get("tx_hash");
             let raw_block_number: String = row.get("block_number");
             let raw_witness_args: Option<String> = row.get("witness_args");
             let raw_commitment_args: Option<String> = row.get("commitment_args");
+            let raw_timestamp: String = row.get("timestamp");
             let tx_hash = format!("0x{}", raw_tx_hash);
             let block_number = format!("0x{}", raw_block_number);
+            let timestamp = format!("0x{}", raw_timestamp);
+
             let witness_args = raw_witness_args.map(|args| format!("0x{}", args));
             let commitment_args = raw_commitment_args.map(|args| format!("0x{}", args));
-            (tx_hash, block_number, witness_args, commitment_args)
+            (
+                tx_hash,
+                block_number,
+                timestamp,
+                witness_args,
+                commitment_args,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -595,6 +609,7 @@ pub async fn query_channel_state(
     struct Txs {
         tx_hash: String,
         block_number: String,
+        timestamp: String,
         witness_args: Option<String>,
         commitment_args: Option<String>,
     }
@@ -602,18 +617,21 @@ pub async fn query_channel_state(
     struct TxState {
         funding_args: JsonBytes,
         state: String,
+        capacity: String,
         txs: Vec<Txs>,
     }
 
     let res = TxState {
         funding_args,
         state,
+        capacity,
         txs: rows
             .into_iter()
             .map(
-                |(tx_hash, block_number, witness_args, commitment_args)| Txs {
+                |(tx_hash, block_number, timestamp, witness_args, commitment_args)| Txs {
                     tx_hash,
                     block_number,
+                    timestamp,
                     witness_args,
                     commitment_args,
                 },
@@ -633,10 +651,18 @@ pub async fn group_channel_by_state(
     let offset = page.saturating_mul(PAGE_SIZE);
     let sql = format!(
         r#"
-        select channel_outpoint, funding_args, last_block_number, last_tx_hash, last_commitment_args
-        from {}
+        with channel_tx as (
+            select channel_outpoint, tx_hash from {}
+            ),
+            channel_tx_count as (
+                select channel_outpoint, count(*) as tx_count from channel_tx group by channel_outpoint
+            )
+        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.capacity, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
+        from {} n
+        left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
         where state = $1 LIMIT {} OFFSET {}
     "#,
+        net.channel_txs(),
         net.channel_states(),
         PAGE_SIZE,
         offset
@@ -652,11 +678,19 @@ pub async fn group_channel_by_state(
             let last_block_number: String = row.get("last_block_number");
             let last_tx_hash: String = row.get("last_tx_hash");
             let last_commitment_args: Option<String> = row.get("last_commitment_args");
+            let create_time: String = row.get("create_time");
+            let last_commit_time: String = row.get("last_commit_time");
+            let tx_count: i64 = row.get("tx_count");
+            let capacity: String = row.get("capacity");
             (
                 format!("0x{}", channel_outpoint),
                 format!("0x{}", funding_args),
                 format!("0x{}", last_block_number),
                 format!("0x{}", last_tx_hash),
+                format!("0x{}", create_time),
+                format!("0x{}", last_commit_time),
+                format!("0x{}", capacity),
+                tx_count as usize,
                 last_commitment_args.map(|arg| format!("0x{}", arg)),
             )
         })
@@ -669,6 +703,10 @@ pub async fn group_channel_by_state(
         last_block_number: String,
         last_tx_hash: String,
         last_commitment_args: Option<String>,
+        create_time: String,
+        last_commit_time: String,
+        capacity: String,
+        tx_count: usize,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -685,17 +723,107 @@ pub async fn group_channel_by_state(
                     funding_args,
                     last_block_number,
                     last_tx_hash,
+                    create_time,
+                    last_commit_time,
+                    capacity,
+                    tx_count,
                     last_commitment_args,
                 )| State {
                     channel_outpoint,
                     funding_args,
                     last_block_number,
                     last_tx_hash,
+                    tx_count,
+                    create_time,
+                    capacity,
+                    last_commit_time,
                     last_commitment_args,
                 },
             )
             .collect(),
         next_page: page.saturating_add(1),
     };
+    Ok(serde_json::to_string(&res).unwrap())
+}
+
+pub async fn grout_channel_count_by_state(
+    pool: &Pool<Postgres>,
+    state: DBState,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let sql = format!(
+        r#"
+        select count(*) from {}
+        where state = $1
+    "#,
+        net.channel_states()
+    );
+    let count: i64 = sqlx::query(&sql)
+        .bind(state.to_sql())
+        .fetch_one(pool)
+        .await?
+        .get(0);
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Count {
+        count: usize,
+    }
+    let res = Count {
+        count: count as usize,
+    };
+    Ok(serde_json::to_string(&res).unwrap())
+}
+
+pub async fn query_channel_capacity_distribution(
+    pool: &Pool<Postgres>,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let hour_bucket = chrono::Utc::now() - chrono::Duration::hours(3);
+    let sql = format!(
+        r#"
+        SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity, bucket AS last_seen_hour from {}
+        WHERE bucket >= $1::timestamp
+        ORDER BY channel_outpoint, bucket DESC
+    "#,
+        net.online_channels_hourly()
+    );
+
+    let rows = sqlx::query(&sql)
+        .bind(hour_bucket)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let capacity: u128 = {
+                let raw: String = row.get("capacity");
+                let mut buf = [0u8; 16];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                u128::from_le_bytes(buf)
+            };
+            capacity / 1000
+        })
+        .collect::<Vec<u128>>();
+
+    let mut buckets = vec![0usize; 8];
+    for &cap in &rows {
+        let idx = if cap == 0 {
+            0usize
+        } else {
+            let mut v = cap;
+            let mut exp = 0usize;
+            while v >= 10 && exp < 7 {
+                v /= 10;
+                exp += 1;
+            }
+            exp
+        };
+        buckets[idx] += 1;
+    }
+
+    let res = buckets
+        .into_iter()
+        .enumerate()
+        .map(|(i, count)| (format!("Capacity 10^{}k", i), count))
+        .collect::<HashMap<_, _>>();
+
     Ok(serde_json::to_string(&res).unwrap())
 }

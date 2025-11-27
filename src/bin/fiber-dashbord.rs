@@ -41,9 +41,10 @@ fn main() {
 
 async fn http_server() {
     use fiber_dashbord_backend::http_server::{
-        analysis, analysis_hourly, channel_by_state, channel_info, channel_state,
-        list_channels_hourly, list_channels_monthly, list_nodes_hourly, list_nodes_monthly,
-        node_info, node_udt_infos, nodes_by_udt,
+        analysis, analysis_hourly, channel_by_state, channel_capacity_distribution,
+        channel_count_by_state, channel_info, channel_state, list_channels_hourly,
+        list_channels_monthly, list_nodes_hourly, list_nodes_monthly, node_info, node_udt_infos,
+        nodes_by_udt,
     };
     use salvo::{
         Listener, Router, Server, Service, conn::TcpListener, cors::AllowOrigin, cors::Cors,
@@ -66,8 +67,12 @@ async fn http_server() {
         .push(Router::with_path("analysis").post(analysis))
         .push(Router::with_path("channel_state").get(channel_state))
         .push(Router::with_path("group_channel_by_state").get(channel_by_state))
+        .push(Router::with_path("channel_count_by_state").get(channel_count_by_state))
         .push(Router::with_path("channel_info").get(channel_info))
-        .push(Router::with_path("node_info").get(node_info));
+        .push(Router::with_path("node_info").get(node_info))
+        .push(
+            Router::with_path("channel_capacity_distribution").get(channel_capacity_distribution),
+        );
 
     let service = Service::new(router).hoop(cors);
     let http_port = std::env::var("HTTP_PORT").unwrap_or("8000".to_string());

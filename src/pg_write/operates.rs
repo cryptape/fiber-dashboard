@@ -644,6 +644,14 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     };
 
+                    let header = loop {
+                        let header = rpc.get_header_by_number(url.clone(), tc.block_number).await;
+                        if let Ok(header) = header {
+                            break header;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    };
+
                     let commitment_args: Option<JsonBytes> =
                         new_tx.inner.outputs.iter().find_map(|output| {
                             if &output.lock.code_hash == code_hash {
@@ -663,15 +671,28 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                                 .and_modify(|csu: &mut ChannelStateUpdate| {
                                     csu.state = DBState::Closed;
                                     csu.last_block_number = tc.block_number;
-                                    csu.txs
-                                        .push((tc.tx_hash.clone(), tc.block_number, None, None));
+                                    csu.last_commit = header.inner.timestamp.value();
+                                    csu.txs.push((
+                                        tc.tx_hash.clone(),
+                                        tc.block_number,
+                                        header.inner.timestamp.value(),
+                                        None,
+                                        None,
+                                    ));
                                 })
                                 .or_insert(ChannelStateUpdate {
                                     outpoint: outpoint.clone(),
                                     state: DBState::Closed,
                                     last_block_number: tc.block_number,
+                                    last_commit: header.inner.timestamp.value(),
                                     last_commitment_args: None,
-                                    txs: vec![(tc.tx_hash.clone(), tc.block_number, None, None)],
+                                    txs: vec![(
+                                        tc.tx_hash.clone(),
+                                        tc.block_number,
+                                        header.inner.timestamp.value(),
+                                        None,
+                                        None,
+                                    )],
                                 });
                         }
                         Some(commitment_args) => {
@@ -685,9 +706,11 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                                     csu.state = DBState::Commitment;
                                     csu.last_block_number = tc.block_number;
                                     csu.last_commitment_args = Some(commitment_args.clone());
+                                    csu.last_commit = header.inner.timestamp.value();
                                     csu.txs.push((
                                         tc.tx_hash.clone(),
                                         tc.block_number,
+                                        header.inner.timestamp.value(),
                                         None,
                                         Some(commitment_args.clone()),
                                     ));
@@ -696,10 +719,12 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                                     outpoint: outpoint.clone(),
                                     state: DBState::Commitment,
                                     last_block_number: tc.block_number,
+                                    last_commit: header.inner.timestamp.value(),
                                     last_commitment_args: Some(commitment_args.clone()),
                                     txs: vec![(
                                         tc.tx_hash.clone(),
                                         tc.block_number,
+                                        header.inner.timestamp.value(),
                                         None,
                                         Some(commitment_args.clone()),
                                     )],
@@ -865,6 +890,13 @@ async fn commitment_branch(
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 };
+                let header = loop {
+                    let header = rpc.get_header_by_number(url.clone(), tc.block_number).await;
+                    if let Ok(header) = header {
+                        break header;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                };
                 let mut witness_args = None;
                 for (ty, idx) in tc.cells.iter() {
                     if let CellType::Input = ty {
@@ -887,9 +919,11 @@ async fn commitment_branch(
                             .and_modify(|csu: &mut ChannelStateUpdate| {
                                 csu.state = DBState::Closed;
                                 csu.last_block_number = tc.block_number;
+                                csu.last_commit = header.inner.timestamp.value();
                                 csu.txs.push((
                                     tc.tx_hash.clone(),
                                     tc.block_number,
+                                    header.inner.timestamp.value(),
                                     witness_args.clone(),
                                     None,
                                 ));
@@ -898,10 +932,12 @@ async fn commitment_branch(
                                 outpoint: outpoint.clone(),
                                 state: DBState::Closed,
                                 last_block_number: tc.block_number,
+                                last_commit: header.inner.timestamp.value(),
                                 last_commitment_args: None,
                                 txs: vec![(
                                     tc.tx_hash.clone(),
                                     tc.block_number,
+                                    header.inner.timestamp.value(),
                                     witness_args.clone(),
                                     None,
                                 )],
@@ -918,10 +954,12 @@ async fn commitment_branch(
                             .and_modify(|csu: &mut ChannelStateUpdate| {
                                 csu.state = DBState::Commitment;
                                 csu.last_block_number = tc.block_number;
+                                csu.last_commit = header.inner.timestamp.value();
                                 csu.last_commitment_args = Some(next_commitment_args.clone());
                                 csu.txs.push((
                                     tc.tx_hash.clone(),
                                     tc.block_number,
+                                    header.inner.timestamp.value(),
                                     witness_args.clone(),
                                     Some(next_commitment_args.clone()),
                                 ));
@@ -930,10 +968,12 @@ async fn commitment_branch(
                                 outpoint: outpoint.clone(),
                                 state: DBState::Commitment,
                                 last_block_number: tc.block_number,
+                                last_commit: header.inner.timestamp.value(),
                                 last_commitment_args: Some(next_commitment_args.clone()),
                                 txs: vec![(
                                     tc.tx_hash.clone(),
                                     tc.block_number,
+                                    header.inner.timestamp.value(),
                                     witness_args.clone(),
                                     Some(next_commitment_args.clone()),
                                 )],
@@ -994,9 +1034,10 @@ impl DBState {
 pub struct ChannelStateUpdate {
     outpoint: JsonBytes,
     state: DBState,
+    last_commit: u64,
     last_block_number: BlockNumber,
     last_commitment_args: Option<JsonBytes>,
-    txs: Vec<(H256, BlockNumber, Option<JsonBytes>, Option<JsonBytes>)>, // (tx_hash, block_number, witness_args, commitment_args)
+    txs: Vec<(H256, BlockNumber, u64, Option<JsonBytes>, Option<JsonBytes>)>, // (tx_hash, block_number, timestamp, witness_args, commitment_args)
 }
 
 impl ChannelStateUpdate {
@@ -1014,8 +1055,9 @@ impl ChannelStateUpdate {
                 last_tx_hash = $1,
                 last_block_number = $2,
                 last_commitment_args = $3,
-                state = $4
-            WHERE channel_outpoint = $5",
+                state = $4,
+                last_commit_time = $5,
+            WHERE channel_outpoint = $6",
             net.channel_states()
         );
 
@@ -1031,6 +1073,7 @@ impl ChannelStateUpdate {
                         .map(|args| hex_string(args.as_bytes())),
                 )
                 .bind(cu.state.to_sql())
+                .bind(hex_string(cu.last_commit.to_le_bytes().as_ref()))
                 .bind(hex_string(cu.outpoint.as_bytes()))
                 .execute(&mut *conn)
                 .await?;
@@ -1049,7 +1092,7 @@ impl ChannelStateUpdate {
         }
 
         let sql = format!(
-            "insert into {} (channel_outpoint, tx_hash, block_number, witness_args, commitment_args) ",
+            "insert into {} (channel_outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args) ",
             net.channel_txs()
         );
         let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
@@ -1058,22 +1101,24 @@ impl ChannelStateUpdate {
             .iter()
             .flat_map(|cu| std::iter::repeat(cu.outpoint.clone()).zip(cu.txs.iter()))
             .map(
-                |(outpoint, (tx_hash, block_number, witness_args, commitment_args))| {
+                |(outpoint, (tx_hash, block_number, timestamp, witness_args, commitment_args))| {
                     (
                         outpoint,
                         tx_hash,
                         block_number,
+                        timestamp,
                         witness_args,
                         commitment_args,
                     )
                 },
             );
         query_builder.push_values(
-            combin.take(65535 / 4),
-            |mut b, (outpoint, tx_hash, block_number, witness_args, commitment_args)| {
+            combin.take(65535 / 6),
+            |mut b, (outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args)| {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
                     .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                    .push_bind(hex_string(timestamp.to_le_bytes().as_ref()))
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));
             },
@@ -1088,10 +1133,13 @@ pub struct ChannelGroup {
     net: Network,
     outpoint: JsonBytes,
     funding_args: JsonBytes,
+    capacity: u64,
+    create_time: u64,
+    last_commit_time: u64,
     last_block_number: BlockNumber,
     last_commitment_args: Option<JsonBytes>,
     state: DBState,
-    txs: Vec<(H256, BlockNumber, Option<JsonBytes>, Option<JsonBytes>)>, // (tx_hash, block_number, witness_args, commitment_args)
+    txs: Vec<(H256, BlockNumber, u64, Option<JsonBytes>, Option<JsonBytes>)>, // (tx_hash, block_number, commit_time, witness_args, commitment_args)
 }
 
 impl ChannelGroup {
@@ -1109,7 +1157,7 @@ impl ChannelGroup {
                     DBState::Commitment => State::Commitment {
                         tx_hash: self.txs.last().unwrap().0.clone(),
                         block_number: self.txs.last().unwrap().1,
-                        commitment_args: self.txs.last().unwrap().2.clone().unwrap(),
+                        commitment_args: self.txs.last().unwrap().3.clone().unwrap(),
                     },
                     DBState::Closed => State::Closed,
                 },
@@ -1122,7 +1170,7 @@ impl ChannelGroup {
         conn: &mut sqlx::PgConnection,
     ) -> Result<(), sqlx::Error> {
         let sql = format!(
-            "insert into {} (channel_outpoint, funding_args, last_tx_hash, last_block_number, last_commitment_args, state) ",
+            "insert into {} (channel_outpoint, funding_args, capacity, last_tx_hash, last_block_number, create_time, last_commit_time, last_commitment_args, state) ",
             groups[0].net.channel_states()
         );
 
@@ -1131,10 +1179,13 @@ impl ChannelGroup {
         query_builder.push_values(groups.iter(), |mut b, cg| {
             b.push_bind(hex_string(cg.outpoint.as_bytes()))
                 .push_bind(hex_string(cg.funding_args.as_bytes()))
+                .push_bind(hex_string(cg.capacity.to_le_bytes().as_ref()))
                 .push_bind(hex_string(cg.txs.last().unwrap().0.as_bytes()))
                 .push_bind(hex_string(
                     cg.last_block_number.value().to_le_bytes().as_ref(),
                 ))
+                .push_bind(hex_string(cg.create_time.to_le_bytes().as_ref()))
+                .push_bind(hex_string(cg.last_commit_time.to_le_bytes().as_ref()))
                 .push_bind(
                     cg.last_commitment_args
                         .as_ref()
@@ -1152,7 +1203,7 @@ impl ChannelGroup {
         conn: &mut sqlx::PgConnection,
     ) -> Result<(), sqlx::Error> {
         let sql = format!(
-            "insert into {} (channel_outpoint, tx_hash, block_number, witness_args, commitment_args) ",
+            "insert into {} (channel_outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args) ",
             groups[0].net.channel_txs()
         );
         let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
@@ -1161,11 +1212,12 @@ impl ChannelGroup {
             .iter()
             .flat_map(|cg| std::iter::repeat(cg.outpoint.clone()).zip(cg.txs.clone()))
             .map(
-                |(outpoint, (tx_hash, block_number, witness_args, commitment_args))| {
+                |(outpoint, (tx_hash, block_number, timestamp, witness_args, commitment_args))| {
                     (
                         outpoint,
                         tx_hash,
                         block_number,
+                        timestamp,
                         witness_args,
                         commitment_args,
                     )
@@ -1173,10 +1225,11 @@ impl ChannelGroup {
             );
         query_builder.push_values(
             combin,
-            |mut b, (outpoint, tx_hash, block_number, witness_args, commitment_args)| {
+            |mut b, (outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args)| {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
                     .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                    .push_bind(hex_string(timestamp.to_le_bytes().as_ref()))
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));
             },
@@ -1219,6 +1272,12 @@ pub async fn new_channels(
             .get(Unpack::<u32>::unpack(&raw_outpoint.as_reader().index()) as usize)
             .map(|output| output.lock.args.clone())
             .unwrap();
+        let capacity = funding_tx
+            .inner
+            .outputs
+            .iter()
+            .map(|output| output.capacity.value())
+            .sum::<u64>();
         let txs = loop {
             let txs = rpc
                 .get_transactions(
@@ -1248,13 +1307,25 @@ pub async fn new_channels(
             outpoint,
             funding_args: funding_args.clone(),
             last_block_number: 0.into(),
+            capacity,
+            create_time: 0,
+            last_commit_time: 0,
             last_commitment_args: None,
             state: DBState::Open,
-            txs: vec![(funding_tx.hash.clone(), 0.into(), None, None)],
+            txs: vec![(funding_tx.hash.clone(), 0.into(), 0, None, None)],
         };
         for tx in txs.objects {
             if let Tx::Grouped(tc) = &tx {
                 if tc.tx_hash == funding_tx.hash {
+                    let header = loop {
+                        let header = rpc.get_header_by_number(url.clone(), tc.block_number).await;
+                        if let Ok(header) = header {
+                            break header;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    };
+                    group.create_time = header.inner.timestamp.value();
+                    group.last_commit_time = header.inner.timestamp.value();
                     group.last_block_number = tc.block_number;
                     group.txs[0].1 = tc.block_number;
                     continue;
@@ -1263,6 +1334,13 @@ pub async fn new_channels(
                     let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
                     if let Ok(tx) = tx {
                         break tx.unwrap();
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                };
+                let header = loop {
+                    let header = rpc.get_header_by_number(url.clone(), tc.block_number).await;
+                    if let Ok(header) = header {
+                        break header;
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 };
@@ -1278,17 +1356,27 @@ pub async fn new_channels(
                     None => {
                         group.state = DBState::Closed;
                         group.last_block_number = tc.block_number;
-                        group
-                            .txs
-                            .push((tc.tx_hash.clone(), tc.block_number, None, None));
+                        group.last_commit_time = header.inner.timestamp.value();
+                        group.txs.push((
+                            tc.tx_hash.clone(),
+                            tc.block_number,
+                            header.inner.timestamp.value(),
+                            None,
+                            None,
+                        ));
                     }
                     Some(args) => {
                         group.last_commitment_args = Some(args.clone());
                         group.last_block_number = tc.block_number;
+                        group.last_commit_time = header.inner.timestamp.value();
                         group.state = DBState::Commitment;
-                        group
-                            .txs
-                            .push((tc.tx_hash.clone(), tc.block_number, None, Some(args)));
+                        group.txs.push((
+                            tc.tx_hash.clone(),
+                            tc.block_number,
+                            header.inner.timestamp.value(),
+                            None,
+                            Some(args),
+                        ));
                     }
                 }
             }
@@ -1323,13 +1411,24 @@ pub async fn new_channels(
             };
             for tx in txs.objects {
                 if let Tx::Grouped(tc) = &tx {
-                    if group.txs.iter().any(|(hash, _, _, _)| hash == &tc.tx_hash) {
+                    if group
+                        .txs
+                        .iter()
+                        .any(|(hash, _, _, _, _)| hash == &tc.tx_hash)
+                    {
                         continue;
                     }
                     let new_tx = loop {
                         let tx = rpc.get_transaction(url.clone(), &tc.tx_hash).await;
                         if let Ok(tx) = tx {
                             break tx.unwrap();
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    };
+                    let header = loop {
+                        let header = rpc.get_header_by_number(url.clone(), tc.block_number).await;
+                        if let Ok(header) = header {
+                            break header;
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     };
@@ -1352,9 +1451,11 @@ pub async fn new_channels(
                         None => {
                             group.state = DBState::Closed;
                             group.last_block_number = tc.block_number;
+                            group.last_commit_time = header.inner.timestamp.value();
                             group.txs.push((
                                 tc.tx_hash.clone(),
                                 tc.block_number,
+                                header.inner.timestamp.value(),
                                 witness_args,
                                 None,
                             ));
@@ -1362,10 +1463,12 @@ pub async fn new_channels(
                         Some(args) => {
                             group.last_commitment_args = Some(args.clone());
                             group.last_block_number = tc.block_number;
+                            group.last_commit_time = header.inner.timestamp.value();
                             group.state = DBState::Commitment;
                             group.txs.push((
                                 tc.tx_hash.clone(),
                                 tc.block_number,
+                                header.inner.timestamp.value(),
                                 witness_args,
                                 Some(args),
                             ));

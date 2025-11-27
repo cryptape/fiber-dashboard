@@ -13,7 +13,7 @@ use crate::types::{
     Cell, GraphChannelsParams, GraphChannelsResult, GraphNodesParams, GraphNodesResult, IndexerTip,
     Order, Pagination, SearchKey, Tx,
 };
-use ckb_jsonrpc_types::{JsonBytes, TransactionView, TxStatus, Uint32};
+use ckb_jsonrpc_types::{BlockNumber, HeaderView, JsonBytes, TransactionView, TxStatus, Uint32};
 use ckb_types::H256;
 use serde::{Deserialize, Serialize};
 
@@ -195,5 +195,13 @@ impl RpcClient {
 
     pub fn get_indexer_tip(&self, url: Url) -> impl Future<Output = Result<IndexerTip, io::Error>> {
         jsonrpc!("get_indexer_tip", self, url, IndexerTip)
+    }
+
+    pub fn get_header_by_number(
+        &self,
+        url: Url,
+        number: BlockNumber,
+    ) -> impl Future<Output = Result<HeaderView, io::Error>> {
+        jsonrpc!("get_header_by_number", self, url, HeaderView, number)
     }
 }
