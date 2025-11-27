@@ -36,6 +36,9 @@ create table daily_summarized_data (
 create table channel_states (
     channel_outpoint TEXT NOT NULL PRIMARY KEY,
     funding_args TEXT NOT NULL,
+    capacity TEXT NOT NULL,
+    create_time TEXT NOT NULL,
+    last_commit_time TEXT NOT NULL,
     last_tx_hash TEXT NOT NULL,
     last_block_number TEXT NOT NULL,
     last_commitment_args TEXT,
@@ -46,6 +49,7 @@ create table channel_txs (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
     witness_args TEXT,
     commitment_args TEXT
 );
@@ -237,6 +241,9 @@ create table daily_summarized_data_testnet (
 create table channel_states_testnet (
     channel_outpoint TEXT NOT NULL PRIMARY KEY,
     funding_args TEXT NOT NULL,
+    capacity TEXT NOT NULL,
+    create_time TEXT NOT NULL,
+    last_commit_time TEXT NOT NULL,
     last_tx_hash TEXT NOT NULL,
     last_block_number TEXT NOT NULL,
     last_commitment_args TEXT,
@@ -247,6 +254,7 @@ create table channel_txs_testnet (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states_testnet(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
     witness_args TEXT,
     commitment_args TEXT
 );

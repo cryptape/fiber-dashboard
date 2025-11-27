@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Network, get_pg_pool,
     pg_read::{
-        AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state, query_analysis,
-        query_analysis_hourly, query_channel_info, query_channel_state, query_node_info,
-        read_channels_hourly, read_channels_monthly, read_nodes_hourly, read_nodes_monthly,
+        AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state,
+        grout_channel_count_by_state, query_analysis, query_analysis_hourly,
+        query_channel_capacity_distribution, query_channel_info, query_channel_state,
+        query_node_info, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
+        read_nodes_monthly,
     },
     pg_write::DBState,
 };
@@ -288,4 +290,38 @@ pub async fn channel_by_state(
             salvo::Error::Io(std::io::Error::other("Failed to query channels by state"))
         })?;
     Ok(states)
+}
+
+#[handler]
+pub async fn channel_count_by_state(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<ChannelByStateParams>().await?;
+    let pool = get_pg_pool();
+    let counts = grout_channel_count_by_state(pool, params.state, params.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to count channels by state: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to count channels by state"))
+        })?;
+    Ok(counts)
+}
+
+#[handler]
+pub async fn channel_capacity_distribution(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let network_info = req.extract::<NetworkInfo>().await?;
+    let pool = get_pg_pool();
+    let distribution = query_channel_capacity_distribution(pool, network_info.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to get channel capacity distribution: {}", e);
+            salvo::Error::Io(std::io::Error::other(
+                "Failed to get channel capacity distribution",
+            ))
+        })?;
+    Ok(distribution)
 }
