@@ -87,16 +87,28 @@ async fn http_server() {
 }
 
 static MAINNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
-    std::env::var("FIBER_MAINNET_RPC_URL")
-        .map(|url| Url::parse(&url).unwrap())
+    let url = std::env::var("FIBER_MAINNET_RPC_URL")
+        .map(|url| Url::parse(&url).ok())
         .ok()
+        .flatten();
+    if url.is_none() {
+        log::warn!("FIBER_MAINNET_RPC_URL is not set, mainnet fiber dashbord will be disabled");
+    }
+
+    url
 });
 static MAINNET_FIBER_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
     LazyLock::new(|| std::env::var("FIBER_MAINNET_RPC_BEARER_TOKEN").ok());
 static TESTNET_FIBER_RPC_URL: LazyLock<Option<Url>> = LazyLock::new(|| {
-    std::env::var("FIBER_TESTNET_RPC_URL")
-        .map(|url| Url::parse(&url).unwrap())
+    let url = std::env::var("FIBER_TESTNET_RPC_URL")
+        .map(|url| Url::parse(&url).ok())
         .ok()
+        .flatten();
+    if url.is_none() {
+        log::warn!("FIBER_TESTNET_RPC_URL is not set, testnet fiber dashbord will be disabled");
+    }
+
+    url
 });
 static TESTNET_FIBER_RPC_BEARER_TOKEN: LazyLock<Option<String>> =
     LazyLock::new(|| std::env::var("FIBER_TESTNET_RPC_BEARER_TOKEN").ok());
