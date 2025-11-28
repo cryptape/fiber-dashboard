@@ -161,7 +161,8 @@ pub struct HourlyNodeInfo {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    pub channel_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_count: Option<usize>,
 }
 
 impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
@@ -190,7 +191,7 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
             city: info.city,
             region: info.region,
             loc: info.loc,
-            channel_count: info.channel_count as usize,
+            channel_count: info.channel_count.map(|count| count as usize),
         }
     }
 }
@@ -208,7 +209,7 @@ pub struct HourlyNodeInfoDBRead {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    pub channel_count: i64,
+    pub channel_count: Option<i64>,
 }
 
 impl HourlyNodeInfoDBRead {
@@ -276,6 +277,79 @@ impl HourlyNodeInfoDBRead {
             .await?;
 
         Ok(res)
+    }
+
+    pub async fn fetch_node_by_country(
+        pool: &Pool<Postgres>,
+        country: String,
+        page: usize,
+        net: Network,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql = format!(
+            r#"
+        SELECT DISTINCT ON (node_id)
+            node_id,
+            bucket AS last_seen_hour,
+            node_name,
+            addresses,
+            announce_timestamp,
+            chain_hash,
+            auto_accept_min_ckb_funding_amount,
+            country,
+            city,
+            region,
+            loc,
+            null as channel_count
+        FROM {}
+        WHERE bucket >= $1::timestamp and country = $2
+        ORDER BY node_id, bucket DESC
+    "#,
+            net.online_nodes_hourly()
+        );
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(hour_bucket)
+            .bind(country)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
+    }
+
+    pub async fn fetch_node_fuzzy_by_name_or_id(
+        pool: &Pool<Postgres>,
+        keyword: String,
+        page: usize,
+        net: Network,
+    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
+        let offset = page.saturating_mul(PAGE_SIZE);
+        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql = format!(
+            r#"
+        SELECT DISTINCT ON (node_id)
+            node_id,
+            bucket AS last_seen_hour,
+            node_name,
+            addresses,
+            announce_timestamp,
+            chain_hash,
+            auto_accept_min_ckb_funding_amount,
+            country,
+            city,
+            region,
+            loc,
+            null as channel_count
+        FROM {}
+        WHERE bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
+        ORDER BY node_id, bucket DESC "#,
+            net.online_nodes_hourly()
+        );
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .bind(hour_bucket)
+            .bind(keyword)
+            .fetch_all(pool)
+            .await
+            .map(|rows| (rows, page.saturating_add(1)))
     }
 
     pub async fn fetch_by_page_hourly(

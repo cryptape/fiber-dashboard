@@ -9,7 +9,8 @@ use crate::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state,
         group_channel_count_by_state, query_analysis, query_analysis_hourly,
         query_channel_capacity_distribution, query_channel_info, query_channel_state,
-        query_node_info, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
+        query_channels_by_node_id, query_node_info, query_nodes_by_country,
+        query_nodes_fuzzy_by_name, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
         read_nodes_monthly,
     },
     pg_write::DBState,
@@ -29,6 +30,25 @@ struct Page {
 #[salvo(extract(default_source(from = "query")))]
 struct NodeId {
     node_id: JsonBytes,
+    page: usize,
+    #[serde(default)]
+    net: Network,
+}
+
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+struct FuzzyNodeName {
+    node_name: String,
+    page: usize,
+    #[serde(default)]
+    net: Network,
+}
+
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+struct NodeByCountry {
+    country: String,
+    page: usize,
     #[serde(default)]
     net: Network,
 }
@@ -111,6 +131,45 @@ pub async fn list_nodes_monthly(
 }
 
 #[handler]
+pub async fn nodes_fuzzy_by_name_or_id(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<FuzzyNodeName>().await?;
+    let pool = get_pg_pool();
+
+    let nodes = query_nodes_fuzzy_by_name(pool, params.node_name, params.page, params.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query nodes by name or id: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to query nodes by name or id"))
+        })?;
+    Ok(serde_json::to_string(&NodePage {
+        next_page: nodes.1,
+        nodes: nodes.0,
+    })?)
+}
+
+#[handler]
+pub async fn nodes_by_country(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<NodeByCountry>().await?;
+    let pool = get_pg_pool();
+    let nodes = query_nodes_by_country(pool, params.country, params.page, params.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query nodes by country: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to query nodes by country"))
+        })?;
+    Ok(serde_json::to_string(&NodePage {
+        next_page: nodes.1,
+        nodes: nodes.0,
+    })?)
+}
+
+#[handler]
 pub async fn list_channels_hourly(
     req: &mut Request,
     _res: &mut Response,
@@ -158,6 +217,21 @@ pub async fn list_channels_monthly(
         next_page: channels.1,
         channels: channels.0,
     })?)
+}
+
+#[handler]
+pub async fn channels_by_node_id(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let node_id = req.extract::<NodeId>().await?;
+    let pool = get_pg_pool();
+    query_channels_by_node_id(pool, node_id.node_id, node_id.page, node_id.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to query channels by node id: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to query channels by node id"))
+        })
 }
 
 #[handler]

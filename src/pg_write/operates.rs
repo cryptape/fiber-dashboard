@@ -1056,7 +1056,7 @@ impl ChannelStateUpdate {
                 last_block_number = $2,
                 last_commitment_args = $3,
                 state = $4,
-                last_commit_time = $5,
+                last_commit_time = $5
             WHERE channel_outpoint = $6",
             net.channel_states()
         );
@@ -1073,7 +1073,9 @@ impl ChannelStateUpdate {
                         .map(|args| hex_string(args.as_bytes())),
                 )
                 .bind(cu.state.to_sql())
-                .bind(hex_string(cu.last_commit.to_le_bytes().as_ref()))
+                .bind(chrono::DateTime::from_timestamp_millis(
+                    cu.last_commit as i64,
+                ))
                 .bind(hex_string(cu.outpoint.as_bytes()))
                 .execute(&mut *conn)
                 .await?;
@@ -1106,7 +1108,7 @@ impl ChannelStateUpdate {
                         outpoint,
                         tx_hash,
                         block_number,
-                        timestamp,
+                        chrono::DateTime::from_timestamp_millis(*timestamp as i64),
                         witness_args,
                         commitment_args,
                     )
@@ -1118,7 +1120,7 @@ impl ChannelStateUpdate {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
                     .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
-                    .push_bind(hex_string(timestamp.to_le_bytes().as_ref()))
+                    .push_bind(timestamp)
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));
             },
@@ -1184,8 +1186,12 @@ impl ChannelGroup {
                 .push_bind(hex_string(
                     cg.last_block_number.value().to_le_bytes().as_ref(),
                 ))
-                .push_bind(hex_string(cg.create_time.to_le_bytes().as_ref()))
-                .push_bind(hex_string(cg.last_commit_time.to_le_bytes().as_ref()))
+                .push_bind(chrono::DateTime::from_timestamp_millis(
+                    cg.create_time as i64,
+                ))
+                .push_bind(chrono::DateTime::from_timestamp_millis(
+                    cg.last_commit_time as i64,
+                ))
                 .push_bind(
                     cg.last_commitment_args
                         .as_ref()
@@ -1217,7 +1223,7 @@ impl ChannelGroup {
                         outpoint,
                         tx_hash,
                         block_number,
-                        timestamp,
+                        chrono::DateTime::from_timestamp_millis(timestamp as i64),
                         witness_args,
                         commitment_args,
                     )
@@ -1229,7 +1235,7 @@ impl ChannelGroup {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
                     .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
-                    .push_bind(hex_string(timestamp.to_le_bytes().as_ref()))
+                    .push_bind(timestamp)
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));
             },
@@ -1266,18 +1272,12 @@ pub async fn new_channels(
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         };
-        let funding_args = funding_tx
+        let (funding_args, capacity) = funding_tx
             .inner
             .outputs
             .get(Unpack::<u32>::unpack(&raw_outpoint.as_reader().index()) as usize)
-            .map(|output| output.lock.args.clone())
+            .map(|output| (output.lock.args.clone(), output.capacity.value()))
             .unwrap();
-        let capacity = funding_tx
-            .inner
-            .outputs
-            .iter()
-            .map(|output| output.capacity.value())
-            .sum::<u64>();
         let txs = loop {
             let txs = rpc
                 .get_transactions(

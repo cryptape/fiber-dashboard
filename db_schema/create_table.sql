@@ -37,8 +37,8 @@ create table channel_states (
     channel_outpoint TEXT NOT NULL PRIMARY KEY,
     funding_args TEXT NOT NULL,
     capacity TEXT NOT NULL,
-    create_time TEXT NOT NULL,
-    last_commit_time TEXT NOT NULL,
+    create_time TIMESTAMPTZ NOT NULL,
+    last_commit_time TIMESTAMPTZ NOT NULL,
     last_tx_hash TEXT NOT NULL,
     last_block_number TEXT NOT NULL,
     last_commitment_args TEXT,
@@ -49,7 +49,7 @@ create table channel_txs (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
     witness_args TEXT,
     commitment_args TEXT
 );
@@ -60,6 +60,7 @@ create index idx_node_udt_relations_node on node_udt_relations(node_id);
 create index idx_daily_summarized_data_day on daily_summarized_data(day);
 create index idx_channel_txs_outpoint on channel_txs(channel_outpoint);
 create index idx_channel_states_state on channel_states(state);
+create index idx_channel_states_last_commit_time on channel_states(last_commit_time);
 
 create table node_infos (
     time TIMESTAMPTZ NOT NULL,
@@ -83,6 +84,10 @@ WITH (
 
 create unique index idx_node_id_time
   ON node_infos(node_id, time DESC);
+create index idx_node_name_time
+  ON node_infos(node_name, time DESC);
+create index idx_country_time
+  ON node_infos(country, time DESC);
 
 create table channel_infos (
     time TIMESTAMPTZ NOT NULL,
@@ -242,8 +247,8 @@ create table channel_states_testnet (
     channel_outpoint TEXT NOT NULL PRIMARY KEY,
     funding_args TEXT NOT NULL,
     capacity TEXT NOT NULL,
-    create_time TEXT NOT NULL,
-    last_commit_time TEXT NOT NULL,
+    create_time TIMESTAMPTZ NOT NULL,
+    last_commit_time TIMESTAMPTZ NOT NULL,
     last_tx_hash TEXT NOT NULL,
     last_block_number TEXT NOT NULL,
     last_commitment_args TEXT,
@@ -254,7 +259,7 @@ create table channel_txs_testnet (
     channel_outpoint TEXT NOT NULL REFERENCES channel_states_testnet(channel_outpoint),
     tx_hash TEXT NOT NULL,
     block_number TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
     witness_args TEXT,
     commitment_args TEXT
 );
@@ -265,6 +270,7 @@ create index idx_node_udt_relations_node_testnet on node_udt_relations_testnet(n
 create index idx_daily_summarized_data_day_testnet on daily_summarized_data_testnet(day);
 create index idx_channel_txs_outpoint_testnet on channel_txs_testnet(channel_outpoint);
 create index idx_channel_states_state_testnet on channel_states_testnet(state);
+create index idx_channel_states_last_commit_time_testnet on channel_states_testnet(last_commit_time);
 
 create table node_infos_testnet (
     time TIMESTAMPTZ NOT NULL,
@@ -288,6 +294,10 @@ WITH (
 
 create unique index idx_node_id_time_testnet
   ON node_infos_testnet(node_id, time DESC);
+  create index idx_node_name_time_testnet
+  ON node_infos_testnet(node_name, time DESC);
+create index idx_country_time_testnet
+  ON node_infos_testnet(country, time DESC);
 
 create table channel_infos_testnet (
     time TIMESTAMPTZ NOT NULL,

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
+use chrono::{DateTime, Utc};
 use ckb_jsonrpc_types::{DepType, JsonBytes, OutPoint as OutPointWrapper, Script};
 use ckb_types::H256;
 use serde::{Deserialize, Serialize};
@@ -57,6 +58,38 @@ pub async fn query_node_info(
         .map(|res| res.map(HourlyNodeInfo::from))
 }
 
+pub async fn query_nodes_by_country(
+    pool: &Pool<Postgres>,
+    country: String,
+    page: usize,
+    net: Network,
+) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+    HourlyNodeInfoDBRead::fetch_node_by_country(pool, country, page, net)
+        .await
+        .map(|(entities, next_page)| {
+            (
+                entities.into_iter().map(HourlyNodeInfo::from).collect(),
+                next_page,
+            )
+        })
+}
+
+pub async fn query_nodes_fuzzy_by_name(
+    pool: &Pool<Postgres>,
+    name: String,
+    page: usize,
+    net: Network,
+) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+    HourlyNodeInfoDBRead::fetch_node_fuzzy_by_name_or_id(pool, name, page, net)
+        .await
+        .map(|(entities, next_page)| {
+            (
+                entities.into_iter().map(HourlyNodeInfo::from).collect(),
+                next_page,
+            )
+        })
+}
+
 pub async fn read_channels_hourly(
     pool: &Pool<Postgres>,
     page: usize,
@@ -97,6 +130,71 @@ pub async fn query_channel_info(
     HourlyChannelInfoDBRead::fetch_by_id(pool, outpoint, net)
         .await
         .map(|res| res.map(ChannelInfo::from))
+}
+
+pub async fn query_channels_by_node_id(
+    pool: &Pool<Postgres>,
+    node_id: JsonBytes,
+    page: usize,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let offset = page.saturating_mul(PAGE_SIZE);
+    let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+    let sql = format!(
+        "
+            select DISTINCT ON (n.channel_outpoint)
+            n.channel_outpoint, 
+            n.bucket as last_seen_hour, 
+            n.capacity,
+            n.created_timestamp,
+            c.state,
+            c.last_commit_time
+            from {} n
+            left join {} c on n.channel_outpoint = c.channel_outpoint
+            WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
+            ORDER BY n.channel_outpoint, n.bucket DESC
+        ",
+        net.online_channels_hourly(),
+        net.channel_states()
+    );
+
+    #[derive(Serialize, Deserialize)]
+    struct Channel {
+        channel_outpoint: String,
+        last_seen_hour: DateTime<Utc>,
+        capacity: String,
+        created_timestamp: DateTime<Utc>,
+        state: String,
+        last_commit_time: DateTime<Utc>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct ChannelWithPage {
+        channels: Vec<Channel>,
+        next_page: usize,
+    }
+
+    let channels = sqlx::query(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+        .bind(hour_bucket)
+        .bind(faster_hex::hex_string(node_id.as_bytes()))
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| Channel {
+            channel_outpoint: format!("0x{}", row.get::<String, _>("channel_outpoint")),
+            last_seen_hour: row.get("last_seen_hour"),
+            capacity: row.get("capacity"),
+            created_timestamp: row.get("created_timestamp"),
+            state: row.get("state"),
+            last_commit_time: row.get("last_commit_time"),
+        })
+        .collect();
+
+    Ok(serde_json::to_string(&ChannelWithPage {
+        channels,
+        next_page: page.saturating_add(1),
+    })
+    .unwrap())
 }
 
 pub async fn query_node_udt_relation(
@@ -580,10 +678,10 @@ pub async fn query_channel_state(
             let raw_block_number: String = row.get("block_number");
             let raw_witness_args: Option<String> = row.get("witness_args");
             let raw_commitment_args: Option<String> = row.get("commitment_args");
-            let raw_timestamp: String = row.get("timestamp");
+            let raw_timestamp: DateTime<Utc> = row.get("timestamp");
             let tx_hash = format!("0x{}", raw_tx_hash);
             let block_number = format!("0x{}", raw_block_number);
-            let timestamp = format!("0x{}", raw_timestamp);
+            let timestamp = raw_timestamp.to_rfc3339();
 
             let witness_args = raw_witness_args.map(|args| format!("0x{}", args));
             let commitment_args = raw_commitment_args.map(|args| format!("0x{}", args));
@@ -661,6 +759,7 @@ pub async fn group_channel_by_state(
         from {} n
         left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
         where state = $1 LIMIT {} OFFSET {}
+        order by n.last_commit_time desc
     "#,
         net.channel_txs(),
         net.channel_states(),
@@ -678,8 +777,8 @@ pub async fn group_channel_by_state(
             let last_block_number: String = row.get("last_block_number");
             let last_tx_hash: String = row.get("last_tx_hash");
             let last_commitment_args: Option<String> = row.get("last_commitment_args");
-            let create_time: String = row.get("create_time");
-            let last_commit_time: String = row.get("last_commit_time");
+            let create_time: DateTime<Utc> = row.get("create_time");
+            let last_commit_time: DateTime<Utc> = row.get("last_commit_time");
             let tx_count: i64 = row.get("tx_count");
             let capacity: String = row.get("capacity");
             (
@@ -687,8 +786,8 @@ pub async fn group_channel_by_state(
                 format!("0x{}", funding_args),
                 format!("0x{}", last_block_number),
                 format!("0x{}", last_tx_hash),
-                format!("0x{}", create_time),
-                format!("0x{}", last_commit_time),
+                create_time.to_rfc3339(),
+                last_commit_time.to_rfc3339(),
                 format!("0x{}", capacity),
                 tx_count as usize,
                 last_commitment_args.map(|arg| format!("0x{}", arg)),
