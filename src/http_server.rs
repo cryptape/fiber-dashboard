@@ -30,6 +30,7 @@ struct Page {
 #[salvo(extract(default_source(from = "query")))]
 struct NodeId {
     node_id: JsonBytes,
+    #[serde(default)]
     page: usize,
     #[serde(default)]
     net: Network,
