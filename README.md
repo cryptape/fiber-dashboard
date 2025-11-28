@@ -3,20 +3,20 @@
 http api default on 8080, method list:
 
 ```
-/nodes_hourly?page=0
+/nodes_hourly?page=0&sort_by=region/last_seen&order=asc/desc
 /channels_hourly?page=0
 /nodes_nearly_monthly?page=0&start=%Y-%m-%d&end=%Y-%m-%d start/end is optional
 /channels_nearly_monthly?page=0&start=%Y-%m-%d&end=%Y-%m-%d start/end is optional
 /node_udt_infos?node_id=0x...
 /analysis_hourly
 /channel_state?channel_outpoint=0x..
-/group_channel_by_state?state=open/commitment/closed&page=0
+/group_channel_by_state?state=open/commitment/closed&page=0&sort_by=create_time/last_commit_time&order=asc/desc
 /channel_count_by_state
 /channel_info?channel_outpoint=0x..
 /node_info?node_id=0x..
-/channels_by_node_id?node_id=0x..&page=0
-/nodes_by_country?country=HK&page=0
-/nodes_fuzzy_by_name?node_name=Cr&page=0
+/channels_by_node_id?node_id=0x..&page=0&sort_by=create_time/last_commit_time&order=asc/desc
+/nodes_by_region?region=HK&page=0&sort_by=region/last_seen&order=asc/desc
+/nodes_fuzzy_by_name?node_name=Cr&page=0&sort_by=region/last_seen&order=asc/desc
 /channel_capacity_distribution
 post /nodes_by_udt body={ udt: Script }
 post /analysis need json body

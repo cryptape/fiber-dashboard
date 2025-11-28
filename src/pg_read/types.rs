@@ -7,6 +7,7 @@ use multiaddr::MultiAddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::http_server::{FuzzyNodeName, ListNodesHourlyParams, NodeByRegion};
 use crate::{
     Network,
     types::{ChannelUpdateInfo, U64Hex, U128Hex},
@@ -36,7 +37,7 @@ SELECT DISTINCT ON (n.node_id)
   n.announce_timestamp,
   n.chain_hash,
   n.auto_accept_min_ckb_funding_amount,
-  n.country,
+  n.country_or_region,
   n.city,
   n.region,
   n.loc,
@@ -44,7 +45,7 @@ SELECT DISTINCT ON (n.node_id)
 FROM {nodes} n
 LEFT JOIN channel_counts cc ON cc.node = n.node_id
 WHERE n.bucket >= $1::timestamp
-ORDER BY n.node_id, n.bucket DESC";
+ORDER BY n.node_id, {sort_by} {order}";
 
 const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   channel_outpoint,
@@ -101,7 +102,7 @@ SELECT DISTINCT ON (n.node_id)
   n.announce_timestamp,
   n.chain_hash,
   n.auto_accept_min_ckb_funding_amount,
-  n.country,
+  n.country_or_region,
   n.city,
   n.region,
   n.loc,
@@ -157,7 +158,7 @@ pub struct HourlyNodeInfo {
     pub chain_hash: H256,
     /// The minimum CKB funding amount for automatically accepting open channel requests.
     pub auto_accept_min_ckb_funding_amount: u64,
-    pub country: Option<String>,
+    pub country_or_region: Option<String>,
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
@@ -187,7 +188,7 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
                 .unwrap();
                 u64::from_le_bytes(amount_bytes)
             },
-            country: info.country,
+            country_or_region: info.country_or_region,
             city: info.city,
             region: info.region,
             loc: info.loc,
@@ -205,7 +206,7 @@ pub struct HourlyNodeInfoDBRead {
     pub announce_timestamp: DateTime<Utc>,
     pub chain_hash: String,
     pub auto_accept_min_ckb_funding_amount: String,
-    pub country: Option<String>,
+    pub country_or_region: Option<String>,
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
@@ -256,7 +257,7 @@ impl HourlyNodeInfoDBRead {
                 n.announce_timestamp,
                 n.chain_hash,
                 n.auto_accept_min_ckb_funding_amount,
-                n.country,
+                n.country_or_region,
                 n.city,
                 n.region,
                 n.loc,
@@ -279,13 +280,11 @@ impl HourlyNodeInfoDBRead {
         Ok(res)
     }
 
-    pub async fn fetch_node_by_country(
+    pub(crate) async fn fetch_node_by_region(
         pool: &Pool<Postgres>,
-        country: String,
-        page: usize,
-        net: Network,
+        params: NodeByRegion,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
+        let offset = params.page.saturating_mul(PAGE_SIZE);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql = format!(
             r#"
@@ -297,32 +296,32 @@ impl HourlyNodeInfoDBRead {
             announce_timestamp,
             chain_hash,
             auto_accept_min_ckb_funding_amount,
-            country,
+            country_or_region,
             city,
             region,
             loc,
             null as channel_count
         FROM {}
-        WHERE bucket >= $1::timestamp and country = $2
-        ORDER BY node_id, bucket DESC
+        WHERE bucket >= $1::timestamp and country_or_region = $2
+        ORDER BY node_id, {} {}
     "#,
-            net.online_nodes_hourly()
+            params.net.online_nodes_hourly(),
+            params.sort_by.as_str(),
+            params.order.as_str()
         );
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
             .bind(hour_bucket)
-            .bind(country)
+            .bind(params.region)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1)))
     }
 
-    pub async fn fetch_node_fuzzy_by_name_or_id(
+    pub(crate) async fn fetch_node_fuzzy_by_name_or_id(
         pool: &Pool<Postgres>,
-        keyword: String,
-        page: usize,
-        net: Network,
+        params: FuzzyNodeName,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
+        let offset = params.page.saturating_mul(PAGE_SIZE);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql = format!(
             r#"
@@ -334,39 +333,42 @@ impl HourlyNodeInfoDBRead {
             announce_timestamp,
             chain_hash,
             auto_accept_min_ckb_funding_amount,
-            country,
+            country_or_region,
             city,
             region,
             loc,
             null as channel_count
         FROM {}
         WHERE bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
-        ORDER BY node_id, bucket DESC "#,
-            net.online_nodes_hourly()
+        ORDER BY node_id, {} {} "#,
+            params.net.online_nodes_hourly(),
+            params.sort_by.as_str(),
+            params.order.as_str()
         );
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
             .bind(hour_bucket)
-            .bind(keyword)
+            .bind(params.node_name)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1)))
     }
 
-    pub async fn fetch_by_page_hourly(
+    pub(crate) async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
-        page: usize,
-        net: Network,
+        params: ListNodesHourlyParams,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
+        let offset = params.page.saturating_mul(PAGE_SIZE);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql = SELECT_HOURLY_NODES_SQL
-            .replace("{nodes}", net.online_nodes_hourly())
-            .replace("{channels}", net.online_channels_hourly());
+            .replace("{nodes}", params.net.online_nodes_hourly())
+            .replace("{channels}", params.net.online_channels_hourly())
+            .replace("{sort_by}", params.sort_by.as_str())
+            .replace("{order}", params.order.as_str());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
             .bind(hour_bucket)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1)))
     }
 
     pub async fn fetch_by_page_monthly(

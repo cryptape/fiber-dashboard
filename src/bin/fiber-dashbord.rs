@@ -44,7 +44,7 @@ async fn http_server() {
         analysis, analysis_hourly, channel_by_state, channel_capacity_distribution,
         channel_count_by_state, channel_info, channel_state, channels_by_node_id,
         list_channels_hourly, list_channels_monthly, list_nodes_hourly, list_nodes_monthly,
-        node_info, node_udt_infos, nodes_by_country, nodes_by_udt, nodes_fuzzy_by_name_or_id,
+        node_info, node_udt_infos, nodes_by_region, nodes_by_udt, nodes_fuzzy_by_name_or_id,
     };
     use salvo::{
         Listener, Router, Server, Service, conn::TcpListener, cors::AllowOrigin, cors::Cors,
@@ -71,7 +71,7 @@ async fn http_server() {
         .push(Router::with_path("channel_info").get(channel_info))
         .push(Router::with_path("node_info").get(node_info))
         .push(Router::with_path("channels_by_node_id").get(channels_by_node_id))
-        .push(Router::with_path("nodes_by_country").get(nodes_by_country))
+        .push(Router::with_path("nodes_by_region").get(nodes_by_region))
         .push(Router::with_path("nodes_fuzzy_by_name").get(nodes_fuzzy_by_name_or_id))
         .push(
             Router::with_path("channel_capacity_distribution").get(channel_capacity_distribution),
