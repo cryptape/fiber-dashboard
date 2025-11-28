@@ -9,19 +9,22 @@ use sqlx::{Pool, Postgres, Row};
 
 use crate::{
     Network,
+    http_server::{
+        ChannelByNodeIdParams, ChannelByStateParams, FuzzyNodeName, ListNodesHourlyParams,
+        NodeByRegion,
+    },
     pg_read::{
         ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead, PAGE_SIZE,
     },
-    pg_write::{DBState, global_cache, global_cache_testnet},
+    pg_write::{global_cache, global_cache_testnet},
     types::{U64Hex, U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
-pub async fn read_nodes_hourly(
+pub(crate) async fn read_nodes_hourly(
     pool: &Pool<Postgres>,
-    page: usize,
-    net: Network,
+    params: ListNodesHourlyParams,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, page, net)
+    HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, params)
         .await
         .map(|(entities, next_page)| {
             (
@@ -58,13 +61,11 @@ pub async fn query_node_info(
         .map(|res| res.map(HourlyNodeInfo::from))
 }
 
-pub async fn query_nodes_by_country(
+pub(crate) async fn query_nodes_by_region(
     pool: &Pool<Postgres>,
-    country: String,
-    page: usize,
-    net: Network,
+    params: NodeByRegion,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_node_by_country(pool, country, page, net)
+    HourlyNodeInfoDBRead::fetch_node_by_region(pool, params)
         .await
         .map(|(entities, next_page)| {
             (
@@ -74,13 +75,11 @@ pub async fn query_nodes_by_country(
         })
 }
 
-pub async fn query_nodes_fuzzy_by_name(
+pub(crate) async fn query_nodes_fuzzy_by_name(
     pool: &Pool<Postgres>,
-    name: String,
-    page: usize,
-    net: Network,
+    params: FuzzyNodeName,
 ) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_node_fuzzy_by_name_or_id(pool, name, page, net)
+    HourlyNodeInfoDBRead::fetch_node_fuzzy_by_name_or_id(pool, params)
         .await
         .map(|(entities, next_page)| {
             (
@@ -132,13 +131,11 @@ pub async fn query_channel_info(
         .map(|res| res.map(ChannelInfo::from))
 }
 
-pub async fn query_channels_by_node_id(
+pub(crate) async fn query_channels_by_node_id(
     pool: &Pool<Postgres>,
-    node_id: JsonBytes,
-    page: usize,
-    net: Network,
+    params: ChannelByNodeIdParams,
 ) -> Result<String, sqlx::Error> {
-    let offset = page.saturating_mul(PAGE_SIZE);
+    let offset = params.page.saturating_mul(PAGE_SIZE);
     let hour_bucket = Utc::now() - chrono::Duration::hours(3);
     let sql = format!(
         "
@@ -152,10 +149,12 @@ pub async fn query_channels_by_node_id(
             from {} n
             left join {} c on n.channel_outpoint = c.channel_outpoint
             WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
-            ORDER BY n.channel_outpoint, n.bucket DESC
+            ORDER BY n.channel_outpoint, {} {}
         ",
-        net.online_channels_hourly(),
-        net.channel_states()
+        params.net.online_channels_hourly(),
+        params.net.channel_states(),
+        params.sort_by.as_str(),
+        params.order.as_str(),
     );
 
     #[derive(Serialize, Deserialize)]
@@ -176,7 +175,7 @@ pub async fn query_channels_by_node_id(
 
     let channels = sqlx::query(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
         .bind(hour_bucket)
-        .bind(faster_hex::hex_string(node_id.as_bytes()))
+        .bind(faster_hex::hex_string(params.node_id.as_bytes()))
         .fetch_all(pool)
         .await?
         .into_iter()
@@ -192,7 +191,7 @@ pub async fn query_channels_by_node_id(
 
     Ok(serde_json::to_string(&ChannelWithPage {
         channels,
-        next_page: page.saturating_add(1),
+        next_page: params.page.saturating_add(1),
     })
     .unwrap())
 }
@@ -740,13 +739,11 @@ pub async fn query_channel_state(
     Ok(serde_json::to_string(&res).unwrap())
 }
 
-pub async fn group_channel_by_state(
+pub(crate) async fn group_channel_by_state(
     pool: &Pool<Postgres>,
-    state: DBState,
-    page: usize,
-    net: Network,
+    params: ChannelByStateParams,
 ) -> Result<String, sqlx::Error> {
-    let offset = page.saturating_mul(PAGE_SIZE);
+    let offset = params.page.saturating_mul(PAGE_SIZE);
     let sql = format!(
         r#"
         with channel_tx as (
@@ -759,16 +756,18 @@ pub async fn group_channel_by_state(
         from {} n
         left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
         where state = $1 
-        order by n.last_commit_time desc
+        order by n.{} {}
         LIMIT {} OFFSET {}
     "#,
-        net.channel_txs(),
-        net.channel_states(),
+        params.net.channel_txs(),
+        params.net.channel_states(),
+        params.sort_by.as_str(),
+        params.order.as_str(),
         PAGE_SIZE,
         offset
     );
     let rows = sqlx::query(&sql)
-        .bind(state.to_sql())
+        .bind(params.state.to_sql())
         .fetch_all(pool)
         .await?
         .into_iter()
@@ -841,7 +840,7 @@ pub async fn group_channel_by_state(
                 },
             )
             .collect(),
-        next_page: page.saturating_add(1),
+        next_page: params.page.saturating_add(1),
     };
     Ok(serde_json::to_string(&res).unwrap())
 }

@@ -9,7 +9,7 @@ use crate::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state,
         group_channel_count_by_state, query_analysis, query_analysis_hourly,
         query_channel_capacity_distribution, query_channel_info, query_channel_state,
-        query_channels_by_node_id, query_node_info, query_nodes_by_country,
+        query_channels_by_node_id, query_node_info, query_nodes_by_region,
         query_nodes_fuzzy_by_name, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
         read_nodes_monthly,
     },
@@ -38,20 +38,28 @@ struct NodeId {
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
-struct FuzzyNodeName {
-    node_name: String,
-    page: usize,
+pub(crate) struct FuzzyNodeName {
+    pub(crate) node_name: String,
+    pub(crate) page: usize,
     #[serde(default)]
-    net: Network,
+    pub(crate) net: Network,
+    #[serde(default)]
+    pub(crate) order: Order,
+    #[serde(default)]
+    pub(crate) sort_by: ListNodesHourlySortBy,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
-struct NodeByCountry {
-    country: String,
-    page: usize,
+pub(crate) struct NodeByRegion {
+    pub(crate) region: String,
+    pub(crate) page: usize,
     #[serde(default)]
-    net: Network,
+    pub(crate) net: Network,
+    #[serde(default)]
+    pub(crate) order: Order,
+    #[serde(default)]
+    pub(crate) sort_by: ListNodesHourlySortBy,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -81,19 +89,47 @@ struct ChannelPage {
     channels: Vec<ChannelInfo>,
 }
 
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+pub(crate) struct ListNodesHourlyParams {
+    pub(crate) page: usize,
+    #[serde(default)]
+    pub(crate) net: Network,
+    #[serde(default)]
+    pub(crate) order: Order,
+    #[serde(default)]
+    pub(crate) sort_by: ListNodesHourlySortBy,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub(crate) enum ListNodesHourlySortBy {
+    #[serde(rename = "region")]
+    Region,
+    #[default]
+    #[serde(rename = "last_seen")]
+    LastSeen,
+}
+
+impl ListNodesHourlySortBy {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ListNodesHourlySortBy::Region => "country_or_region",
+            ListNodesHourlySortBy::LastSeen => "last_seen_hour",
+        }
+    }
+}
+
 #[handler]
 pub async fn list_nodes_hourly(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let page = req.extract::<Page>().await?;
+    let params = req.extract::<ListNodesHourlyParams>().await?;
     let pool = get_pg_pool();
-    let nodes = read_nodes_hourly(pool, page.page, page.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to read nodes: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to read nodes"))
-        })?;
+    let nodes = read_nodes_hourly(pool, params).await.map_err(|e| {
+        log::error!("Failed to read nodes: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to read nodes"))
+    })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
@@ -139,12 +175,10 @@ pub async fn nodes_fuzzy_by_name_or_id(
     let params = req.extract::<FuzzyNodeName>().await?;
     let pool = get_pg_pool();
 
-    let nodes = query_nodes_fuzzy_by_name(pool, params.node_name, params.page, params.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query nodes by name or id: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to query nodes by name or id"))
-        })?;
+    let nodes = query_nodes_fuzzy_by_name(pool, params).await.map_err(|e| {
+        log::error!("Failed to query nodes by name or id: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to query nodes by name or id"))
+    })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
@@ -152,18 +186,16 @@ pub async fn nodes_fuzzy_by_name_or_id(
 }
 
 #[handler]
-pub async fn nodes_by_country(
+pub async fn nodes_by_region(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req.extract::<NodeByCountry>().await?;
+    let params = req.extract::<NodeByRegion>().await?;
     let pool = get_pg_pool();
-    let nodes = query_nodes_by_country(pool, params.country, params.page, params.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query nodes by country: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to query nodes by country"))
-        })?;
+    let nodes = query_nodes_by_region(pool, params).await.map_err(|e| {
+        log::error!("Failed to query nodes by region: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to query nodes by region"))
+    })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
@@ -220,19 +252,48 @@ pub async fn list_channels_monthly(
     })?)
 }
 
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+pub(crate) struct ChannelByNodeIdParams {
+    pub(crate) node_id: JsonBytes,
+    pub(crate) page: usize,
+    #[serde(default)]
+    pub(crate) sort_by: ChannelSortBy,
+    #[serde(default)]
+    pub(crate) order: Order,
+    #[serde(default)]
+    pub(crate) net: Network,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub(crate) enum ChannelSortBy {
+    #[serde(rename = "create_time")]
+    CreateTime,
+    #[default]
+    #[serde(rename = "last_commit_time")]
+    LastCommitTime,
+}
+
+impl ChannelSortBy {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ChannelSortBy::CreateTime => "n.created_timestamp",
+            ChannelSortBy::LastCommitTime => "c.last_commit_time",
+        }
+    }
+}
+
 #[handler]
 pub async fn channels_by_node_id(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let node_id = req.extract::<NodeId>().await?;
+    let params = req.extract::<ChannelByNodeIdParams>().await?;
     let pool = get_pg_pool();
-    query_channels_by_node_id(pool, node_id.node_id, node_id.page, node_id.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query channels by node id: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to query channels by node id"))
-        })
+    query_channels_by_node_id(pool, params).await.map_err(|e| {
+        log::error!("Failed to query channels by node id: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to query channels by node id"))
+    })
 }
 
 #[handler]
@@ -344,11 +405,51 @@ pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<Stri
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
-struct ChannelByStateParams {
-    state: DBState,
-    page: usize,
+pub(crate) struct ChannelByStateParams {
+    pub(crate) state: DBState,
+    pub(crate) page: usize,
     #[serde(default)]
-    net: Network,
+    pub(crate) net: Network,
+    #[serde(default)]
+    pub(crate) sort_by: ChannelStateSortBy,
+    #[serde(default)]
+    pub(crate) order: Order,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub(crate) enum ChannelStateSortBy {
+    #[serde(rename = "create_time")]
+    CreateTime,
+    #[default]
+    #[serde(rename = "last_commit_time")]
+    LastCommitTime,
+}
+
+impl ChannelStateSortBy {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ChannelStateSortBy::CreateTime => "create_time",
+            ChannelStateSortBy::LastCommitTime => "last_commit_time",
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub(crate) enum Order {
+    #[serde(rename = "asc")]
+    Asc,
+    #[default]
+    #[serde(rename = "desc")]
+    Desc,
+}
+
+impl Order {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Order::Asc => "ASC",
+            Order::Desc => "DESC",
+        }
+    }
 }
 
 #[handler]
@@ -358,12 +459,10 @@ pub async fn channel_by_state(
 ) -> Result<String, salvo::Error> {
     let params = req.extract::<ChannelByStateParams>().await?;
     let pool = get_pg_pool();
-    let states = group_channel_by_state(pool, params.state, params.page, params.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query channels by state: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to query channels by state"))
-        })?;
+    let states = group_channel_by_state(pool, params).await.map_err(|e| {
+        log::error!("Failed to query channels by state: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to query channels by state"))
+    })?;
     Ok(states)
 }
 

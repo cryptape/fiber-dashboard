@@ -145,7 +145,7 @@ pub async fn from_rpc_to_db_schema(
         announce_timestamp,
         chain_hash: hex_string(node_info.chain_hash.as_bytes()),
         auto_accept_min_ckb_funding_amount,
-        country: Default::default(),
+        country_or_region: Default::default(),
         city: Default::default(),
         region: Default::default(),
         loc: Default::default(),
@@ -157,7 +157,7 @@ pub async fn from_rpc_to_db_schema(
         .filter_map(multiaddr_to_socketaddr)
     {
         if let Ok(ip_details) = lookup_ipinfo(&addr.ip().to_string()).await {
-            node_schema.country = ip_details.country;
+            node_schema.country_or_region = ip_details.country;
             node_schema.city = ip_details.city;
             node_schema.region = ip_details.region;
             node_schema.loc = ip_details.loc;

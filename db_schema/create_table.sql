@@ -70,7 +70,7 @@ create table node_infos (
     announce_timestamp TIMESTAMPTZ NOT NULL,
     chain_hash TEXT NOT NULL,
     auto_accept_min_ckb_funding_amount TEXT NOT NULL,
-    country TEXT,
+    country_or_region TEXT,
     city TEXT,
     region TEXT,
     loc TEXT
@@ -86,8 +86,8 @@ create unique index idx_node_id_time
   ON node_infos(node_id, time DESC);
 create index idx_node_name_time
   ON node_infos(node_name, time DESC);
-create index idx_country_time
-  ON node_infos(country, time DESC);
+create index idx_country_or_region_time
+  ON node_infos(country_or_region, time DESC);
 
 create table channel_infos (
     time TIMESTAMPTZ NOT NULL,
@@ -134,7 +134,7 @@ SELECT
   last(announce_timestamp, time) AS announce_timestamp,
   last(chain_hash, time) AS chain_hash,
   last(auto_accept_min_ckb_funding_amount, time) AS auto_accept_min_ckb_funding_amount,
-  last(country, time) AS country,
+  last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
   last(loc, time) AS loc
@@ -156,6 +156,10 @@ SELECT add_retention_policy('online_nodes_hourly', INTERVAL '12 months');
 
 create index idx_node_hourly_id_time
   ON online_nodes_hourly(node_id, bucket DESC);
+create index idx_node_hourly_name_time
+  ON online_nodes_hourly(node_name, bucket DESC);
+create index idx_node_hourly_country_or_region_time
+  ON online_nodes_hourly(country_or_region, bucket DESC);
 
 CREATE MATERIALIZED VIEW online_channels_hourly
 WITH (timescaledb.continuous) AS
@@ -280,7 +284,7 @@ create table node_infos_testnet (
     announce_timestamp TIMESTAMPTZ NOT NULL,
     chain_hash TEXT NOT NULL,
     auto_accept_min_ckb_funding_amount TEXT NOT NULL,
-    country TEXT,
+    country_or_region TEXT,
     city TEXT,
     region TEXT,
     loc TEXT
@@ -296,8 +300,8 @@ create unique index idx_node_id_time_testnet
   ON node_infos_testnet(node_id, time DESC);
   create index idx_node_name_time_testnet
   ON node_infos_testnet(node_name, time DESC);
-create index idx_country_time_testnet
-  ON node_infos_testnet(country, time DESC);
+create index idx_country_or_region_time_testnet
+  ON node_infos_testnet(country_or_region, time DESC);
 
 create table channel_infos_testnet (
     time TIMESTAMPTZ NOT NULL,
@@ -344,7 +348,7 @@ SELECT
   last(announce_timestamp, time) AS announce_timestamp,
   last(chain_hash, time) AS chain_hash,
   last(auto_accept_min_ckb_funding_amount, time) AS auto_accept_min_ckb_funding_amount,
-  last(country, time) AS country,
+  last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
   last(loc, time) AS loc
@@ -366,6 +370,10 @@ SELECT add_retention_policy('online_nodes_hourly_testnet', INTERVAL '12 months')
 
 create index idx_node_hourly_id_time_testnet
   ON online_nodes_hourly_testnet(node_id, bucket DESC);
+create index idx_node_hourly_name_time_testnet
+  ON online_nodes_hourly_testnet(node_name, bucket DESC);
+create index idx_node_hourly_country_or_region_time_testnet
+  ON online_nodes_hourly_testnet(country_or_region, bucket DESC);
 
 CREATE MATERIALIZED VIEW online_channels_hourly_testnet
 WITH (timescaledb.continuous) AS

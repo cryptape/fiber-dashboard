@@ -15,7 +15,7 @@ pub const UDT_INFO_INSERT_SQL: &str =
     "insert into {} (id, name, code_hash, hash_type, args, auto_accept_amount) ";
 pub const UDT_DEP_RELATION_INSERT_SQL: &str = "insert into {} (outpoint_tx_hash, outpoint_index, dep_type, code_hash, hash_type, args, udt_info_id) ";
 pub const UDT_NODE_RELATION_INSERT_SQL: &str = "insert into {} (node_id, udt_info_id) ";
-pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country, city, region, loc) ";
+pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country_or_region, city, region, loc) ";
 pub const CHANNEL_INFO_INSERT_SQL: &str = "insert into {} (
     time, channel_outpoint, node1, node2, capacity, chain_hash, udt_type_script, 
     created_timestamp, update_of_node1_timestamp, update_of_node1_enabled, 
@@ -149,7 +149,7 @@ pub struct NodeInfoDBSchema {
     // hex string
     pub chain_hash: String,
     pub auto_accept_min_ckb_funding_amount: String,
-    pub country: String,
+    pub country_or_region: String,
     pub city: String,
     pub region: String,
     pub loc: String,
@@ -176,7 +176,7 @@ impl NodeInfoDBSchema {
                 .push_bind(node.announce_timestamp)
                 .push_bind(&node.chain_hash)
                 .push_bind(&node.auto_accept_min_ckb_funding_amount)
-                .push_bind(&node.country)
+                .push_bind(&node.country_or_region)
                 .push_bind(&node.city)
                 .push_bind(&node.region)
                 .push_bind(&node.loc);
