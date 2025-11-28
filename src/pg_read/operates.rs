@@ -758,8 +758,9 @@ pub async fn group_channel_by_state(
         select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.capacity, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
         from {} n
         left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
-        where state = $1 LIMIT {} OFFSET {}
+        where state = $1 
         order by n.last_commit_time desc
+        LIMIT {} OFFSET {}
     "#,
         net.channel_txs(),
         net.channel_states(),
