@@ -14,9 +14,9 @@ http api default on 8080, method list:
 /channel_count_by_state
 /channel_info?channel_outpoint=0x..
 /node_info?node_id=0x..
-/channels_by_node_id?node_id=0x..
-/nodes_by_country?country=HK
-/nodes_fuzzy_by_name?node_name=Cr
+/channels_by_node_id?node_id=0x..&page=0
+/nodes_by_country?country=HK&page=0
+/nodes_fuzzy_by_name?node_name=Cr&page=0
 /channel_capacity_distribution
 post /nodes_by_udt body={ udt: Script }
 post /analysis need json body
