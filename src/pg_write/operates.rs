@@ -34,6 +34,7 @@ use std::{
 pub async fn from_rpc_to_db_schema(
     node_info: NodeInfo,
     net: Network,
+    node_channels_count: &HashMap<String, usize>,
 ) -> (
     NodeInfoDBSchema,
     Vec<UdtInfos>,
@@ -141,7 +142,8 @@ pub async fn from_rpc_to_db_schema(
     let mut node_schema = NodeInfoDBSchema {
         node_name: node_info.node_name,
         addresses: serde_json::to_string(&node_info.addresses).unwrap(),
-        node_id: String::from_utf8(node_info.node_id.to_vec()).unwrap(),
+        channel_count: *node_channels_count.get(&node_id).unwrap_or(&0),
+        node_id,
         announce_timestamp,
         chain_hash: hex_string(node_info.chain_hash.as_bytes()),
         auto_accept_min_ckb_funding_amount,

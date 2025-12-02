@@ -1,5 +1,5 @@
 use sqlx::types::chrono::{DateTime, Utc};
-use sqlx::{FromRow, Pool, Postgres};
+use sqlx::{FromRow, Pool, Postgres, Row};
 
 use ckb_jsonrpc_types::{JsonBytes, Script};
 use ckb_types::H256;
@@ -7,28 +7,13 @@ use multiaddr::MultiAddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::http_server::{FuzzyNodeName, ListNodesHourlyParams, NodeByRegion};
+use crate::http_server::{FuzzyNodeName, ListNodesHourlyParams, NodeByRegion, Page};
 use crate::{
     Network,
     types::{ChannelUpdateInfo, U64Hex, U128Hex},
 };
 
-const SELECT_HOURLY_NODES_SQL: &str = "WITH latest_channels AS (
-  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-  FROM {channels}
-  WHERE bucket >= $1::timestamp
-  ORDER BY channel_outpoint, bucket DESC
-),
-channel_nodes AS (
-  SELECT node1 AS node, channel_outpoint FROM latest_channels
-  UNION ALL
-  SELECT node2 AS node, channel_outpoint FROM latest_channels
-),
-channel_counts AS (
-  SELECT node, COUNT(*) AS channel_count
-  FROM channel_nodes
-  GROUP BY node
-)
+const SELECT_HOURLY_NODES_SQL: &str = "
 SELECT DISTINCT ON (n.node_id)
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
@@ -41,9 +26,8 @@ SELECT DISTINCT ON (n.node_id)
   n.city,
   n.region,
   n.loc,
-  COALESCE(cc.channel_count, 0) AS channel_count
+  n.channel_count
 FROM {nodes} n
-LEFT JOIN channel_counts cc ON cc.node = n.node_id
 WHERE n.bucket >= $1::timestamp
 ORDER BY n.node_id, {sort_by} {order}";
 
@@ -78,22 +62,6 @@ WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
 const SELECT_MONTHLY_NODES_SQL: &str = "
-WITH latest_channels AS (
-  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-  FROM {channels}
-  WHERE bucket >= $1::timestamp and bucket < $2::timestamp
-  ORDER BY channel_outpoint, bucket DESC
-),
-channel_nodes AS (
-  SELECT node1 AS node, channel_outpoint FROM latest_channels
-  UNION ALL
-  SELECT node2 AS node, channel_outpoint FROM latest_channels
-),
-channel_counts AS (
-  SELECT node, COUNT(*) AS channel_count
-  FROM channel_nodes
-  GROUP BY node
-)
 SELECT DISTINCT ON (n.node_id)
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
@@ -106,9 +74,8 @@ SELECT DISTINCT ON (n.node_id)
   n.city,
   n.region,
   n.loc,
-  COALESCE(cc.channel_count, 0) AS channel_count
+  n.channel_count
 FROM {nodes} n
-LEFT JOIN channel_counts cc ON cc.node = n.node_id
 WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp
 ORDER BY n.node_id, n.bucket DESC";
 
@@ -162,8 +129,8 @@ pub struct HourlyNodeInfo {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub channel_count: Option<usize>,
+    pub channel_count: usize,
+    pub last_seen_hour: String,
 }
 
 impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
@@ -192,7 +159,8 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
             city: info.city,
             region: info.region,
             loc: info.loc,
-            channel_count: info.channel_count.map(|count| count as usize),
+            channel_count: info.channel_count as usize,
+            last_seen_hour: info.last_seen_hour.to_rfc3339(),
         }
     }
 }
@@ -210,22 +178,10 @@ pub struct HourlyNodeInfoDBRead {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    pub channel_count: Option<i64>,
+    pub channel_count: i32,
 }
 
 impl HourlyNodeInfoDBRead {
-    /// fetch all hourly node information from the database.
-    pub async fn fetch_all(pool: &Pool<Postgres>, net: Network) -> Result<Vec<Self>, sqlx::Error> {
-        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        let sql = SELECT_HOURLY_NODES_SQL
-            .replace("{nodes}", net.online_nodes_hourly())
-            .replace("{channels}", net.online_channels_hourly());
-        sqlx::query_as::<_, Self>(&sql)
-            .bind(hour_bucket)
-            .fetch_all(pool)
-            .await
-    }
-
     pub async fn fetch_by_id(
         pool: &Pool<Postgres>,
         node_id: JsonBytes,
@@ -233,22 +189,6 @@ impl HourlyNodeInfoDBRead {
     ) -> Result<Option<Self>, sqlx::Error> {
         let sql = format!(
             "
-            WITH latest_channels AS (
-            SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-            FROM {}
-            WHERE bucket >= $2::timestamp
-            ORDER BY channel_outpoint, bucket DESC
-            ),
-            channel_nodes AS (
-            SELECT node1 AS node, channel_outpoint FROM latest_channels where node1 = $1
-            UNION ALL
-            SELECT node2 AS node, channel_outpoint FROM latest_channels where node2 = $1
-            ),
-            channel_counts AS (
-            SELECT node, COUNT(*) AS channel_count
-            FROM channel_nodes
-            GROUP BY node
-            )
             SELECT 
                 n.node_id as node_id,
                 n.time AS last_seen_hour,
@@ -261,13 +201,11 @@ impl HourlyNodeInfoDBRead {
                 n.city,
                 n.region,
                 n.loc,
-                COALESCE(cc.channel_count, 0) AS channel_count
+                n.channel_count
             FROM {} n
-            LEFT JOIN channel_counts cc ON cc.node = n.node_id
             WHERE node_id = $1
             ORDER BY last_seen_hour DESC
             LIMIT 1",
-            net.online_channels_hourly(),
             net.node_infos()
         );
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
@@ -283,9 +221,20 @@ impl HourlyNodeInfoDBRead {
     pub(crate) async fn fetch_node_by_region(
         pool: &Pool<Postgres>,
         params: NodeByRegion,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = params.page.saturating_mul(PAGE_SIZE);
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp and country_or_region = $2",
+            params.net.online_nodes_hourly()
+        );
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(hour_bucket)
+            .bind(params.region.clone())
+            .fetch_one(pool)
+            .await?
+            .get(0);
         let sql = format!(
             r#"
         SELECT DISTINCT ON (node_id)
@@ -300,7 +249,7 @@ impl HourlyNodeInfoDBRead {
             city,
             region,
             loc,
-            null as channel_count
+            channel_count
         FROM {}
         WHERE bucket >= $1::timestamp and country_or_region = $2
         ORDER BY node_id, {} {}
@@ -309,20 +258,31 @@ impl HourlyNodeInfoDBRead {
             params.sort_by.as_str(),
             params.order.as_str()
         );
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
             .bind(params.region)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, params.page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 
     pub(crate) async fn fetch_node_fuzzy_by_name_or_id(
         pool: &Pool<Postgres>,
         params: FuzzyNodeName,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = params.page.saturating_mul(PAGE_SIZE);
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp AND ((POSITION($2 IN n.node_id) > 0) OR (POSITION($2 IN n.node_name) > 0))",
+            params.net.online_nodes_hourly()
+        );
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(hour_bucket)
+            .bind(params.node_name.clone())
+            .fetch_one(pool)
+            .await?
+            .get(0);
         let sql = format!(
             r#"
         SELECT DISTINCT ON (node_id)
@@ -337,7 +297,7 @@ impl HourlyNodeInfoDBRead {
             city,
             region,
             loc,
-            null as channel_count
+            channel_count
         FROM {}
         WHERE bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
         ORDER BY node_id, {} {} "#,
@@ -345,49 +305,70 @@ impl HourlyNodeInfoDBRead {
             params.sort_by.as_str(),
             params.order.as_str()
         );
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
             .bind(params.node_name)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, params.page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 
     pub(crate) async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         params: ListNodesHourlyParams,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = params.page.saturating_mul(PAGE_SIZE);
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp",
+            params.net.online_nodes_hourly()
+        );
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(hour_bucket)
+            .fetch_one(pool)
+            .await?
+            .get(0);
         let sql = SELECT_HOURLY_NODES_SQL
             .replace("{nodes}", params.net.online_nodes_hourly())
-            .replace("{channels}", params.net.online_channels_hourly())
             .replace("{sort_by}", params.sort_by.as_str())
             .replace("{order}", params.order.as_str());
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, params.page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 
     pub async fn fetch_by_page_monthly(
         pool: &Pool<Postgres>,
-        page: usize,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-        net: Network,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
-        let sql = SELECT_MONTHLY_NODES_SQL
-            .replace("{nodes}", net.online_nodes_hourly())
-            .replace("{channels}", net.online_channels_hourly());
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+        params: Page,
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp",
+            params.net.online_nodes_hourly()
+        );
+        let now = Utc::now().date_naive();
+        let start = params.start.unwrap_or(now - chrono::Duration::days(30));
+        let mut end: chrono::NaiveDate = params.end.unwrap_or(now);
+        if end - start > chrono::Duration::days(30) || start > end {
+            end = start + chrono::Duration::days(30);
+        }
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(start)
+            .bind(end)
+            .fetch_one(pool)
+            .await?
+            .get(0);
+        let sql = SELECT_MONTHLY_NODES_SQL.replace("{nodes}", params.net.online_nodes_hourly());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(start)
             .bind(end)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 }
 
@@ -417,6 +398,8 @@ pub struct ChannelInfo {
     pub chain_hash: H256,
     /// The UDT type script of the channel.
     pub udt_type_script: Option<Script>,
+    pub udt_name: Option<String>,
+    pub udt_auto_accept_amount: Option<String>,
 }
 
 impl From<HourlyChannelInfoDBRead> for ChannelInfo {
@@ -552,6 +535,10 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                     JsonBytes::from_vec(args_bytes)
                 },
             }),
+            udt_name: info.udt_name,
+            udt_auto_accept_amount: info
+                .udt_auto_accept_amount
+                .map(|amount| format!("0x{}", amount)),
         }
     }
 }
@@ -591,18 +578,6 @@ pub struct HourlyChannelInfoDBRead {
 }
 
 impl HourlyChannelInfoDBRead {
-    /// fetch all active channel information from the database.
-    pub async fn fetch_all(pool: &Pool<Postgres>, net: Network) -> Result<Vec<Self>, sqlx::Error> {
-        let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-        let sql = SELECT_HOURLY_CHANNELS_SQL
-            .replace("{1}", net.online_channels_hourly())
-            .replace("{2}", net.udt_infos());
-        sqlx::query_as::<_, Self>(&sql)
-            .bind(hour_bucket)
-            .fetch_all(pool)
-            .await
-    }
-
     pub async fn fetch_by_id(
         pool: &Pool<Postgres>,
         outpoint: JsonBytes,
@@ -651,37 +626,60 @@ impl HourlyChannelInfoDBRead {
     }
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
-        page: usize,
-        net: Network,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
+        params: Page,
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT channel_outpoint) FROM {} n WHERE n.bucket >= $1::timestamp",
+            params.net.online_channels_hourly()
+        );
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(hour_bucket)
+            .fetch_one(pool)
+            .await?
+            .get(0);
         let sql = SELECT_HOURLY_CHANNELS_SQL
-            .replace("{1}", net.online_channels_hourly())
-            .replace("{2}", net.udt_infos());
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .replace("{1}", params.net.online_channels_hourly())
+            .replace("{2}", params.net.udt_infos());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 
     pub async fn fetch_by_page_monthly(
         pool: &Pool<Postgres>,
-        page: usize,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-        net: Network,
-    ) -> Result<(Vec<Self>, usize), sqlx::Error> {
-        let offset = page.saturating_mul(PAGE_SIZE);
+        params: Page,
+    ) -> Result<(Vec<Self>, usize, usize), sqlx::Error> {
+        let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+        let offset = params.page.saturating_mul(page_size);
+        let now = Utc::now().date_naive();
+        let start = params.start.unwrap_or(now - chrono::Duration::days(30));
+        let mut end = params.end.unwrap_or(now);
+        if end - start > chrono::Duration::days(30) || start > end {
+            end = start + chrono::Duration::days(30);
+        }
+        let sql_count = format!(
+            "SELECT COUNT(DISTINCT channel_outpoint) FROM {} n WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp",
+            params.net.online_channels_hourly()
+        );
+        let total_count: i64 = sqlx::query(&sql_count)
+            .bind(start)
+            .bind(end)
+            .fetch_one(pool)
+            .await?
+            .get(0);
         let sql = SELECT_MONTHLY_CHANNELS_SQL
-            .replace("{1}", net.online_channels_hourly())
-            .replace("{2}", net.udt_infos());
-        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+            .replace("{1}", params.net.online_channels_hourly())
+            .replace("{2}", params.net.udt_infos());
+        sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(start)
             .bind(end)
             .fetch_all(pool)
             .await
-            .map(|rows| (rows, page.saturating_add(1)))
+            .map(|rows| (rows, params.page.saturating_add(1), total_count as usize))
     }
 }

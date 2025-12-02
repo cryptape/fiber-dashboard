@@ -73,7 +73,8 @@ create table node_infos (
     country_or_region TEXT,
     city TEXT,
     region TEXT,
-    loc TEXT
+    loc TEXT,
+    channel_count INTEGER NOT NULL
 )
 WITH (
   timescaledb.hypertable,
@@ -137,7 +138,8 @@ SELECT
   last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
-  last(loc, time) AS loc
+  last(loc, time) AS loc,
+  last(channel_count, time) AS channel_count
 FROM node_infos
 -- group by node ID to ensure each node appears only once
 GROUP BY bucket, node_id
@@ -160,6 +162,8 @@ create index idx_node_hourly_name_time
   ON online_nodes_hourly(node_name, bucket DESC);
 create index idx_node_hourly_country_or_region_time
   ON online_nodes_hourly(country_or_region, bucket DESC);
+create index idx_node_hourly_channel_count_time
+  ON online_nodes_hourly(channel_count, bucket DESC);
 
 CREATE MATERIALIZED VIEW online_channels_hourly
 WITH (timescaledb.continuous) AS
@@ -287,7 +291,8 @@ create table node_infos_testnet (
     country_or_region TEXT,
     city TEXT,
     region TEXT,
-    loc TEXT
+    loc TEXT,
+    channel_count INTEGER NOT NULL
 )
 WITH (
   timescaledb.hypertable,
@@ -351,7 +356,8 @@ SELECT
   last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
-  last(loc, time) AS loc
+  last(loc, time) AS loc,
+  last(channel_count, time) AS channel_count
 FROM node_infos_testnet
 -- group by node ID to ensure each node appears only once
 GROUP BY bucket, node_id
@@ -374,6 +380,8 @@ create index idx_node_hourly_name_time_testnet
   ON online_nodes_hourly_testnet(node_name, bucket DESC);
 create index idx_node_hourly_country_or_region_time_testnet
   ON online_nodes_hourly_testnet(country_or_region, bucket DESC);
+create index idx_node_hourly_channel_count_time_testnet
+  ON online_nodes_hourly_testnet(channel_count, bucket DESC);
 
 CREATE MATERIALIZED VIEW online_channels_hourly_testnet
 WITH (timescaledb.continuous) AS

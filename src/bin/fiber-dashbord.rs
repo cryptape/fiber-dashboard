@@ -41,7 +41,7 @@ fn main() {
 
 async fn http_server() {
     use fiber_dashbord_backend::http_server::{
-        analysis, analysis_hourly, channel_by_state, channel_capacity_distribution,
+        all_region, analysis, analysis_hourly, channel_by_state, channel_capacity_distribution,
         channel_count_by_state, channel_info, channel_state, channels_by_node_id,
         list_channels_hourly, list_channels_monthly, list_nodes_hourly, list_nodes_monthly,
         node_info, node_udt_infos, nodes_by_region, nodes_by_udt, nodes_fuzzy_by_name_or_id,
@@ -73,6 +73,7 @@ async fn http_server() {
         .push(Router::with_path("channels_by_node_id").get(channels_by_node_id))
         .push(Router::with_path("nodes_by_region").get(nodes_by_region))
         .push(Router::with_path("nodes_fuzzy_by_name").get(nodes_fuzzy_by_name_or_id))
+        .push(Router::with_path("all_region").get(all_region))
         .push(
             Router::with_path("channel_capacity_distribution").get(channel_capacity_distribution),
         );
@@ -201,13 +202,23 @@ async fn timed_commit_states() {
                 }
             }
 
+            let node_channels_count = raw_channels.iter().fold(
+                std::collections::HashMap::<String, usize>::new(),
+                |mut acc, channel| {
+                    *acc.entry(String::from_utf8(channel.node1.to_vec()).unwrap())
+                        .or_default() += 1;
+                    *acc.entry(String::from_utf8(channel.node2.to_vec()).unwrap())
+                        .or_default() += 1;
+                    acc
+                },
+            );
             let mut node_schemas = Vec::with_capacity(raw_nodes.len());
             let mut udt_infos = Vec::new();
             let mut udt_dep_relations = Vec::new();
             let mut udt_node_relations = Vec::new();
             for node in raw_nodes {
                 let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
-                    from_rpc_to_db_schema(node, *net).await;
+                    from_rpc_to_db_schema(node, *net, &node_channels_count).await;
                 node_schemas.push(node_schema);
                 udt_infos.extend(udt_info);
                 udt_dep_relations.extend(udt_dep_relation);

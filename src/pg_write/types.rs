@@ -15,7 +15,7 @@ pub const UDT_INFO_INSERT_SQL: &str =
     "insert into {} (id, name, code_hash, hash_type, args, auto_accept_amount) ";
 pub const UDT_DEP_RELATION_INSERT_SQL: &str = "insert into {} (outpoint_tx_hash, outpoint_index, dep_type, code_hash, hash_type, args, udt_info_id) ";
 pub const UDT_NODE_RELATION_INSERT_SQL: &str = "insert into {} (node_id, udt_info_id) ";
-pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country_or_region, city, region, loc) ";
+pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country_or_region, city, region, loc, channel_count) ";
 pub const CHANNEL_INFO_INSERT_SQL: &str = "insert into {} (
     time, channel_outpoint, node1, node2, capacity, chain_hash, udt_type_script, 
     created_timestamp, update_of_node1_timestamp, update_of_node1_enabled, 
@@ -153,6 +153,7 @@ pub struct NodeInfoDBSchema {
     pub city: String,
     pub region: String,
     pub loc: String,
+    pub channel_count: usize,
 }
 
 impl NodeInfoDBSchema {
@@ -168,7 +169,7 @@ impl NodeInfoDBSchema {
         let sql = NODE_INFO_INSERT_SQL.replace("{}", net.node_infos());
         let mut query_builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(sql);
 
-        query_builder.push_values(nodes.iter().take(65535 / 11), |mut b, node| {
+        query_builder.push_values(nodes.iter().take(65535 / 12), |mut b, node| {
             b.push_bind(time)
                 .push_bind(&node.node_name)
                 .push_bind(&node.addresses)
@@ -179,7 +180,8 @@ impl NodeInfoDBSchema {
                 .push_bind(&node.country_or_region)
                 .push_bind(&node.city)
                 .push_bind(&node.region)
-                .push_bind(&node.loc);
+                .push_bind(&node.loc)
+                .push_bind(node.channel_count as i32);
         });
 
         query_builder.build().execute(conn).await?;
