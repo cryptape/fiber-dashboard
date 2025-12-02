@@ -235,19 +235,14 @@ impl Tx {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum IndexerScriptSearchMode {
     /// Mode `prefix` search script with prefix
+    #[default]
     Prefix,
     /// Mode `exact` search script with exact match
     Exact,
-}
-
-impl Default for IndexerScriptSearchMode {
-    fn default() -> Self {
-        Self::Prefix
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

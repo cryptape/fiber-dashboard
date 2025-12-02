@@ -108,6 +108,8 @@ pub(crate) enum ListNodesHourlySortBy {
     #[default]
     #[serde(rename = "last_seen")]
     LastSeen,
+    #[serde(rename = "channel_count")]
+    ChannelCount,
 }
 
 impl ListNodesHourlySortBy {
@@ -115,6 +117,7 @@ impl ListNodesHourlySortBy {
         match self {
             ListNodesHourlySortBy::Region => "country_or_region",
             ListNodesHourlySortBy::LastSeen => "last_seen_hour",
+            ListNodesHourlySortBy::ChannelCount => "channel_count",
         }
     }
 }

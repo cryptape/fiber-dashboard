@@ -13,22 +13,7 @@ use crate::{
     types::{ChannelUpdateInfo, U64Hex, U128Hex},
 };
 
-const SELECT_HOURLY_NODES_SQL: &str = "WITH latest_channels AS (
-  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-  FROM {channels}
-  WHERE bucket >= $1::timestamp
-  ORDER BY channel_outpoint, bucket DESC
-),
-channel_nodes AS (
-  SELECT node1 AS node, channel_outpoint FROM latest_channels
-  UNION ALL
-  SELECT node2 AS node, channel_outpoint FROM latest_channels
-),
-channel_counts AS (
-  SELECT node, COUNT(*) AS channel_count
-  FROM channel_nodes
-  GROUP BY node
-)
+const SELECT_HOURLY_NODES_SQL: &str = "
 SELECT DISTINCT ON (n.node_id)
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
@@ -41,9 +26,8 @@ SELECT DISTINCT ON (n.node_id)
   n.city,
   n.region,
   n.loc,
-  COALESCE(cc.channel_count, 0) AS channel_count
+  n.channel_count
 FROM {nodes} n
-LEFT JOIN channel_counts cc ON cc.node = n.node_id
 WHERE n.bucket >= $1::timestamp
 ORDER BY n.node_id, {sort_by} {order}";
 
@@ -78,22 +62,6 @@ WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
 const SELECT_MONTHLY_NODES_SQL: &str = "
-WITH latest_channels AS (
-  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-  FROM {channels}
-  WHERE bucket >= $1::timestamp and bucket < $2::timestamp
-  ORDER BY channel_outpoint, bucket DESC
-),
-channel_nodes AS (
-  SELECT node1 AS node, channel_outpoint FROM latest_channels
-  UNION ALL
-  SELECT node2 AS node, channel_outpoint FROM latest_channels
-),
-channel_counts AS (
-  SELECT node, COUNT(*) AS channel_count
-  FROM channel_nodes
-  GROUP BY node
-)
 SELECT DISTINCT ON (n.node_id)
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
@@ -106,9 +74,8 @@ SELECT DISTINCT ON (n.node_id)
   n.city,
   n.region,
   n.loc,
-  COALESCE(cc.channel_count, 0) AS channel_count
+  n.channel_count
 FROM {nodes} n
-LEFT JOIN channel_counts cc ON cc.node = n.node_id
 WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp
 ORDER BY n.node_id, n.bucket DESC";
 
@@ -162,8 +129,7 @@ pub struct HourlyNodeInfo {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub channel_count: Option<usize>,
+    pub channel_count: usize,
 }
 
 impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
@@ -192,7 +158,7 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
             city: info.city,
             region: info.region,
             loc: info.loc,
-            channel_count: info.channel_count.map(|count| count as usize),
+            channel_count: info.channel_count as usize,
         }
     }
 }
@@ -210,7 +176,7 @@ pub struct HourlyNodeInfoDBRead {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    pub channel_count: Option<i64>,
+    pub channel_count: i32,
 }
 
 impl HourlyNodeInfoDBRead {
@@ -233,22 +199,6 @@ impl HourlyNodeInfoDBRead {
     ) -> Result<Option<Self>, sqlx::Error> {
         let sql = format!(
             "
-            WITH latest_channels AS (
-            SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
-            FROM {}
-            WHERE bucket >= $2::timestamp
-            ORDER BY channel_outpoint, bucket DESC
-            ),
-            channel_nodes AS (
-            SELECT node1 AS node, channel_outpoint FROM latest_channels where node1 = $1
-            UNION ALL
-            SELECT node2 AS node, channel_outpoint FROM latest_channels where node2 = $1
-            ),
-            channel_counts AS (
-            SELECT node, COUNT(*) AS channel_count
-            FROM channel_nodes
-            GROUP BY node
-            )
             SELECT 
                 n.node_id as node_id,
                 n.time AS last_seen_hour,
@@ -261,13 +211,11 @@ impl HourlyNodeInfoDBRead {
                 n.city,
                 n.region,
                 n.loc,
-                COALESCE(cc.channel_count, 0) AS channel_count
+                n.channel_count
             FROM {} n
-            LEFT JOIN channel_counts cc ON cc.node = n.node_id
             WHERE node_id = $1
             ORDER BY last_seen_hour DESC
             LIMIT 1",
-            net.online_channels_hourly(),
             net.node_infos()
         );
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
@@ -300,7 +248,7 @@ impl HourlyNodeInfoDBRead {
             city,
             region,
             loc,
-            null as channel_count
+            channel_count
         FROM {}
         WHERE bucket >= $1::timestamp and country_or_region = $2
         ORDER BY node_id, {} {}
@@ -337,7 +285,7 @@ impl HourlyNodeInfoDBRead {
             city,
             region,
             loc,
-            null as channel_count
+            channel_count
         FROM {}
         WHERE bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
         ORDER BY node_id, {} {} "#,
@@ -361,7 +309,6 @@ impl HourlyNodeInfoDBRead {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql = SELECT_HOURLY_NODES_SQL
             .replace("{nodes}", params.net.online_nodes_hourly())
-            .replace("{channels}", params.net.online_channels_hourly())
             .replace("{sort_by}", params.sort_by.as_str())
             .replace("{order}", params.order.as_str());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
@@ -379,9 +326,7 @@ impl HourlyNodeInfoDBRead {
         net: Network,
     ) -> Result<(Vec<Self>, usize), sqlx::Error> {
         let offset = page.saturating_mul(PAGE_SIZE);
-        let sql = SELECT_MONTHLY_NODES_SQL
-            .replace("{nodes}", net.online_nodes_hourly())
-            .replace("{channels}", net.online_channels_hourly());
+        let sql = SELECT_MONTHLY_NODES_SQL.replace("{nodes}", net.online_nodes_hourly());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
             .bind(start)
             .bind(end)
