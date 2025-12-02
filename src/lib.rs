@@ -1,6 +1,6 @@
 pub mod http_server;
 mod ip_location;
-pub mod pg_read;
+pub(crate) mod pg_read;
 pub mod pg_write;
 mod rpc_client;
 pub mod types;

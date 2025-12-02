@@ -18,10 +18,12 @@ http api default on 8080, method list:
 /nodes_by_region?region=HK&page=0&sort_by=region/last_seen/channel_count&order=asc/desc
 /nodes_fuzzy_by_name?node_name=Cr&page=0&sort_by=region/last_seen/channel_count&order=asc/desc
 /channel_capacity_distribution
+/all_region
 post /nodes_by_udt body={ udt: Script }
 post /analysis need json body
 ```
 
+All apis that include paging functions have a page_size parameter. The default is 500, and the maximum is 500. It can be adjusted by passing parameters.
 
 /analysis body:
 | Parameter | Type                          | Description                                                    |

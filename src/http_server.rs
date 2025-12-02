@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use ckb_jsonrpc_types::{JsonBytes, Script};
 use salvo::{Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
@@ -18,12 +18,13 @@ use crate::{
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
-struct Page {
-    page: usize,
+pub(crate) struct Page {
+    pub(crate) page: usize,
     #[serde(default)]
-    net: Network,
-    start: Option<NaiveDate>,
-    end: Option<NaiveDate>,
+    pub(crate) net: Network,
+    pub(crate) start: Option<NaiveDate>,
+    pub(crate) end: Option<NaiveDate>,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -34,6 +35,7 @@ struct NodeId {
     page: usize,
     #[serde(default)]
     net: Network,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -47,6 +49,7 @@ pub(crate) struct FuzzyNodeName {
     pub(crate) order: Order,
     #[serde(default)]
     pub(crate) sort_by: ListNodesHourlySortBy,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -60,6 +63,7 @@ pub(crate) struct NodeByRegion {
     pub(crate) order: Order,
     #[serde(default)]
     pub(crate) sort_by: ListNodesHourlySortBy,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -81,12 +85,14 @@ struct NetworkInfo {
 struct NodePage {
     next_page: usize,
     nodes: Vec<HourlyNodeInfo>,
+    total_count: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ChannelPage {
     next_page: usize,
     channels: Vec<ChannelInfo>,
+    total_count: usize,
 }
 
 #[derive(Debug, Extractible, Serialize, Deserialize)]
@@ -99,6 +105,7 @@ pub(crate) struct ListNodesHourlyParams {
     pub(crate) order: Order,
     #[serde(default)]
     pub(crate) sort_by: ListNodesHourlySortBy,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -136,6 +143,7 @@ pub async fn list_nodes_hourly(
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
+        total_count: nodes.2,
     })?)
 }
 
@@ -146,27 +154,14 @@ pub async fn list_nodes_monthly(
 ) -> Result<String, salvo::Error> {
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
-    let now = Utc::now().date_naive();
-    let start = page.start.unwrap_or(now - chrono::Duration::days(30));
-    let mut end = page.end.unwrap_or(now);
-    if end - start > chrono::Duration::days(30) || start > end {
-        end = start + chrono::Duration::days(30);
-    }
-    let nodes = read_nodes_monthly(
-        pool,
-        page.page,
-        start.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-        end.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-        page.net,
-    )
-    .await
-    .map_err(|e| {
+    let nodes = read_nodes_monthly(pool, page).await.map_err(|e| {
         log::error!("Failed to read nodes: {}", e);
         salvo::Error::Io(std::io::Error::other("Failed to read nodes"))
     })?;
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
+        total_count: nodes.2,
     })?)
 }
 
@@ -185,6 +180,7 @@ pub async fn nodes_fuzzy_by_name_or_id(
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
+        total_count: nodes.2,
     })?)
 }
 
@@ -202,6 +198,7 @@ pub async fn nodes_by_region(
     Ok(serde_json::to_string(&NodePage {
         next_page: nodes.1,
         nodes: nodes.0,
+        total_count: nodes.2,
     })?)
 }
 
@@ -212,15 +209,14 @@ pub async fn list_channels_hourly(
 ) -> Result<String, salvo::Error> {
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
-    let channels = read_channels_hourly(pool, page.page, page.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to read channels: {}", e);
-            salvo::Error::Io(std::io::Error::other("Failed to read channels"))
-        })?;
+    let channels = read_channels_hourly(pool, page).await.map_err(|e| {
+        log::error!("Failed to read channels: {}", e);
+        salvo::Error::Io(std::io::Error::other("Failed to read channels"))
+    })?;
     Ok(serde_json::to_string(&ChannelPage {
         next_page: channels.1,
         channels: channels.0,
+        total_count: channels.2,
     })?)
 }
 
@@ -231,27 +227,15 @@ pub async fn list_channels_monthly(
 ) -> Result<String, salvo::Error> {
     let page = req.extract::<Page>().await?;
     let pool = get_pg_pool();
-    let now = Utc::now().date_naive();
-    let start = page.start.unwrap_or(now - chrono::Duration::days(30));
-    let mut end = page.end.unwrap_or(now);
-    if end - start > chrono::Duration::days(30) || start > end {
-        end = start + chrono::Duration::days(30);
-    }
-    let channels = read_channels_monthly(
-        pool,
-        page.page,
-        start.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-        end.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-        page.net,
-    )
-    .await
-    .map_err(|e| {
+
+    let channels = read_channels_monthly(pool, page).await.map_err(|e| {
         log::error!("Failed to read channels: {}", e);
         salvo::Error::Io(std::io::Error::other("Failed to read channels"))
     })?;
     Ok(serde_json::to_string(&ChannelPage {
         next_page: channels.1,
         channels: channels.0,
+        total_count: channels.2,
     })?)
 }
 
@@ -266,6 +250,7 @@ pub(crate) struct ChannelByNodeIdParams {
     pub(crate) order: Order,
     #[serde(default)]
     pub(crate) net: Network,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -417,6 +402,7 @@ pub(crate) struct ChannelByStateParams {
     pub(crate) sort_by: ChannelStateSortBy,
     #[serde(default)]
     pub(crate) order: Order,
+    pub(crate) page_size: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -501,4 +487,17 @@ pub async fn channel_capacity_distribution(
             ))
         })?;
     Ok(distribution)
+}
+
+#[handler]
+pub async fn all_region(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
+    let network_info = req.extract::<NetworkInfo>().await?;
+    let pool = get_pg_pool();
+    let regions = crate::pg_read::query_nodes_all_regions(pool, network_info.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to get all regions: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to get all regions"))
+        })?;
+    Ok(regions)
 }

@@ -11,7 +11,7 @@ use crate::{
     Network,
     http_server::{
         ChannelByNodeIdParams, ChannelByStateParams, FuzzyNodeName, ListNodesHourlyParams,
-        NodeByRegion,
+        NodeByRegion, Page,
     },
     pg_read::{
         ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead, PAGE_SIZE,
@@ -23,30 +23,29 @@ use crate::{
 pub(crate) async fn read_nodes_hourly(
     pool: &Pool<Postgres>,
     params: ListNodesHourlyParams,
-) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+) -> Result<(Vec<HourlyNodeInfo>, usize, usize), sqlx::Error> {
     HourlyNodeInfoDBRead::fetch_by_page_hourly(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(HourlyNodeInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
 
 pub async fn read_nodes_monthly(
     pool: &Pool<Postgres>,
-    page: usize,
-    start: chrono::DateTime<chrono::Utc>,
-    end: chrono::DateTime<chrono::Utc>,
-    net: Network,
-) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
-    HourlyNodeInfoDBRead::fetch_by_page_monthly(pool, page, start, end, net)
+    params: Page,
+) -> Result<(Vec<HourlyNodeInfo>, usize, usize), sqlx::Error> {
+    HourlyNodeInfoDBRead::fetch_by_page_monthly(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(HourlyNodeInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
@@ -64,13 +63,14 @@ pub async fn query_node_info(
 pub(crate) async fn query_nodes_by_region(
     pool: &Pool<Postgres>,
     params: NodeByRegion,
-) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+) -> Result<(Vec<HourlyNodeInfo>, usize, usize), sqlx::Error> {
     HourlyNodeInfoDBRead::fetch_node_by_region(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(HourlyNodeInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
@@ -78,45 +78,44 @@ pub(crate) async fn query_nodes_by_region(
 pub(crate) async fn query_nodes_fuzzy_by_name(
     pool: &Pool<Postgres>,
     params: FuzzyNodeName,
-) -> Result<(Vec<HourlyNodeInfo>, usize), sqlx::Error> {
+) -> Result<(Vec<HourlyNodeInfo>, usize, usize), sqlx::Error> {
     HourlyNodeInfoDBRead::fetch_node_fuzzy_by_name_or_id(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(HourlyNodeInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
 
 pub async fn read_channels_hourly(
     pool: &Pool<Postgres>,
-    page: usize,
-    net: Network,
-) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page_hourly(pool, page, net)
+    params: Page,
+) -> Result<(Vec<ChannelInfo>, usize, usize), sqlx::Error> {
+    HourlyChannelInfoDBRead::fetch_by_page_hourly(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(ChannelInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
 
 pub async fn read_channels_monthly(
     pool: &Pool<Postgres>,
-    page: usize,
-    start: chrono::DateTime<chrono::Utc>,
-    end: chrono::DateTime<chrono::Utc>,
-    net: Network,
-) -> Result<(Vec<ChannelInfo>, usize), sqlx::Error> {
-    HourlyChannelInfoDBRead::fetch_by_page_monthly(pool, page, start, end, net)
+    params: Page,
+) -> Result<(Vec<ChannelInfo>, usize, usize), sqlx::Error> {
+    HourlyChannelInfoDBRead::fetch_by_page_monthly(pool, params)
         .await
-        .map(|(entities, next_page)| {
+        .map(|(entities, next_page, total_count)| {
             (
                 entities.into_iter().map(ChannelInfo::from).collect(),
                 next_page,
+                total_count,
             )
         })
 }
@@ -135,8 +134,23 @@ pub(crate) async fn query_channels_by_node_id(
     pool: &Pool<Postgres>,
     params: ChannelByNodeIdParams,
 ) -> Result<String, sqlx::Error> {
-    let offset = params.page.saturating_mul(PAGE_SIZE);
+    let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+    let offset = params.page.saturating_mul(page_size);
     let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+    let sql_count = format!(
+        "
+            select COUNT(DISTINCT n.channel_outpoint) as total_count
+            from {} n
+            WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
+        ",
+        params.net.online_channels_hourly(),
+    );
+    let total_count: i64 = sqlx::query(&sql_count)
+        .bind(hour_bucket)
+        .bind(faster_hex::hex_string(params.node_id.as_bytes()))
+        .fetch_one(pool)
+        .await?
+        .get("total_count");
     let sql = format!(
         "
             select DISTINCT ON (n.channel_outpoint)
@@ -171,9 +185,10 @@ pub(crate) async fn query_channels_by_node_id(
     struct ChannelWithPage {
         channels: Vec<Channel>,
         next_page: usize,
+        total_count: usize,
     }
 
-    let channels = sqlx::query(&format!("{} LIMIT {} OFFSET {}", sql, PAGE_SIZE, offset))
+    let channels = sqlx::query(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
         .bind(hour_bucket)
         .bind(faster_hex::hex_string(params.node_id.as_bytes()))
         .fetch_all(pool)
@@ -192,6 +207,7 @@ pub(crate) async fn query_channels_by_node_id(
     Ok(serde_json::to_string(&ChannelWithPage {
         channels,
         next_page: params.page.saturating_add(1),
+        total_count: total_count as usize,
     })
     .unwrap())
 }
@@ -743,7 +759,21 @@ pub(crate) async fn group_channel_by_state(
     pool: &Pool<Postgres>,
     params: ChannelByStateParams,
 ) -> Result<String, sqlx::Error> {
-    let offset = params.page.saturating_mul(PAGE_SIZE);
+    let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
+    let offset = params.page.saturating_mul(page_size);
+    let sql_count = format!(
+        r#"
+        select COUNT(*) as total_count
+        from {} 
+        where state = $1
+    "#,
+        params.net.channel_states()
+    );
+    let total_count: i64 = sqlx::query(&sql_count)
+        .bind(params.state.to_sql())
+        .fetch_one(pool)
+        .await?
+        .get("total_count");
     let sql = format!(
         r#"
         with channel_tx as (
@@ -763,7 +793,7 @@ pub(crate) async fn group_channel_by_state(
         params.net.channel_states(),
         params.sort_by.as_str(),
         params.order.as_str(),
-        PAGE_SIZE,
+        page_size,
         offset
     );
     let rows = sqlx::query(&sql)
@@ -812,6 +842,7 @@ pub(crate) async fn group_channel_by_state(
     struct ChannelState {
         list: Vec<State>,
         next_page: usize,
+        total_count: usize,
     }
     let res = ChannelState {
         list: rows
@@ -841,6 +872,7 @@ pub(crate) async fn group_channel_by_state(
             )
             .collect(),
         next_page: params.page.saturating_add(1),
+        total_count: total_count as usize,
     };
     Ok(serde_json::to_string(&res).unwrap())
 }
@@ -922,4 +954,29 @@ pub async fn query_channel_capacity_distribution(
         .collect::<HashMap<_, _>>();
 
     Ok(serde_json::to_string(&res).unwrap())
+}
+
+pub async fn query_nodes_all_regions(
+    pool: &Pool<Postgres>,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let sql = format!(
+        r#"
+        select distinct country_or_region from {}
+        WHERE country_or_region IS NOT NULL 
+        AND country_or_region != ''
+    "#,
+        net.node_infos()
+    );
+    let rows = sqlx::query(&sql)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let region: String = row.get("country_or_region");
+            region
+        })
+        .collect::<Vec<String>>();
+
+    Ok(serde_json::to_string(&rows).unwrap())
 }
