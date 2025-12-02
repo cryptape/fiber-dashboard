@@ -2,7 +2,6 @@ import TimeSeriesChart from "@/shared/components/chart/TimeSeriesChart";
 import {
   KpiCard,
   SectionHeader,
-  SelectOption,
   GlassCardContainer,
   EasyTable,
 } from "@/shared/components/ui";
@@ -10,13 +9,10 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { queryKeys, queryClient } from "@/features/dashboard/hooks/useDashboard";
-import { formatCompactNumber } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
-const TIME_RANGE_OPTIONS: SelectOption[] = [
-  { value: "hourly", label: "Hourly" },
-  { value: "monthly", label: "Monthly" },
-];
+// 固定使用 hourly 时间范围
+const TIME_RANGE = "hourly" as const;
 
 // Mock data for TimeSeriesChart
 const MOCK_TIME_SERIES_DATA = [
@@ -62,7 +58,7 @@ const MOCK_TIME_SERIES_DATA2 = [
 ];
 
 export const DashboardNew = () => {
-  const [timeRange, setTimeRange] = useState<"hourly" | "monthly">("hourly");
+  const timeRange = TIME_RANGE; // 固定使用 hourly
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const { apiClient, currentNetwork } = useNetwork();
   const router = useRouter();
@@ -125,9 +121,7 @@ export const DashboardNew = () => {
     ]);
   };
 
-  const handleTimeRangeChange = (value: string) => {
-    setTimeRange(value as "hourly" | "monthly");
-  };
+  // 移除时间范围选择功能，固定使用 hourly
 
   return (
     <div className="flex flex-col gap-5">
@@ -135,9 +129,6 @@ export const DashboardNew = () => {
         title="Overview"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
-        selectOptions={TIME_RANGE_OPTIONS}
-        selectValue={timeRange}
-        onSelectChange={handleTimeRangeChange}
       />
 
       {/* 桌面端左右两大块布局 - 7:3 比例 */}
@@ -249,11 +240,10 @@ export const DashboardNew = () => {
                 ),
               },
               {
-                key: "capacity",
-                label: "Capacity (CKB)",
+                key: "channel_count",
+                label: "Channels",
                 format: value => {
-                  const num = Number(value);
-                  return formatCompactNumber(num, 1);
+                  return String(value || 0);
                 },
               },
             ]}

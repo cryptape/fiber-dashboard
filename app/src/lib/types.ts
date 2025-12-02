@@ -144,10 +144,11 @@ export const RustNodeInfoSchema = z.object({
   announce_timestamp: z.number(),
   chain_hash: z.string(),
   auto_accept_min_ckb_funding_amount: z.number(),
-  country: z.string().optional(),
+  country_or_region: z.string().optional(),
   city: z.string().optional(),
   region: z.string().optional(),
   loc: z.string().optional(),
+  channel_count: z.number().optional(),
 });
 
 export const RustChannelInfoSchema = z.object({
@@ -303,6 +304,10 @@ export const BasicChannelInfoSchema = z.object({
   last_block_number: z.string(),
   last_tx_hash: z.string(),
   last_commitment_args: z.string().nullable(),
+  create_time: z.string(),
+  last_commit_time: z.string(),
+  capacity: z.string(),
+  tx_count: z.number(),
 });
 
 export const GroupChannelsByStateResponseSchema = z.object({
@@ -314,3 +319,21 @@ export type BasicChannelInfo = z.infer<typeof BasicChannelInfoSchema>;
 export type GroupChannelsByStateResponse = z.infer<
   typeof GroupChannelsByStateResponseSchema
 >;
+
+// Channels by node ID response
+export const ChannelByNodeSchema = z.object({
+  channel_outpoint: z.string(),
+  last_seen_hour: z.string(),
+  capacity: z.string(),
+  created_timestamp: z.string(),
+  state: z.string(),
+  last_commit_time: z.string(),
+});
+
+export const ChannelsByNodeIdResponseSchema = z.object({
+  next_page: z.number(),
+  channels: z.array(ChannelByNodeSchema),
+});
+
+export type ChannelByNode = z.infer<typeof ChannelByNodeSchema>;
+export type ChannelsByNodeIdResponse = z.infer<typeof ChannelsByNodeIdResponseSchema>;

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
-import { formatCompactNumber, hexToDecimal, u128LittleEndianToDecimal } from "@/lib/utils";
+import { formatCompactNumber } from "@/lib/utils";
 import {
   SectionHeader,
   Table,
@@ -14,8 +14,6 @@ import {
   SortState,
   GlassCardContainer,
   SearchInput,
-  CustomSelect,
-  SelectOption,
 } from "@/shared/components/ui";
 import NodeNetworkMap, { NodeMapData, NodeConnectionData } from "@/shared/components/chart/NodeNetworkMap";
 
@@ -24,8 +22,8 @@ interface NodeData extends Record<string, unknown> {
   nodeId: string;
   nodeName: string;
   channels: number;
-  location: string;
-  capacity: number; // 改为数字类型，用于排序和计算
+  region: string; // 对应服务端的 country_or_region
+  capacity: number;
   autoAccept: number;
   lastSeen: string;
 }
@@ -46,29 +44,55 @@ export const Nodes = () => {
   const { apiClient, currentNetwork } = useNetwork();
   const [currentPage, setCurrentPage] = useState(1);
   const [searchValue, setSearchValue] = useState('');
-  const [locationValue, setLocationValue] = useState('');
-  const [sortKey, setSortKey] = useState<string>('capacity'); // 排序字段
+  const [debouncedSearchValue, setDebouncedSearchValue] = useState(''); // 防抖后的搜索值
+  const [sortKey, setSortKey] = useState<string>('last_seen'); // 排序字段，使用服务端支持的字段
   const [sortState, setSortState] = useState<SortState>('descending'); // 排序方向
-  const itemsPerPage = 10; // 每页显示数量
 
-  // 获取节点和通道数据
-  const { data: nodes = [], isLoading: nodesLoading, dataUpdatedAt: nodesUpdatedAt } = useQuery({
-    queryKey: ['nodes', currentNetwork],
-    queryFn: () => apiClient.fetchAllActiveNodes(),
+  // 计算服务端分页参数（从 1 开始的前端页码转换为从 0 开始的后端页码）
+  const backendPage = currentPage - 1;
+  
+  // 映射前端 sortKey 到服务端 sort_by 参数
+  const getSortBy = (key: string): string | undefined => {
+    switch (key) {
+      case 'region':
+        return 'region';
+      case 'last_seen':
+        return 'last_seen';
+      default:
+        return 'last_seen';
+    }
+  };
+  
+  // 映射 sortState 到服务端 order 参数
+  const getOrder = (state: SortState): string => {
+    return state === 'ascending' ? 'asc' : 'desc';
+  };
+
+  // 使用分页接口获取节点数据（每次只请求当前页）
+  const { data: nodesResponse, isLoading: nodesLoading, dataUpdatedAt: nodesUpdatedAt } = useQuery({
+    queryKey: ['nodes', currentNetwork, backendPage, sortKey, sortState, debouncedSearchValue],
+    queryFn: async () => {
+      const sortBy = getSortBy(sortKey);
+      const order = getOrder(sortState);
+      
+      // 如果有搜索关键词，使用搜索接口
+      if (debouncedSearchValue.trim()) {
+        return apiClient.searchNodesByName(debouncedSearchValue.trim(), backendPage, sortBy, order);
+      }
+      
+      // 否则使用普通列表接口
+      return apiClient.getActiveNodesByPage(backendPage, sortBy, order);
+    },
     refetchInterval: 300000, // 5分钟轮询
   });
 
-  const { data: channels = [], isLoading: channelsLoading, dataUpdatedAt: channelsUpdatedAt } = useQuery({
-    queryKey: ['channels', currentNetwork],
-    queryFn: () => apiClient.fetchAllActiveChannels(),
-    refetchInterval: 300000, // 5分钟轮询
-  });
-
-  const isLoading = nodesLoading || channelsLoading;
+  const nodes = nodesResponse?.nodes || [];
+  const nextPage = nodesResponse?.next_page ?? 0;
+  const isLoading = nodesLoading;
 
   // 计算最后更新时间
   const lastUpdated = useMemo(() => {
-    const latestUpdateTime = Math.max(nodesUpdatedAt, channelsUpdatedAt);
+    const latestUpdateTime = nodesUpdatedAt;
     if (latestUpdateTime === 0) return "";
     
     const updateDate = new Date(latestUpdateTime);
@@ -89,78 +113,28 @@ export const Nodes = () => {
       });
       return `Last updated: ${formattedTime}`;
     }
-  }, [nodesUpdatedAt, channelsUpdatedAt]);
+  }, [nodesUpdatedAt]);
 
-  // 当搜索或筛选条件改变时，自动重置到第一页
+  // 搜索防抖：用户输入完 500ms 后才触发搜索
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchValue(searchValue);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  // 当排序或搜索条件改变时，自动重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, locationValue, sortKey, sortState]);
+  }, [sortKey, sortState, debouncedSearchValue]);
 
-  // 容量解析工具
-  const parseChannelCapacityToCKB = useCallback(
-    (capacity: string | number): number => {
-      const SHANNONS_PER_CKB = 100000000;
-
-      try {
-        const capacityInShannons =
-          typeof capacity === "string"
-            ? capacity.startsWith("0x") && capacity.length === 34
-              ? u128LittleEndianToDecimal(capacity)
-              : hexToDecimal(capacity)
-            : BigInt(capacity);
-        return Number(capacityInShannons) / SHANNONS_PER_CKB;
-      } catch (error) {
-        console.warn("Error parsing capacity:", error, capacity);
-        return 0;
-      }
-    },
-    []
-  );
-
-  // 计算节点统计信息
-  const nodeStats = useMemo(() => {
-    const stats = new Map<string, { channels: number; capacity: number }>();
-
-    channels.forEach(channel => {
-      try {
-        const capacityInCKB = parseChannelCapacityToCKB(channel.capacity);
-
-        // Add to node1 stats
-        const node1Stats = stats.get(channel.node1) || {
-          channels: 0,
-          capacity: 0,
-        };
-        node1Stats.channels += 1;
-        node1Stats.capacity += capacityInCKB;
-        stats.set(channel.node1, node1Stats);
-
-        // Add to node2 stats
-        const node2Stats = stats.get(channel.node2) || {
-          channels: 0,
-          capacity: 0,
-        };
-        node2Stats.channels += 1;
-        node2Stats.capacity += capacityInCKB;
-        stats.set(channel.node2, node2Stats);
-      } catch (error) {
-        console.warn("Error processing channel:", error, channel);
-      }
-    });
-
-    return stats;
-  }, [channels, parseChannelCapacityToCKB]);
-
-  // 处理节点数据，添加统计信息
+  // 处理节点数据，添加展示字段
   const processedNodes = useMemo((): NodeWithStats[] => {
     return nodes.map(node => {
-      const nodeStat = nodeStats.get(node.node_id) || {
-        channels: 0,
-        capacity: 0,
-      };
-
-      const location = node.city && node.country 
-        ? `${node.city}, ${node.country}` 
-        : node.country || "Unknown";
+      const location = node.city && node.country_or_region 
+        ? `${node.city}, ${node.country_or_region}` 
+        : node.country_or_region || "Unknown";
 
       const announceDate = new Date(node.announce_timestamp);
       const formattedDate = announceDate.toLocaleDateString("en-US", {
@@ -171,108 +145,33 @@ export const Nodes = () => {
 
       return {
         ...node,
-        totalChannels: nodeStat.channels,
-        totalCapacity: nodeStat.capacity,
+        totalChannels: node.channel_count ?? 0,
+        totalCapacity: 0,
         formattedLocation: location,
         formattedLastSeen: formattedDate,
       };
     });
-  }, [nodes, nodeStats]);
-
-  // 获取所有唯一的国家/地区选项
-  const locationOptions: SelectOption[] = useMemo(() => {
-    const uniqueCountries = new Set<string>();
-    nodes.forEach(node => {
-      if (node.country) {
-        uniqueCountries.add(node.country);
-      }
-    });
-    return Array.from(uniqueCountries)
-      .sort()
-      .map(country => ({ value: country, label: country }));
   }, [nodes]);
 
-  // 筛选和排序节点
-  const filteredAndSortedNodes = useMemo(() => {
-    let filtered = processedNodes;
+  // 获取所有唯一的国家/地区选项（暂时禁用，因为需要所有数据）
+  // const locationOptions: SelectOption[] = [];
 
-    // 应用搜索筛选
-    if (searchValue) {
-      const term = searchValue.toLowerCase().trim();
-      filtered = filtered.filter(
-        node =>
-          node.node_name.toLowerCase().includes(term) ||
-          node.node_id.toLowerCase().includes(term) ||
-          node.addresses.some(addr => addr.toLowerCase().includes(term))
-      );
-    }
-
-    // 应用位置筛选
-    if (locationValue) {
-      filtered = filtered.filter(node => node.country === locationValue);
-    }
-
-    // 应用排序
-    filtered.sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
-
-      switch (sortKey) {
-        case 'channels':
-          aValue = a.totalChannels;
-          bValue = b.totalChannels;
-          break;
-        case 'location':
-          aValue = a.formattedLocation.toLowerCase();
-          bValue = b.formattedLocation.toLowerCase();
-          break;
-        case 'capacity':
-          aValue = a.totalCapacity;
-          bValue = b.totalCapacity;
-          break;
-        case 'lastSeen':
-          aValue = new Date(a.announce_timestamp).getTime();
-          bValue = new Date(b.announce_timestamp).getTime();
-          break;
-        default:
-          aValue = a.totalCapacity;
-          bValue = b.totalCapacity;
-      }
-
-      // 字符串比较
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortState === 'ascending'
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
-      }
-      
-      // 数字比较
-      return sortState === 'ascending'
-        ? (aValue as number) - (bValue as number)
-        : (bValue as number) - (aValue as number);
-    });
-
-    return filtered;
-  }, [processedNodes, searchValue, locationValue, sortKey, sortState]);
-
-  // 分页计算
-  const totalPages = Math.max(1, Math.ceil(filteredAndSortedNodes.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentNodes = filteredAndSortedNodes.slice(startIndex, endIndex);
-
-  // 转换为 NodeData 格式
+  // 直接使用服务端返回的数据（已经按服务端排序）
   const tableData: NodeData[] = useMemo(() => {
-    return currentNodes.map(node => ({
+    return processedNodes.map(node => ({
       nodeId: node.node_id,
       nodeName: node.node_name,
       channels: node.totalChannels,
-      location: node.formattedLocation,
+      region: node.formattedLocation,
       capacity: node.totalCapacity,
       autoAccept: node.auto_accept_min_ckb_funding_amount / 100000000,
       lastSeen: node.formattedLastSeen,
     }));
-  }, [currentNodes]);
+  }, [processedNodes]);
+
+  // 计算总页数（根据 next_page 判断是否有下一页）
+  const hasNextPage = nextPage > backendPage;
+  const totalPages = hasNextPage ? currentPage + 1 : currentPage;
 
   // 转换为地图数据格式
   const mapData: NodeMapData[] = useMemo(() => {
@@ -284,25 +183,22 @@ export const Nodes = () => {
           nodeId: node.node_id,
           nodeName: node.node_name,
           city: node.city || "Unknown",
-          country: node.country || "Unknown",
+          country: node.country_or_region || "Unknown",
           latitude: lat || 0,
           longitude: lng || 0,
-          capacity: node.totalCapacity,
+          capacity: 0, // capacity 已移除，保留字段但设为 0
         };
       })
       .filter(node => node.latitude !== 0 && node.longitude !== 0);
   }, [processedNodes]);
 
-  // 构建连接数据（基于通道）
+  // 连接数据（不再使用 channels，返回空数组）
   const connectionData: NodeConnectionData[] = useMemo(() => {
-    return channels.slice(0, 10000).map(channel => ({
-      fromNodeId: channel.node1,
-      toNodeId: channel.node2,
-    }));
-  }, [channels]);
+    return [];
+  }, []);
   console.log(mapData, connectionData,'===')
 
-  // 列定义
+  // 列定义（只有服务端支持的字段才标记 sortable）
   const columns: ColumnDef<NodeData>[] = [
     {
       key: 'nodeId',
@@ -332,21 +228,13 @@ export const Nodes = () => {
       key: "channels",
       label: "Channels",
       width: "w-32",
-      sortable: true,
+      sortable: false, // 服务端未提供按 channel_count 排序
     },
     {
-      key: "location",
+      key: "region",
       label: "Location",
       width: "w-36",
-      sortable: true,
-    },
-    {
-      key: "capacity",
-      label: "Capacity (CKB)",
-      width: "w-40",
-      sortable: true,
-      className: "text-purple font-bold",
-      render: (value) => formatCompactNumber(value as number),
+      sortable: true, // 对应服务端 sort_by=region (country_or_region)
     },
     {
       key: "autoAccept",
@@ -358,22 +246,21 @@ export const Nodes = () => {
       render: (value) => formatCompactNumber(value as number),
     },
     {
-      key: "lastSeen",
+      key: "last_seen",
       label: "Last seen on",
       width: "w-48",
-      sortable: true,
+      sortable: true, // 对应服务端 sort_by=last_seen
     },
   ];
   const handleRefresh = () => {
-    // 清除所有相关查询缓存，触发重新请求
+    // 清除相关查询缓存，触发重新请求
     queryClient.invalidateQueries({ queryKey: ['nodes', currentNetwork] });
-    queryClient.invalidateQueries({ queryKey: ['channels', currentNetwork] });
   };
 
   const handleSort = (key: string, state: SortState) => {
     setSortKey(key);
     setSortState(state);
-    // 页码重置由 useEffect 处理
+    setCurrentPage(1); // 排序时重置到第一页
   };
 
   const handlePageChange = (page: number) => {
@@ -382,12 +269,7 @@ export const Nodes = () => {
 
   const handleSearch = (value: string) => {
     setSearchValue(value);
-    // 页码重置由 useEffect 处理
-  };
-
-  const handleLocationChange = (value: string) => {
-    setLocationValue(value);
-    // 页码重置由 useEffect 处理
+    // 不需要重置页码，由 useEffect 在 debouncedSearchValue 变化时处理
   };
 
 
@@ -418,7 +300,7 @@ export const Nodes = () => {
 
       <div className="flex justify-between items-center">
         <span className="type-h2">
-          Active Nodes({isLoading ? '...' : filteredAndSortedNodes.length})
+          Active Nodes
         </span>
         <div className="flex items-center gap-3">
           <SearchInput
@@ -426,20 +308,19 @@ export const Nodes = () => {
             placeholder="Search nodes by ID or name"
             onChange={(value) => {
               setSearchValue(value);
-              // 页码重置由 useEffect 处理
             }}
             onSearch={handleSearch}
           />
         </div>
       </div>
 
-      <CustomSelect
+      {/* <CustomSelect
         options={locationOptions}
         value={locationValue}
         onChange={handleLocationChange}
         placeholder="All Location"
         className="w-[145px]"
-      />
+      /> */}
       <GlassCardContainer>
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
@@ -451,11 +332,11 @@ export const Nodes = () => {
               columns={columns}
               data={tableData}
               onSort={handleSort}
-              defaultSortKey="capacity"
+              defaultSortKey="last_seen"
               defaultSortState="descending"
             />
 
-            {filteredAndSortedNodes.length > 0 && (
+            {tableData.length > 0 && (
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -464,15 +345,11 @@ export const Nodes = () => {
               />
             )}
 
-            {filteredAndSortedNodes.length === 0 && (
+            {tableData.length === 0 && (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
                 <div className="text-center">
                   <div className="text-lg font-medium mb-2">No nodes found</div>
-                  <div className="text-sm">
-                    {searchValue || locationValue
-                      ? "Try adjusting your search or filter"
-                      : "No nodes available"}
-                  </div>
+                  <div className="text-sm">No nodes available</div>
                 </div>
               </div>
             )}

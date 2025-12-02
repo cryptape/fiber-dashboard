@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
-import { RustChannelInfo, RustNodeInfo } from "@/lib/types";
+import { RustNodeInfo } from "@/lib/types";
 import { APIUtils } from "@/lib/client";
 import { formatCompactNumber } from "@/lib/utils";
 
@@ -23,9 +23,8 @@ export const NodeDetail = () => {
   const router = useRouter();
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortKey, setSortKey] = useState<string>('capacity');
+  const [sortKey, setSortKey] = useState<string>('lastCommittedOn');
   const [sortState, setSortState] = useState<SortState>('descending');
-  const itemsPerPage = 10;
 
   // 当排序条件改变时，自动重置到第一页
   useEffect(() => {
@@ -40,26 +39,23 @@ export const NodeDetail = () => {
     retry: 3,
   });
 
-  // 拉取所有活跃通道并过滤出与当前节点相关的通道
-  const { data: allChannels = [] } = useQuery<RustChannelInfo[]>({
-    queryKey: ["channels", currentNetwork],
-    queryFn: () => apiClient.fetchAllActiveChannels(),
-    staleTime: 300000,
+  // 使用新接口：直接拉取该节点的通道数据（支持分页和排序）
+  const { data: channelsResponse } = useQuery({
+    queryKey: ["node-channels", nodeId, currentNetwork, currentPage, sortKey, sortState],
+    queryFn: () => {
+      // 将前端的 sortKey 映射到后端的 sort_by
+      const sortBy = sortKey === 'createdOn' ? 'create_time' : 'last_commit_time';
+      const order = sortState === 'ascending' ? 'asc' : 'desc';
+      return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order);
+    },
+    enabled: !!nodeId,
+    staleTime: 0, // 关闭缓存，确保每次排序都重新请求
   });
 
-  const nodeChannels = useMemo(() => {
-    return allChannels.filter(
-      (ch) => ch.node1 === nodeId || ch.node2 === nodeId
-    );
-  }, [allChannels, nodeId]);
+  const nodeChannels = channelsResponse?.channels || [];
 
-  // 统计：总通道数与总容量（容量统计不除以2）
-  const totalChannels = nodeChannels.length;
-
-  const totalCapacity = useMemo(() => {
-    // 使用工具方法汇总容量（CKB）
-    return APIUtils.getTotalCapacityFromChannels(nodeChannels);
-  }, [nodeChannels]);
+  // 统计：总通道数（后端已返回分页数据，需要获取总数）
+  const totalChannels = nodeInfo?.channel_count || 0;
 
   const autoAcceptCkb = useMemo(() => {
     // auto_accept_min_ckb_funding_amount 已经是 Shannon 单位的数值
@@ -69,8 +65,8 @@ export const NodeDetail = () => {
 
   const locationText = useMemo(() => {
     if (!nodeInfo) return "Unknown";
-    const { city, country } = nodeInfo;
-    return city && country ? `${city}, ${country}` : country || "Unknown";
+    const { city, country_or_region } = nodeInfo;
+    return city && country_or_region ? `${city}, ${country_or_region}` : country_or_region || "Unknown";
   }, [nodeInfo]);
 
   const lastSeenText = useMemo(() => {
@@ -86,73 +82,34 @@ export const NodeDetail = () => {
     }
   }, [nodeInfo]);
 
-  // 将真实通道数据映射到表格所需结构，同时保留原始数值用于排序
+  // 将真实通道数据映射到表格所需结构
   const realChannelRows = useMemo(() => {
     return nodeChannels.map((ch) => {
       const capacityCkb = APIUtils.parseChannelCapacityToCKB(ch.capacity);
-      const createdTimestamp = ch.created_timestamp ? new Date(ch.created_timestamp).getTime() : 0;
-      const commitTimestamp = ch.commit_timestamp ? new Date(ch.commit_timestamp).getTime() : 0;
       
       return {
         channelId: ch.channel_outpoint,
         status: "Active" as const,
         capacity: formatCompactNumber(capacityCkb),
-        capacityRaw: capacityCkb, // 用于排序的原始数值
         createdOn: ch.created_timestamp ? new Date(ch.created_timestamp).toLocaleDateString("en-US", {
           year: "numeric", month: "short", day: "numeric",
         }) : "-",
-        createdOnRaw: createdTimestamp, // 用于排序的时间戳
-        lastCommittedOn: ch.commit_timestamp ? new Date(ch.commit_timestamp).toLocaleDateString("en-US", {
+        lastCommittedOn: ch.last_commit_time ? new Date(ch.last_commit_time).toLocaleDateString("en-US", {
           year: "numeric", month: "short", day: "numeric",
         }) : "-",
-        lastCommittedOnRaw: commitTimestamp, // 用于排序的时间戳
       };
     });
   }, [nodeChannels]);
 
-  // 先排序，再分页
-  const sortedChannelRows = useMemo(() => {
-    const rows = [...realChannelRows];
-    
-    rows.sort((a, b) => {
-      switch (sortKey) {
-        case 'capacity': {
-          const aValue = a.capacityRaw as number;
-          const bValue = b.capacityRaw as number;
-          return sortState === 'ascending' ? aValue - bValue : bValue - aValue;
-        }
-        case 'createdOn': {
-          const aValue = a.createdOnRaw as number;
-          const bValue = b.createdOnRaw as number;
-          return sortState === 'ascending' ? aValue - bValue : bValue - aValue;
-        }
-        case 'lastCommittedOn': {
-          const aValue = a.lastCommittedOnRaw as number;
-          const bValue = b.lastCommittedOnRaw as number;
-          return sortState === 'ascending' ? aValue - bValue : bValue - aValue;
-        }
-        default:
-          return 0;
-      }
-    });
-
-    return rows;
-  }, [realChannelRows, sortKey, sortState]);
-
-  const tableSource = sortedChannelRows;
-
-  const totalPages = Math.ceil(tableSource.length / itemsPerPage);
-  const paginatedData = tableSource.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // 后端已经处理了排序和分页，前端直接展示
+  const paginatedData = realChannelRows;
 
   // 表格列定义
   const columns: ColumnDef<ChannelData>[] = [
     {
       key: "channelId",
       label: "Channel ID",
-      width: "flex-1",
+      width: "w-100",
       render: (value) => (
         <button
           onClick={() => router.push(`/channel/${value}`)}
@@ -174,8 +131,12 @@ export const NodeDetail = () => {
       key: "capacity",
       label: "Capacity (CKB)",
       width: "w-40",
-      sortable: true,
-      render: (value) => <span className="text-purple font-semibold">{value as string}</span>,
+      sortable: false,
+      render: (value) => (
+        <span className="text-purple font-semibold truncate block">
+          {value as string}
+        </span>
+      ),
     },
     {
       key: "createdOn",
@@ -213,7 +174,7 @@ export const NodeDetail = () => {
         />
         <KpiCard
           label="CAPACITY"
-          value={String(totalCapacity)}
+          value={'N/A'}
           unit="CKB"
         />
         <KpiCard
@@ -222,7 +183,7 @@ export const NodeDetail = () => {
           unit="CKB"
         />
       </div>
-      <SectionHeader title={`Channels(${tableSource.length})`} />
+      <SectionHeader title={`Channels(${totalChannels})`} />
       
       {/* 表格和分页 */}
       <GlassCardContainer className="mt-4">
@@ -233,13 +194,13 @@ export const NodeDetail = () => {
             setSortKey(key);
             setSortState(state);
           }}
-          defaultSortKey="capacity"
+          defaultSortKey="lastCommittedOn"
           defaultSortState="descending"
         />
         <div className="mt-4">
           <Pagination
             currentPage={currentPage}
-            totalPages={totalPages}
+            totalPages={Math.ceil(totalChannels / 10)}
             onPageChange={setCurrentPage}
           />
         </div>

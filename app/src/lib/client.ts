@@ -36,6 +36,8 @@ import {
   ChannelStateApiResponseSchema,
   GroupChannelsByStateResponse,
   GroupChannelsByStateResponseSchema,
+  ChannelsByNodeIdResponse,
+  ChannelsByNodeIdResponseSchema,
 } from "./types";
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
@@ -94,9 +96,32 @@ export class APIClient {
     }
   }
 
-  async getActiveNodesByPage(page: number = 0): Promise<NodeResponse> {
+  async getActiveNodesByPage(
+    page: number = 0,
+    sortBy?: string,
+    order?: string
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_hourly?page=${page}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
     return this.apiRequest<NodeResponse>(
-      `/nodes_hourly?page=${page}`,
+      endpoint,
+      undefined,
+      NodeResponseSchema
+    );
+  }
+
+  async searchNodesByName(
+    nodeName: string,
+    page: number = 0,
+    sortBy?: string,
+    order?: string
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_fuzzy_by_name?node_name=${encodeURIComponent(nodeName)}&page=${page}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
+    return this.apiRequest<NodeResponse>(
+      endpoint,
       undefined,
       NodeResponseSchema
     );
@@ -234,6 +259,31 @@ export class APIClient {
 
     // The API returns { node_info: { ...actual node data... } }
     return rawResponse.node_info;
+  }
+
+  async getChannelCapacityDistribution(): Promise<Record<string, number>> {
+    return this.apiRequest<Record<string, number>>(
+      `/channel_capacity_distribution`
+    );
+  }
+
+  async getChannelCountByState(): Promise<Record<string, number>> {
+    return this.apiRequest<Record<string, number>>(
+      `/channel_count_by_state`
+    );
+  }
+
+  async getChannelsByNodeId(
+    nodeId: string,
+    page: number = 0,
+    sortBy: "create_time" | "last_commit_time" = "last_commit_time",
+    order: "asc" | "desc" = "desc"
+  ): Promise<ChannelsByNodeIdResponse> {
+    return this.apiRequest<ChannelsByNodeIdResponse>(
+      `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}`,
+      undefined,
+      ChannelsByNodeIdResponseSchema
+    );
   }
 
   async fetchAllActiveNodes(): Promise<RustNodeInfo[]> {
@@ -657,32 +707,43 @@ export class APIClient {
     start?: string,
     end?: string
   ) {
-    const [nodes, channels] = await Promise.all(
-      timeRange === "hourly"
-        ? [
-            this.fetchAllActiveNodes(),
-            this.fetchAllActiveChannels(),
-          ]
-        : [
-            this.fetchAllHistoricalNodes(start, end),
-            this.fetchAllHistoricalChannels(start, end),
-          ]
-    );
+    // 使用 nodes_hourly 接口的排序功能，按 channel_count 排序获取前 limit 个节点
+    // 服务端已经提供了 channel_count 字段和排序功能，不需要再调用 channels_hourly 接口合并数据
+    if (timeRange === "hourly") {
+      // 使用服务端排序：sort_by=channel_count&order=desc
+      const response = await this.getActiveNodesByPage(0, "channel_count", "desc");
+      const nodes = response.nodes || [];
+      
+      // 服务端已按 channel_count 降序排序，直接取前 limit 个
+      return nodes
+        .slice(0, limit)
+        .map(node => ({
+          id: node.node_id,
+          node_id: node.node_id,
+          channel_count: node.channel_count || 0,
+        }));
+    } else {
+      // monthly 模式暂时保持原有逻辑
+      const [nodes, channels] = await Promise.all([
+        this.fetchAllHistoricalNodes(start, end),
+        this.fetchAllHistoricalChannels(start, end),
+      ]);
 
-    const nodesWithInfo = APIUtils.getNodeChannelInfoFromChannels(
-      nodes,
-      channels
-    );
+      const nodesWithInfo = APIUtils.getNodeChannelInfoFromChannels(
+        nodes,
+        channels
+      );
 
-    // 按总容量降序排序，取前 limit 个
-    return nodesWithInfo
-      .sort((a, b) => b.totalCapacity - a.totalCapacity)
-      .slice(0, limit)
-      .map(node => ({
-        id: node.node_id,
-        node_id: node.node_id,
-        capacity: node.totalCapacity,
-      }));
+      // 按 channel_count 降序排序，取前 limit 个
+      return nodesWithInfo
+        .sort((a, b) => b.totalChannels - a.totalChannels)
+        .slice(0, limit)
+        .map(node => ({
+          id: node.node_id,
+          node_id: node.node_id,
+          channel_count: node.totalChannels,
+        }));
+    }
   }
 
   async fetchHistoricalDashboardData(
@@ -856,7 +917,7 @@ export class APIUtils {
     // country -> node count
     const nodeCountByCountry = new Map<string, number>();
     nodes.forEach(node => {
-      const country = node.country || "Unknown";
+      const country = node.country_or_region || "Unknown";
       nodeCountByCountry.set(
         country,
         (nodeCountByCountry.get(country) || 0) + 1
@@ -866,7 +927,7 @@ export class APIUtils {
     // node_id -> country
     const nodeToCountry = new Map<string, string>();
     nodes.forEach(node => {
-      nodeToCountry.set(node.node_id, node.country || "Unknown");
+      nodeToCountry.set(node.node_id, node.country_or_region || "Unknown");
     });
 
     // node_id -> capacity
@@ -948,7 +1009,7 @@ export class APIUtils {
     // 处理节点数据
     nodes.forEach(node => {
       const city = node.city || "Unknown City";
-      const country = node.country || "Unknown";
+      const country = node.country_or_region || "Unknown";
       const countryCode = getCountryCode(country);
       const coordinates = parseCoordinates(node.loc);
 
@@ -973,7 +1034,7 @@ export class APIUtils {
     // node_id -> country 映射（用于容量计算）
     const nodeToCountry = new Map<string, string>();
     nodes.forEach(node => {
-      nodeToCountry.set(node.node_id, node.country || "Unknown");
+      nodeToCountry.set(node.node_id, node.country_or_region || "Unknown");
     });
 
     // 城市 -> 容量映射
@@ -1089,8 +1150,8 @@ export class APIUtils {
           nodeId: node.node_id,
           nodeName: node.node_name,
           city: node.city || "Unknown City",
-          country: node.country || "Unknown",
-          countryCode: getCountryCode(node.country || "Unknown"),
+          country: node.country_or_region || "Unknown",
+          countryCode: getCountryCode(node.country_or_region || "Unknown"),
           latitude: coordinates[0],
           longitude: coordinates[1],
           capacity:

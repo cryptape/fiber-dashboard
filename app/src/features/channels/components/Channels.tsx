@@ -15,7 +15,7 @@ import BarChart from "@/shared/components/chart/BarChart";
 import PieChart from "@/shared/components/chart/PieChart";
 import { useChannelsByState } from "@/features/channels/hooks/useChannels";
 import { ChannelState, BasicChannelInfo } from "@/lib/types";
-import { u64LittleEndianToDecimal, hexToDecimal } from "@/lib/utils";
+import { hexToDecimal } from "@/lib/utils";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -63,18 +63,25 @@ export const Channels = () => {
   const itemsPerPage = 10; // 每页显示10条
   const { apiClient, currentNetwork } = useNetwork();
 
-  // 获取全量通道数据用于容量分布统计
-  const { data: allChannelsData, dataUpdatedAt: allChannelsUpdatedAt } = useQuery({
-    queryKey: ["all-channels-for-capacity", currentNetwork],
-    queryFn: () => apiClient.fetchAllActiveChannels(),
+  // 使用新的后端聚合接口获取容量分布数据
+  const { data: capacityDistribution, dataUpdatedAt: capacityDistributionUpdatedAt } = useQuery({
+    queryKey: ["channel-capacity-distribution", currentNetwork],
+    queryFn: () => apiClient.getChannelCapacityDistribution(),
     refetchInterval: 300000, // 5分钟刷新
   });
 
-  // 调试日志：查看获取的数据
+  // 使用新的后端聚合接口获取各状态通道数量
+  const { data: channelCountByState, dataUpdatedAt: channelCountUpdatedAt } = useQuery({
+    queryKey: ["channel-count-by-state", currentNetwork],
+    queryFn: () => apiClient.getChannelCountByState(),
+    refetchInterval: 300000, // 5分钟刷新
+  });
+
+  // 调试日志:查看获取的数据
   useEffect(() => {
-    console.log("[Channels] allChannelsData:", allChannelsData);
-    console.log("[Channels] allChannelsData length:", allChannelsData?.length);
-  }, [allChannelsData]);
+    console.log("[Channels] capacityDistribution:", capacityDistribution);
+    console.log("[Channels] channelCountByState:", channelCountByState);
+  }, [capacityDistribution, channelCountByState]);
 
   // Fetch all data for selected state (page 0 gets all data)
   const { data: channelsData, isLoading, refetch, dataUpdatedAt: channelsDataUpdatedAt } = useChannelsByState(
@@ -82,19 +89,10 @@ export const Channels = () => {
     0
   );
 
-  // Fetch counts for all states
-  const { data: openCount } = useChannelsByState("open", 0);
-  const { data: commitmentCount } = useChannelsByState("commitment", 0);
-  const { data: closedCount } = useChannelsByState("closed", 0);
-
+  // 使用后端返回的状态统计数据
   const getStateCount = (state: ChannelState) => {
-    const data =
-      state === "open"
-        ? openCount
-        : state === "commitment"
-          ? commitmentCount
-          : closedCount;
-    return data?.list?.length || 0;
+    if (!channelCountByState) return 0;
+    return channelCountByState[state] || 0;
   };
 
   // 组装 PieChart 数据
@@ -104,92 +102,69 @@ export const Channels = () => {
     { name: "Closed", value: getStateCount("closed"), status: "Closed" },
   ];
 
-  // 计算容量分布数据
-  const capacityDistributionData = (() => {
-    console.log("[Channels] Computing capacity distribution, allChannelsData:", allChannelsData);
+  // 计算容量分布数据 - 使用后端返回的分桶结果
+  const capacityDistributionData = useMemo(() => {
+    console.log("[Channels] Processing capacity distribution, data:", capacityDistribution);
     
-    if (!allChannelsData || allChannelsData.length === 0) {
-      console.log("[Channels] No channel data, returning empty distribution");
-      return CAPACITY_RANGES.map(range => ({ label: range.label, value: 0, min: range.min, max: range.max }));
+    if (!capacityDistribution) {
+      console.log("[Channels] No capacity distribution data, returning empty");
+      return CAPACITY_RANGES.map(range => ({ 
+        label: range.label, 
+        value: 0, 
+        min: range.min, 
+        max: range.max 
+      }));
     }
 
-    console.log("[Channels] Processing", allChannelsData.length, "channels");
-
-    // 初始化每个区间的计数
-    const distribution = CAPACITY_RANGES.map(range => ({
-      ...range,
-      count: 0,
-    }));
-
-    // 统计每个通道落在哪个区间
-    let minCapacity = Infinity;
-    let maxCapacity = 0;
-    let outOfRangeCount = 0;
-    
-    allChannelsData.forEach((channel, index) => {
-      try {
-        // 将 capacity 从 Shannon 转换为 CKB
-        // capacity 字段已经是正确的 hex 格式，直接解析即可
-        const capacityInShannon = hexToDecimal(channel.capacity);
-        const capacityInCKB = Number(capacityInShannon) / 100_000_000;
-        
-        // 记录最小和最大容量
-        minCapacity = Math.min(minCapacity, capacityInCKB);
-        maxCapacity = Math.max(maxCapacity, capacityInCKB);
-        
-        if (index < 3) {
-          console.log(`[Channels] Channel ${index} capacity:`, {
-            raw: channel.capacity,
-            shannon: capacityInShannon.toString(),
-            ckb: capacityInCKB
-          });
-        }
-        
-        // 找到对应的区间
-        const rangeIndex = distribution.findIndex(
-          range => capacityInCKB >= range.min && capacityInCKB < range.max
-        );
-        
-        if (rangeIndex !== -1) {
-          distribution[rangeIndex].count++;
-        } else {
-          outOfRangeCount++;
-          if (outOfRangeCount <= 3) {
-            console.log(`[Channels] Channel ${index} capacity ${capacityInCKB} CKB not in any range`);
-          }
-        }
-      } catch (error) {
-        console.warn("Error parsing channel capacity:", error, channel);
-      }
+    // 后端返回格式: {"Capacity 10^0k": count, "Capacity 10^1k": count, ...}
+    // 转换为前端需要的格式
+    const result = CAPACITY_RANGES.map(range => {
+      const key = `Capacity 10^${range.label.replace('10^', '')}k`;
+      const count = capacityDistribution[key] || 0;
+      return {
+        label: range.label,
+        value: count,
+        min: range.min,
+        max: range.max,
+      };
     });
-
-    console.log(`[Channels] Capacity range: ${minCapacity} - ${maxCapacity} CKB`);
-    console.log(`[Channels] Out of range count: ${outOfRangeCount} / ${allChannelsData.length}`);
-    console.log("[Channels] Distribution result:", distribution);
-
-    // 转换为 BarChart 需要的格式
-    const result = distribution.map(item => ({
-      label: item.label,
-      value: item.count,
-      min: item.min,
-      max: item.max,
-    }));
     
     console.log("[Channels] Final bar chart data:", result);
     return result;
-  })();
+  }, [capacityDistribution]);
 
   // 计算总通道数用于百分比
-  const totalChannelsForCapacity = allChannelsData?.length || 0;
+  const totalChannelsForCapacity = useMemo(() => {
+    return capacityDistributionData.reduce((sum, item) => sum + item.value, 0);
+  }, [capacityDistributionData]);
 
-  // Convert all API data to table format
-  const allTableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => ({
-    channelId: channel.channel_outpoint,
-    transactions: 0, // API doesn't provide this, you may need to add it
-    capacity: "N/A", // API doesn't provide this, you may need to add it
-    createdOn: "N/A", // API doesn't provide this, you may need to add it
-    lastCommitted: `Block ${Number(u64LittleEndianToDecimal(channel.last_block_number)).toLocaleString()}`,
-  })) || [];
+  // Convert all API data to table format - 直接使用后端返回的字段
+  const allTableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
+    // 将容量从十六进制 Shannon 转换为 CKB
+    const capacityInShannon = hexToDecimal(channel.capacity);
+    const capacityInCKB = Number(capacityInShannon) / 100_000_000;
+    
+    // 格式化时间
+    const formatDate = (isoString: string) => {
+      const date = new Date(isoString);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    };
+    
+    return {
+      channelId: channel.channel_outpoint,
+      transactions: channel.tx_count,
+      capacity: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+      createdOn: formatDate(channel.create_time),
+      lastCommitted: formatDate(channel.last_commit_time),
+    };
+  }) || [];
 
   // Sort data
   const sortedData = [...allTableData].sort((a, b) => {
@@ -226,7 +201,11 @@ export const Channels = () => {
   // 列定义
   // 计算最后更新时间
   const lastUpdated = useMemo(() => {
-    const latestUpdateTime = Math.max(allChannelsUpdatedAt || 0, channelsDataUpdatedAt || 0);
+    const latestUpdateTime = Math.max(
+      capacityDistributionUpdatedAt || 0, 
+      channelCountUpdatedAt || 0,
+      channelsDataUpdatedAt || 0
+    );
     if (latestUpdateTime === 0) return "";
     
     const date = new Date(latestUpdateTime);
@@ -238,7 +217,7 @@ export const Channels = () => {
       hour12: false,
     });
     return `Last updated: ${formattedTime}`;
-  }, [allChannelsUpdatedAt, channelsDataUpdatedAt]);
+  }, [capacityDistributionUpdatedAt, channelCountUpdatedAt, channelsDataUpdatedAt]);
 
   const columns: ColumnDef<ChannelData>[] = [
     {
@@ -267,7 +246,7 @@ export const Channels = () => {
       label: "Capacity (CKB)",
       width: "w-40",
       sortable: true,
-      className: "text-purple font-bold",
+      className: "text-purple-400 font-semibold",
     },
     {
       key: "createdOn",
@@ -285,7 +264,8 @@ export const Channels = () => {
   
   const handleRefresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["all-channels-for-capacity", currentNetwork] }),
+      queryClient.invalidateQueries({ queryKey: ["channel-capacity-distribution", currentNetwork] }),
+      queryClient.invalidateQueries({ queryKey: ["channel-count-by-state", currentNetwork] }),
       refetch(),
     ]);
   };
