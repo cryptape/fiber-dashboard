@@ -25,6 +25,7 @@ export const NodeDetail = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<string>('lastCommittedOn');
   const [sortState, setSortState] = useState<SortState>('descending');
+  const PAGE_SIZE = 10;
 
   // 当排序条件改变时，自动重置到第一页
   useEffect(() => {
@@ -53,6 +54,8 @@ export const NodeDetail = () => {
   });
 
   const nodeChannels = channelsResponse?.channels || [];
+  const totalCount = channelsResponse?.total_count ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   // 统计：总通道数（后端已返回分页数据，需要获取总数）
   const totalChannels = nodeInfo?.channel_count || 0;
@@ -200,7 +203,7 @@ export const NodeDetail = () => {
         <div className="mt-4">
           <Pagination
             currentPage={currentPage}
-            totalPages={Math.ceil(totalChannels / 10)}
+            totalPages={totalPages}
             onPageChange={setCurrentPage}
           />
         </div>

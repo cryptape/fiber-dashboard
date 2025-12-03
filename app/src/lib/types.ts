@@ -175,11 +175,13 @@ export type UdtScript = z.infer<typeof UdtScriptSchema>;
 export const NodeResponseSchema = z.object({
   next_page: z.number(),
   nodes: z.array(RustNodeInfoSchema),
+  total_count: z.number(),
 });
 
 export const ChannelResponseSchema = z.object({
   next_page: z.number(),
   channels: z.array(RustChannelInfoSchema),
+  total_count: z.number(),
 });
 
 export const NodesByUdtResponseSchema = z.object({
@@ -313,6 +315,7 @@ export const BasicChannelInfoSchema = z.object({
 export const GroupChannelsByStateResponseSchema = z.object({
   next_page: z.number(),
   list: z.array(BasicChannelInfoSchema),
+  total_count: z.number(),
 });
 
 export type BasicChannelInfo = z.infer<typeof BasicChannelInfoSchema>;
@@ -333,6 +336,7 @@ export const ChannelByNodeSchema = z.object({
 export const ChannelsByNodeIdResponseSchema = z.object({
   next_page: z.number(),
   channels: z.array(ChannelByNodeSchema),
+  total_count: z.number(),
 });
 
 export type ChannelByNode = z.infer<typeof ChannelByNodeSchema>;

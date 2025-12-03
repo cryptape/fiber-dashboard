@@ -223,13 +223,13 @@ export default function ChannelDetailPage() {
             name={node2Info.node_name || "Unknown Node"}
             status="Active"
             hash={node2Info.node_id}
-            location={node2Info.city && node2Info.country ? `${node2Info.city}, ${node2Info.country}` : node2Info.country || "Unknown"}
+            location={node2Info.city && node2Info.country_or_region ? `${node2Info.city}, ${node2Info.country_or_region}` : node2Info.country_or_region || "Unknown"}
             lastSeen={formatTimestamp(node2Info.announce_timestamp)}
             topExtra={
               <div className="flex items-center justify-between">
                 <div className="type-button1 text-secondary">
                   NODE #2
-                </div>
+                </div>  
                 <button
                   onClick={() => router.push(`/node/${encodeURIComponent(node2Info.node_id)}`)}
                   className="type-button1 text-purple cursor-pointer hover:underline"

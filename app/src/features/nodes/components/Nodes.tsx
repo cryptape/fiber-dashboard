@@ -14,6 +14,8 @@ import {
   SortState,
   GlassCardContainer,
   SearchInput,
+  CustomSelect,
+  SelectOption,
 } from "@/shared/components/ui";
 import NodeNetworkMap, { NodeMapData, NodeConnectionData } from "@/shared/components/chart/NodeNetworkMap";
 
@@ -45,35 +47,53 @@ export const Nodes = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearchValue, setDebouncedSearchValue] = useState(''); // 防抖后的搜索值
-  const [sortKey, setSortKey] = useState<string>('last_seen'); // 排序字段，使用服务端支持的字段
-  const [sortState, setSortState] = useState<SortState>('descending'); // 排序方向
+  const [sortKey, setSortKey] = useState<string>(''); // 排序字段，默认为空表示不排序
+  const [sortState, setSortState] = useState<SortState>('none'); // 排序方向，默认为 none
+  const [selectedRegion, setSelectedRegion] = useState<string>(''); // 选中的 region
+
+  // 获取所有 region 选项
+  const { data: regionsData } = useQuery({
+    queryKey: ['regions', currentNetwork],
+    queryFn: async () => {
+      return apiClient.getAllRegions();
+    },
+    staleTime: 600000, // 10分钟缓存
+  });
 
   // 计算服务端分页参数（从 1 开始的前端页码转换为从 0 开始的后端页码）
   const backendPage = currentPage - 1;
   
   // 映射前端 sortKey 到服务端 sort_by 参数
   const getSortBy = (key: string): string | undefined => {
+    if (!key) return undefined; // 如果没有排序字段，返回 undefined
+    
     switch (key) {
       case 'region':
         return 'region';
-      case 'last_seen':
+      case 'lastSeen':
         return 'last_seen';
       default:
-        return 'last_seen';
+        return undefined;
     }
   };
   
   // 映射 sortState 到服务端 order 参数
-  const getOrder = (state: SortState): string => {
+  const getOrder = (state: SortState): string | undefined => {
+    if (state === 'none') return undefined; // 如果没有排序，返回 undefined
     return state === 'ascending' ? 'asc' : 'desc';
   };
 
   // 使用分页接口获取节点数据（每次只请求当前页）
   const { data: nodesResponse, isLoading: nodesLoading, dataUpdatedAt: nodesUpdatedAt } = useQuery({
-    queryKey: ['nodes', currentNetwork, backendPage, sortKey, sortState, debouncedSearchValue],
+    queryKey: ['nodes', currentNetwork, backendPage, sortKey, sortState, debouncedSearchValue, selectedRegion],
     queryFn: async () => {
       const sortBy = getSortBy(sortKey);
       const order = getOrder(sortState);
+      
+      // 如果有选中的 region，使用 region 筛选接口
+      if (selectedRegion) {
+        return apiClient.getNodesByRegion(selectedRegion, backendPage, sortBy, order);
+      }
       
       // 如果有搜索关键词，使用搜索接口
       if (debouncedSearchValue.trim()) {
@@ -87,7 +107,7 @@ export const Nodes = () => {
   });
 
   const nodes = nodesResponse?.nodes || [];
-  const nextPage = nodesResponse?.next_page ?? 0;
+  const totalCount = nodesResponse?.total_count ?? 0;
   const isLoading = nodesLoading;
 
   // 计算最后更新时间
@@ -124,10 +144,10 @@ export const Nodes = () => {
     return () => clearTimeout(timer);
   }, [searchValue]);
 
-  // 当排序或搜索条件改变时，自动重置到第一页
+  // 当排序、搜索或 region 条件改变时，自动重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [sortKey, sortState, debouncedSearchValue]);
+  }, [sortKey, sortState, debouncedSearchValue, selectedRegion]);
 
   // 处理节点数据，添加展示字段
   const processedNodes = useMemo((): NodeWithStats[] => {
@@ -153,8 +173,18 @@ export const Nodes = () => {
     });
   }, [nodes]);
 
-  // 获取所有唯一的国家/地区选项（暂时禁用，因为需要所有数据）
-  // const locationOptions: SelectOption[] = [];
+  // 获取所有唯一的国家/地区选项
+  const locationOptions: SelectOption[] = useMemo(() => {
+    if (!regionsData) return [];
+    
+    return [
+      { label: 'All Locations', value: '' },
+      ...regionsData.map(region => ({
+        label: region,
+        value: region,
+      })),
+    ];
+  }, [regionsData]);
 
   // 直接使用服务端返回的数据（已经按服务端排序）
   const tableData: NodeData[] = useMemo(() => {
@@ -169,9 +199,9 @@ export const Nodes = () => {
     }));
   }, [processedNodes]);
 
-  // 计算总页数（根据 next_page 判断是否有下一页）
-  const hasNextPage = nextPage > backendPage;
-  const totalPages = hasNextPage ? currentPage + 1 : currentPage;
+  // 计算总页数（使用 total_count 和 page_size）
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   // 转换为地图数据格式
   const mapData: NodeMapData[] = useMemo(() => {
@@ -246,10 +276,10 @@ export const Nodes = () => {
       render: (value) => formatCompactNumber(value as number),
     },
     {
-      key: "last_seen",
+      key: "lastSeen",
       label: "Last seen on",
       width: "w-48",
-      sortable: true, // 对应服务端 sort_by=last_seen
+      sortable: true, // 对应服务端 sort_by=last_seen_hour
     },
   ];
   const handleRefresh = () => {
@@ -270,6 +300,10 @@ export const Nodes = () => {
   const handleSearch = (value: string) => {
     setSearchValue(value);
     // 不需要重置页码，由 useEffect 在 debouncedSearchValue 变化时处理
+  };
+
+  const handleRegionChange = (region: string) => {
+    setSelectedRegion(region);
   };
 
 
@@ -311,16 +345,17 @@ export const Nodes = () => {
             }}
             onSearch={handleSearch}
           />
+          <CustomSelect
+            options={locationOptions}
+            value={selectedRegion}
+            onChange={handleRegionChange}
+            placeholder="All Locations"
+            className="w-[180px]"
+          />
         </div>
       </div>
 
-      {/* <CustomSelect
-        options={locationOptions}
-        value={locationValue}
-        onChange={handleLocationChange}
-        placeholder="All Location"
-        className="w-[145px]"
-      /> */}
+
       <GlassCardContainer>
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
@@ -332,8 +367,6 @@ export const Nodes = () => {
               columns={columns}
               data={tableData}
               onSort={handleSort}
-              defaultSortKey="last_seen"
-              defaultSortState="descending"
             />
 
             {tableData.length > 0 && (

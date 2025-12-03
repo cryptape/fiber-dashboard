@@ -60,8 +60,11 @@ export const Channels = () => {
   const [selectedState, setSelectedState] = useState<ChannelState>("open");
   const [sortKey, setSortKey] = useState<string>("transactions");
   const [sortState, setSortState] = useState<SortState>("descending");
-  const itemsPerPage = 10; // 每页显示10条
+  const PAGE_SIZE = 10; // 每页显示10条
   const { apiClient, currentNetwork } = useNetwork();
+  
+  // 计算后端页码（从1开始转换为从0开始）
+  const backendPage = currentPage - 1;
 
   // 使用新的后端聚合接口获取容量分布数据
   const { data: capacityDistribution, dataUpdatedAt: capacityDistributionUpdatedAt } = useQuery({
@@ -83,11 +86,15 @@ export const Channels = () => {
     console.log("[Channels] channelCountByState:", channelCountByState);
   }, [capacityDistribution, channelCountByState]);
 
-  // Fetch all data for selected state (page 0 gets all data)
+  // 使用服务端分页接口获取指定状态的通道数据
   const { data: channelsData, isLoading, refetch, dataUpdatedAt: channelsDataUpdatedAt } = useChannelsByState(
     selectedState,
-    0
+    backendPage
   );
+  
+  // 从返回数据中提取 total_count
+  const totalCount = channelsData?.total_count ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   // 使用后端返回的状态统计数据
   const getStateCount = (state: ChannelState) => {
@@ -138,8 +145,8 @@ export const Channels = () => {
     return capacityDistributionData.reduce((sum, item) => sum + item.value, 0);
   }, [capacityDistributionData]);
 
-  // Convert all API data to table format - 直接使用后端返回的字段
-  const allTableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
+  // Convert API data to table format - 直接使用当前页的数据
+  const tableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
     // 将容量从十六进制 Shannon 转换为 CKB
     const capacityInShannon = hexToDecimal(channel.capacity);
     const capacityInCKB = Number(capacityInShannon) / 100_000_000;
@@ -165,33 +172,6 @@ export const Channels = () => {
       lastCommitted: formatDate(channel.last_commit_time),
     };
   }) || [];
-
-  // Sort data
-  const sortedData = [...allTableData].sort((a, b) => {
-    if (sortState === "none") return 0;
-
-    const aValue = a[sortKey];
-    const bValue = b[sortKey];
-
-    // Handle different data types
-    let comparison = 0;
-    if (typeof aValue === "number" && typeof bValue === "number") {
-      comparison = aValue - bValue;
-    } else {
-      const aStr = String(aValue).toLowerCase();
-      const bStr = String(bValue).toLowerCase();
-      comparison = aStr.localeCompare(bStr);
-    }
-
-    return sortState === "ascending" ? comparison : -comparison;
-  });
-
-  // Frontend pagination
-  const totalItems = sortedData.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const tableData = sortedData.slice(startIndex, endIndex);
 
   // Reset to first page when state changes
   useEffect(() => {

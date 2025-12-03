@@ -99,9 +99,10 @@ export class APIClient {
   async getActiveNodesByPage(
     page: number = 0,
     sortBy?: string,
-    order?: string
+    order?: string,
+    pageSize: number = 10
   ): Promise<NodeResponse> {
-    let endpoint = `/nodes_hourly?page=${page}`;
+    let endpoint = `/nodes_hourly?page=${page}&page_size=${pageSize}`;
     if (sortBy) endpoint += `&sort_by=${sortBy}`;
     if (order) endpoint += `&order=${order}`;
     return this.apiRequest<NodeResponse>(
@@ -115,9 +116,10 @@ export class APIClient {
     nodeName: string,
     page: number = 0,
     sortBy?: string,
-    order?: string
+    order?: string,
+    pageSize: number = 10
   ): Promise<NodeResponse> {
-    let endpoint = `/nodes_fuzzy_by_name?node_name=${encodeURIComponent(nodeName)}&page=${page}`;
+    let endpoint = `/nodes_fuzzy_by_name?node_name=${encodeURIComponent(nodeName)}&page=${page}&page_size=${pageSize}`;
     if (sortBy) endpoint += `&sort_by=${sortBy}`;
     if (order) endpoint += `&order=${order}`;
     return this.apiRequest<NodeResponse>(
@@ -127,12 +129,34 @@ export class APIClient {
     );
   }
 
+  async getNodesByRegion(
+    region: string,
+    page: number = 0,
+    sortBy?: string,
+    order?: string,
+    pageSize: number = 10
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_by_region?region=${encodeURIComponent(region)}&page=${page}&page_size=${pageSize}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
+    return this.apiRequest<NodeResponse>(
+      endpoint,
+      undefined,
+      NodeResponseSchema
+    );
+  }
+
+  async getAllRegions(): Promise<string[]> {
+    return this.apiRequest<string[]>('/all_region');
+  }
+
   async getHistoricalNodesByPage(
     page: number = 0,
     start?: string,
-    end?: string
+    end?: string,
+    pageSize: number = 10
   ): Promise<NodeResponse> {
-    let endpoint = `/nodes_nearly_monthly?page=${page}`;
+    let endpoint = `/nodes_nearly_monthly?page=${page}&page_size=${pageSize}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
     return this.apiRequest<NodeResponse>(
@@ -142,9 +166,12 @@ export class APIClient {
     );
   }
 
-  async getActiveChannelsByPage(page: number = 0): Promise<ChannelResponse> {
+  async getActiveChannelsByPage(
+    page: number = 0,
+    pageSize: number = 10
+  ): Promise<ChannelResponse> {
     return this.apiRequest<ChannelResponse>(
-      `/channels_hourly?page=${page}`,
+      `/channels_hourly?page=${page}&page_size=${pageSize}`,
       undefined,
       ChannelResponseSchema
     );
@@ -153,9 +180,10 @@ export class APIClient {
   async getHistoricalChannelsByPage(
     page: number = 0,
     start?: string,
-    end?: string
+    end?: string,
+    pageSize: number = 10
   ): Promise<ChannelResponse> {
-    let endpoint = `/channels_nearly_monthly?page=${page}`;
+    let endpoint = `/channels_nearly_monthly?page=${page}&page_size=${pageSize}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
     return this.apiRequest<ChannelResponse>(
@@ -226,10 +254,11 @@ export class APIClient {
 
   async getGroupChannelsByState(
     state: ChannelState,
-    page: number = 0
+    page: number = 0,
+    pageSize: number = 10
   ): Promise<GroupChannelsByStateResponse> {
     return this.apiRequest<GroupChannelsByStateResponse>(
-      `/group_channel_by_state?state=${state}&page=${page}`,
+      `/group_channel_by_state?state=${state}&page=${page}&page_size=${pageSize}`,
       undefined,
       GroupChannelsByStateResponseSchema
     );
@@ -277,10 +306,11 @@ export class APIClient {
     nodeId: string,
     page: number = 0,
     sortBy: "create_time" | "last_commit_time" = "last_commit_time",
-    order: "asc" | "desc" = "desc"
+    order: "asc" | "desc" = "desc",
+    pageSize: number = 10
   ): Promise<ChannelsByNodeIdResponse> {
     return this.apiRequest<ChannelsByNodeIdResponse>(
-      `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}`,
+      `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}&page_size=${pageSize}`,
       undefined,
       ChannelsByNodeIdResponseSchema
     );
