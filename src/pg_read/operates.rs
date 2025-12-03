@@ -10,8 +10,8 @@ use sqlx::{Pool, Postgres, Row};
 use crate::{
     Network,
     http_server::{
-        ChannelByNodeIdParams, ChannelByStateParams, FuzzyNodeName, ListNodesHourlyParams,
-        NodeByRegion, Page,
+        AnalysisHourlyParams, ChannelByNodeIdParams, ChannelByStateParams, FuzzyNodeName,
+        ListNodesHourlyParams, NodeByRegion, Page,
     },
     pg_read::{
         ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead, PAGE_SIZE,
@@ -428,19 +428,21 @@ pub struct AnalysisHourly {
 
 pub async fn query_analysis_hourly(
     pool: &Pool<Postgres>,
-    net: Network,
+    params: AnalysisHourlyParams,
 ) -> Result<AnalysisHourly, sqlx::Error> {
     let channel_sql = format!(
-        "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from {} WHERE bucket >= $1::timestamp ORDER BY channel_outpoint, bucket DESC",
-        net.online_channels_hourly()
+        "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp ORDER BY channel_outpoint, bucket DESC",
+        params.net.online_channels_hourly()
     );
     let node_sql = format!(
-        "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp",
-        net.online_nodes_hourly()
+        "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp",
+        params.net.online_nodes_hourly()
     );
-    let start_time = chrono::Utc::now() - chrono::Duration::hours(3);
+    let end = params.end.unwrap_or_else(|| chrono::Utc::now());
+    let start_time = end - chrono::Duration::hours(3);
     let mut channel_capacitys = sqlx::query(&channel_sql)
         .bind(start_time)
+        .bind(end)
         .fetch_all(pool)
         .await
         .map(|rows| {
@@ -458,6 +460,7 @@ pub async fn query_analysis_hourly(
         })?;
     let total_nodes: u64 = sqlx::query(&node_sql)
         .bind(start_time)
+        .bind(end)
         .fetch_one(pool)
         .await
         .map(|row| {
