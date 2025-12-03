@@ -8,7 +8,7 @@ http api default on 8080, method list:
 /nodes_nearly_monthly?page=0&start=%Y-%m-%d&end=%Y-%m-%d start/end is optional
 /channels_nearly_monthly?page=0&start=%Y-%m-%d&end=%Y-%m-%d start/end is optional
 /node_udt_infos?node_id=0x...
-/analysis_hourly
+/analysis_hourly?end=2012-12-12 12:12:12+0000
 /channel_state?channel_outpoint=0x..
 /group_channel_by_state?state=open/commitment/closed&page=0&sort_by=create_time/last_commit_time&order=asc/desc
 /channel_count_by_state

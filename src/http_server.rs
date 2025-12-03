@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use ckb_jsonrpc_types::{JsonBytes, Script};
 use salvo::{Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
@@ -326,21 +326,27 @@ pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<Stri
     Ok(serde_json::json!({ "nodes": nodes }).to_string())
 }
 
+#[derive(Debug, Extractible, Serialize, Deserialize)]
+#[salvo(extract(default_source(from = "query")))]
+pub(crate) struct AnalysisHourlyParams {
+    #[serde(default)]
+    pub net: Network,
+    pub end: Option<DateTime<Utc>>,
+}
+
 #[handler]
 pub async fn analysis_hourly(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let network_info = req.extract::<NetworkInfo>().await?;
+    let params = req.extract::<AnalysisHourlyParams>().await?;
     let pool = get_pg_pool();
-    let capacitys = query_analysis_hourly(pool, network_info.net)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to query channel capacity analysis: {}", e);
-            salvo::Error::Io(std::io::Error::other(
-                "Failed to query channel capacity analysis",
-            ))
-        })?;
+    let capacitys = query_analysis_hourly(pool, params).await.map_err(|e| {
+        log::error!("Failed to query channel capacity analysis: {}", e);
+        salvo::Error::Io(std::io::Error::other(
+            "Failed to query channel capacity analysis",
+        ))
+    })?;
     Ok(serde_json::to_string(&capacitys)?)
 }
 
