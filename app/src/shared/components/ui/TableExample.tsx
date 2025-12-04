@@ -96,6 +96,7 @@ const columns: ColumnDef<NodeData>[] = [
 
 export const TableExample = () => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const totalPages = 10;
 
   const handleSort = (key: string, state: SortState) => {
@@ -106,7 +107,9 @@ export const TableExample = () => {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     console.log('Page changed to:', page);
-    // 在这里处理分页逻辑
+    // 模拟加载
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1000);
   };
 
   return (
@@ -117,6 +120,8 @@ export const TableExample = () => {
         onSort={handleSort}
         defaultSortKey="channels"
         defaultSortState="descending"
+        loading={isLoading}
+        loadingText="Loading example data..."
       />
       
       <Pagination

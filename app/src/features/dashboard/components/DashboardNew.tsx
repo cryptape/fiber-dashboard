@@ -2,7 +2,6 @@ import TimeSeriesChart from "@/shared/components/chart/TimeSeriesChart";
 import {
   KpiCard,
   SectionHeader,
-  SelectOption,
   GlassCardContainer,
   EasyTable,
 } from "@/shared/components/ui";
@@ -10,13 +9,10 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { queryKeys, queryClient } from "@/features/dashboard/hooks/useDashboard";
-import { formatCompactNumber } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
-const TIME_RANGE_OPTIONS: SelectOption[] = [
-  { value: "hourly", label: "Hourly" },
-  { value: "monthly", label: "Monthly" },
-];
+// 固定使用 hourly 时间范围
+const TIME_RANGE = "hourly" as const;
 
 // Mock data for TimeSeriesChart
 const MOCK_TIME_SERIES_DATA = [
@@ -62,7 +58,7 @@ const MOCK_TIME_SERIES_DATA2 = [
 ];
 
 export const DashboardNew = () => {
-  const [timeRange, setTimeRange] = useState<"hourly" | "monthly">("hourly");
+  const timeRange = TIME_RANGE; // 固定使用 hourly
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const { apiClient, currentNetwork } = useNetwork();
   const router = useRouter();
@@ -79,7 +75,7 @@ export const DashboardNew = () => {
     refetchInterval: 30000,
   });
 
-  const { data: topNodes } = useQuery({
+  const { data: topNodes, isLoading: topNodesLoading } = useQuery({
     queryKey: [...queryKeys.nodes, "ranking", currentNetwork, timeRange],
     queryFn: () => {
       if (timeRange === "hourly") {
@@ -125,9 +121,7 @@ export const DashboardNew = () => {
     ]);
   };
 
-  const handleTimeRangeChange = (value: string) => {
-    setTimeRange(value as "hourly" | "monthly");
-  };
+  // 移除时间范围选择功能，固定使用 hourly
 
   return (
     <div className="flex flex-col gap-5">
@@ -135,9 +129,6 @@ export const DashboardNew = () => {
         title="Overview"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
-        selectOptions={TIME_RANGE_OPTIONS}
-        selectValue={timeRange}
-        onSelectChange={handleTimeRangeChange}
       />
 
       {/* 桌面端左右两大块布局 - 7:3 比例 */}
@@ -150,15 +141,15 @@ export const DashboardNew = () => {
               label="TOTAL CAPACITY"
               value={String(kpi?.totalCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.totalCapacityChange ?? 0}
+              trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="TOTAL CHANNELS"
               value={String(kpi?.totalChannels ?? 0)}
-              changePercent={12}
-              trending="down"
+              changePercent={kpi?.totalChannelsChange ?? 0}
+              trending={(kpi?.totalChannelsChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
               onViewDetails={() => router.push('/channels')}
             />
@@ -180,32 +171,32 @@ export const DashboardNew = () => {
               label="MIN CAPACITY"
               value={String(kpi?.minChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.minChannelCapacityChange ?? 0}
+              trending={(kpi?.minChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="MAX CAPACITY"
               value={String(kpi?.maxChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.maxChannelCapacityChange ?? 0}
+              trending={(kpi?.maxChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="AVG CAPACITY"
               value={String(kpi?.averageChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.averageChannelCapacityChange ?? 0}
+              trending={(kpi?.averageChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="MEDIAN CAPACITY"
               value={String(kpi?.medianChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.medianChannelCapacityChange ?? 0}
+              trending={(kpi?.medianChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
           </div>
@@ -216,8 +207,8 @@ export const DashboardNew = () => {
           <KpiCard
             label="TOTAL ACTIVE NODES"
             value={String(kpi?.totalNodes ?? 0)}
-            changePercent={5.5}
-            trending="down"
+            changePercent={kpi?.totalNodesChange ?? 0}
+            trending={(kpi?.totalNodesChange ?? 0) >= 0 ? "up" : "down"}
             changeLabel="from last week"
             onViewDetails={() => router.push('/nodes')}
           />
@@ -235,6 +226,8 @@ export const DashboardNew = () => {
             actionText="View All"
             onActionClick={() => router.push('/nodes')}
             data={topNodes || []}
+            loading={topNodesLoading}
+            loadingText="Loading nodes ranking..."
             columns={[
               {
                 key: "node_id",
@@ -249,11 +242,10 @@ export const DashboardNew = () => {
                 ),
               },
               {
-                key: "capacity",
-                label: "Capacity (CKB)",
+                key: "channel_count",
+                label: "Channels",
                 format: value => {
-                  const num = Number(value);
-                  return formatCompactNumber(num, 1);
+                  return String(value || 0);
                 },
               },
             ]}

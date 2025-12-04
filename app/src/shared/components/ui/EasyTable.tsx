@@ -24,6 +24,8 @@ export interface EasyTableProps {
   columns: TableColumn[];
   data: TableRow[];
   className?: string;
+  loading?: boolean;
+  loadingText?: string;
 }
 
 export const EasyTable = ({
@@ -33,6 +35,8 @@ export const EasyTable = ({
   columns,
   data,
   className = "",
+  loading = false,
+  loadingText = "Loading...",
 }: EasyTableProps) => {
   return (
     <GlassCardContainer className={className}>
@@ -57,7 +61,7 @@ export const EasyTable = ({
         )}
 
         {/* 表格内容 */}
-        <div className="self-stretch flex flex-col justify-start items-start">
+        <div className="self-stretch flex flex-col justify-start items-start relative">
           {/* 表头 */}
           <div className="self-stretch h-10 flex justify-start items-center">
             {columns.map((column) => (
@@ -75,23 +79,32 @@ export const EasyTable = ({
           <Separator />
 
           {/* 表格行 */}
-          {data.map((row) => (
-            <React.Fragment key={row.id}>
-              <div className="self-stretch h-12 flex justify-start items-center">
-                {columns.map((column) => (
-                  <div
-                    key={`${row.id}-${column.key}`}
-                    className={`${column.width || "flex-1"} pr-2 py-2 flex justify-start items-center gap-1.5 min-w-0`}
-                  >
-                    <div className="text-primary text-sm font-medium font-['Inter'] truncate w-full">
-                      {column.format ? column.format(row[column.key], row) : row[column.key]}
+          <div className="min-h-[156px] w-full">
+            {data.map((row) => (
+              <React.Fragment key={row.id}>
+                <div className="self-stretch h-12 flex justify-start items-center">
+                  {columns.map((column) => (
+                    <div
+                      key={`${row.id}-${column.key}`}
+                      className={`${column.width || "flex-1"} pr-2 py-2 flex justify-start items-center gap-1.5 min-w-0`}
+                    >
+                      <div className="text-primary text-sm font-medium font-['Inter'] truncate w-full">
+                        {column.format ? column.format(row[column.key], row) : row[column.key]}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              <Separator />
-            </React.Fragment>
-          ))}
+                  ))}
+                </div>
+                <Separator />
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Loading Overlay */}
+          {loading && (
+            <div className="absolute top-10 left-0 right-0 bottom-0 flex items-center justify-center">
+              <div className="text-muted-foreground">{loadingText}</div>
+            </div>
+          )}
         </div>
       </div>
     </GlassCardContainer>
