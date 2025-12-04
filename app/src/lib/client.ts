@@ -212,9 +212,13 @@ export class APIClient {
     );
   }
 
-  async getActiveAnalysis(): Promise<ActiveAnalysis> {
+  async getActiveAnalysis(end?: string): Promise<ActiveAnalysis> {
+    let endpoint = `/analysis_hourly`;
+    if (end) {
+      endpoint += `?end=${encodeURIComponent(end)}`;
+    }
     return this.apiRequest<ActiveAnalysis>(
-      `/analysis_hourly`,
+      endpoint,
       undefined,
       ActiveAnalysisSchema
     );
@@ -320,10 +324,11 @@ export class APIClient {
     const allNodes: RustNodeInfo[] = [];
     let page = 0;
     let hasMore = true;
+    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
-        const response = await this.getActiveNodesByPage(page);
+        const response = await this.getActiveNodesByPage(page, undefined, undefined, PAGE_SIZE);
         const nodes = response.nodes || [];
         allNodes.push(...nodes);
 
@@ -348,10 +353,11 @@ export class APIClient {
     const allChannels: RustChannelInfo[] = [];
     let page = 0;
     let hasMore = true;
+    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
-        const response = await this.getActiveChannelsByPage(page);
+        const response = await this.getActiveChannelsByPage(page, PAGE_SIZE);
         const channels = response.channels || [];
         allChannels.push(...channels);
 
@@ -464,8 +470,91 @@ export class APIClient {
     timeRange: "hourly" | "monthly" | "yearly"
   ): Promise<KpiData> {
     if (timeRange === "hourly") {
-      // Use active analysis for hourly data
-      return this.fetchKpiData();
+      // Use active analysis for hourly data and compare with last week
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Fetch current data and last week data in parallel
+      const [currentData, lastWeekData] = await Promise.all([
+        this.getActiveAnalysis(),
+        this.getActiveAnalysis(oneWeekAgo.toISOString()),
+      ]);
+
+      const totalNodes = +currentData.total_nodes;
+      const totalChannels = +currentData.channel_len;
+      const totalCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.total_capacity
+      );
+      const averageChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.avg_capacity
+      );
+      const maxChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.max_capacity
+      );
+      const minChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.min_capacity
+      );
+      const medianChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.median_capacity
+      );
+
+      // Calculate changes from last week
+      const lastWeekTotalCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.total_capacity
+      );
+      const lastWeekTotalNodes = +lastWeekData.total_nodes;
+      const lastWeekTotalChannels = +lastWeekData.channel_len;
+      const lastWeekAvgCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.avg_capacity
+      );
+      const lastWeekMaxCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.max_capacity
+      );
+      const lastWeekMinCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.min_capacity
+      );
+      const lastWeekMedianCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.median_capacity
+      );
+
+      return {
+        totalCapacity,
+        totalNodes,
+        totalChannels,
+        averageChannelCapacity,
+        maxChannelCapacity,
+        minChannelCapacity,
+        medianChannelCapacity,
+        // Calculate percentage changes (rounded to 2 decimal places)
+        totalCapacityChange:
+          lastWeekTotalCapacity > 0
+            ? parseFloat((((totalCapacity - lastWeekTotalCapacity) / lastWeekTotalCapacity) * 100).toFixed(2))
+            : 0,
+        totalNodesChange:
+          lastWeekTotalNodes > 0
+            ? parseFloat((((totalNodes - lastWeekTotalNodes) / lastWeekTotalNodes) * 100).toFixed(2))
+            : 0,
+        totalChannelsChange:
+          lastWeekTotalChannels > 0
+            ? parseFloat((((totalChannels - lastWeekTotalChannels) / lastWeekTotalChannels) * 100).toFixed(2))
+            : 0,
+        averageChannelCapacityChange:
+          lastWeekAvgCapacity > 0
+            ? parseFloat((((averageChannelCapacity - lastWeekAvgCapacity) / lastWeekAvgCapacity) * 100).toFixed(2))
+            : 0,
+        maxChannelCapacityChange:
+          lastWeekMaxCapacity > 0
+            ? parseFloat((((maxChannelCapacity - lastWeekMaxCapacity) / lastWeekMaxCapacity) * 100).toFixed(2))
+            : 0,
+        minChannelCapacityChange:
+          lastWeekMinCapacity > 0
+            ? parseFloat((((minChannelCapacity - lastWeekMinCapacity) / lastWeekMinCapacity) * 100).toFixed(2))
+            : 0,
+        medianChannelCapacityChange:
+          lastWeekMedianCapacity > 0
+            ? parseFloat((((medianChannelCapacity - lastWeekMedianCapacity) / lastWeekMedianCapacity) * 100).toFixed(2))
+            : 0,
+      };
     } else {
       // Use history analysis for monthly/yearly data
       // monthly: 最近3个月, yearly: 最近2年

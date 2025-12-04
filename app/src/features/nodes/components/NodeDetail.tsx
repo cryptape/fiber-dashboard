@@ -41,7 +41,7 @@ export const NodeDetail = () => {
   });
 
   // 使用新接口：直接拉取该节点的通道数据（支持分页和排序）
-  const { data: channelsResponse } = useQuery({
+  const { data: channelsResponse, isLoading: channelsLoading } = useQuery({
     queryKey: ["node-channels", nodeId, currentNetwork, currentPage, sortKey, sortState],
     queryFn: () => {
       // 将前端的 sortKey 映射到后端的 sort_by
@@ -199,14 +199,20 @@ export const NodeDetail = () => {
           }}
           defaultSortKey="lastCommittedOn"
           defaultSortState="descending"
+          loading={channelsLoading}
+          loadingText="Loading channels..."
+          className="min-h-[528px]"
         />
-        <div className="mt-4">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
+        
+        {!channelsLoading && paginatedData.length > 0 && (
+          <div className="mt-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
       </GlassCardContainer>
     </div>
   );

@@ -75,7 +75,7 @@ export const DashboardNew = () => {
     refetchInterval: 30000,
   });
 
-  const { data: topNodes } = useQuery({
+  const { data: topNodes, isLoading: topNodesLoading } = useQuery({
     queryKey: [...queryKeys.nodes, "ranking", currentNetwork, timeRange],
     queryFn: () => {
       if (timeRange === "hourly") {
@@ -141,15 +141,15 @@ export const DashboardNew = () => {
               label="TOTAL CAPACITY"
               value={String(kpi?.totalCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.totalCapacityChange ?? 0}
+              trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="TOTAL CHANNELS"
               value={String(kpi?.totalChannels ?? 0)}
-              changePercent={12}
-              trending="down"
+              changePercent={kpi?.totalChannelsChange ?? 0}
+              trending={(kpi?.totalChannelsChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
               onViewDetails={() => router.push('/channels')}
             />
@@ -171,32 +171,32 @@ export const DashboardNew = () => {
               label="MIN CAPACITY"
               value={String(kpi?.minChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.minChannelCapacityChange ?? 0}
+              trending={(kpi?.minChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="MAX CAPACITY"
               value={String(kpi?.maxChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.maxChannelCapacityChange ?? 0}
+              trending={(kpi?.maxChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="AVG CAPACITY"
               value={String(kpi?.averageChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.averageChannelCapacityChange ?? 0}
+              trending={(kpi?.averageChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
             <KpiCard
               label="MEDIAN CAPACITY"
               value={String(kpi?.medianChannelCapacity ?? 0)}
               unit="CKB"
-              changePercent={12}
-              trending="up"
+              changePercent={kpi?.medianChannelCapacityChange ?? 0}
+              trending={(kpi?.medianChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
             />
           </div>
@@ -207,8 +207,8 @@ export const DashboardNew = () => {
           <KpiCard
             label="TOTAL ACTIVE NODES"
             value={String(kpi?.totalNodes ?? 0)}
-            changePercent={5.5}
-            trending="down"
+            changePercent={kpi?.totalNodesChange ?? 0}
+            trending={(kpi?.totalNodesChange ?? 0) >= 0 ? "up" : "down"}
             changeLabel="from last week"
             onViewDetails={() => router.push('/nodes')}
           />
@@ -226,6 +226,8 @@ export const DashboardNew = () => {
             actionText="View All"
             onActionClick={() => router.push('/nodes')}
             data={topNodes || []}
+            loading={topNodesLoading}
+            loadingText="Loading nodes ranking..."
             columns={[
               {
                 key: "node_id",

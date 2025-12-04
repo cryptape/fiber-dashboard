@@ -9,6 +9,14 @@ export const KpiDataSchema = z.object({
   maxChannelCapacity: z.number(),
   minChannelCapacity: z.number(),
   medianChannelCapacity: z.number(),
+  // 与上周的变化数据（可选）
+  totalCapacityChange: z.number().optional(),
+  totalNodesChange: z.number().optional(),
+  totalChannelsChange: z.number().optional(),
+  minChannelCapacityChange: z.number().optional(),
+  maxChannelCapacityChange: z.number().optional(),
+  averageChannelCapacityChange: z.number().optional(),
+  medianChannelCapacityChange: z.number().optional(),
 });
 
 export type KpiData = z.infer<typeof KpiDataSchema>;
@@ -133,6 +141,7 @@ export const ActiveAnalysisSchema = z.object({
   total_capacity: z.string(),
   total_nodes: z.string(),
   channel_len: z.string(),
+  end: z.string().optional(), // 时间戳字段
 });
 
 // Rust backend type schemas

@@ -203,7 +203,7 @@ export const Channels = () => {
     {
       key: "channelId",
       label: "Channel ID",
-      width: "w-140", // 固定宽度
+      width: "w-120", // 固定宽度
       sortable: false,
       render: (value, row) => (
         <span
@@ -332,28 +332,27 @@ export const Channels = () => {
       </div>
 
       <GlassCardContainer>
-        {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Loading...
-          </div>
-        ) : tableData.length > 0 ? (
-          <>
-            <Table<ChannelData>
-              columns={columns}
-              data={tableData}
-              onSort={handleSort}
-              defaultSortKey={sortKey}
-              defaultSortState={sortState}
-            />
+        <Table<ChannelData>
+          columns={columns}
+          data={tableData}
+          onSort={handleSort}
+          defaultSortKey={sortKey}
+          defaultSortState={sortState}
+          loading={isLoading}
+          loadingText="Loading channels..."
+          className="min-h-[528px]"
+        />
 
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-              className="mt-4"
-            />
-          </>
-        ) : (
+        {!isLoading && tableData.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            className="mt-4"
+          />
+        )}
+
+        {!isLoading && tableData.length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             No {selectedState} channels found
           </div>

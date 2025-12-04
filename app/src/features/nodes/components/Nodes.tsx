@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
@@ -44,6 +44,11 @@ export const Nodes = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { apiClient, currentNetwork } = useNetwork();
+  const searchParams = useSearchParams();
+  
+  // 检查是否为 Mock 模式
+  const isMockMode = searchParams.get('test') === '1';
+  
   const [currentPage, setCurrentPage] = useState(1);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearchValue, setDebouncedSearchValue] = useState(''); // 防抖后的搜索值
@@ -68,6 +73,8 @@ export const Nodes = () => {
     if (!key) return undefined; // 如果没有排序字段，返回 undefined
     
     switch (key) {
+      case 'channels':
+        return 'channel_count';
       case 'region':
         return 'region';
       case 'lastSeen':
@@ -103,6 +110,20 @@ export const Nodes = () => {
       // 否则使用普通列表接口
       return apiClient.getActiveNodesByPage(backendPage, sortBy, order);
     },
+    refetchInterval: 300000, // 5分钟轮询
+  });
+
+  // 为地图视图获取全量节点和通道数据
+  const { data: allNodesData, isLoading: allNodesLoading } = useQuery({
+    queryKey: ['allNodesForMap', currentNetwork],
+    queryFn: async () => {
+      const [nodes, channels] = await Promise.all([
+        apiClient.fetchAllActiveNodes(),
+        apiClient.fetchAllActiveChannels(),
+      ]);
+      return { nodes, channels };
+    },
+    staleTime: 300000, // 5分钟缓存
     refetchInterval: 300000, // 5分钟轮询
   });
 
@@ -203,29 +224,54 @@ export const Nodes = () => {
   const PAGE_SIZE = 10;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // 转换为地图数据格式
+  // 转换为地图数据格式 - 使用全量节点数据
   const mapData: NodeMapData[] = useMemo(() => {
-    return processedNodes
-      .filter(node => node.loc)
-      .map(node => {
-        const [lat, lng] = (node.loc || "").split(",").map(coord => parseFloat(coord.trim()));
-        return {
-          nodeId: node.node_id,
-          nodeName: node.node_name,
-          city: node.city || "Unknown",
-          country: node.country_or_region || "Unknown",
-          latitude: lat || 0,
-          longitude: lng || 0,
-          capacity: 0, // capacity 已移除，保留字段但设为 0
-        };
-      })
-      .filter(node => node.latitude !== 0 && node.longitude !== 0);
-  }, [processedNodes]);
+    if (!allNodesData?.nodes) return [];
 
-  // 连接数据（不再使用 channels，返回空数组）
+    const total = allNodesData.nodes.length;
+    const nodesWithLoc = allNodesData.nodes.filter(node => node.loc);
+    console.log('[MapData] 无loc过滤数量:', total - nodesWithLoc.length, '总数:', total);
+
+    const mapped = nodesWithLoc.map(node => {
+      const [lat, lng] = (node.loc || "").split(",").map(coord => parseFloat(coord.trim()));
+      return {
+        nodeId: node.node_id,
+        nodeName: node.node_name,
+        city: node.city || "Unknown",
+        country: node.country_or_region || "Unknown",
+        latitude: lat || 0,
+        longitude: lng || 0,
+        capacity: 0, // capacity 已移除，保留字段但设为 0
+      };
+    });
+
+    const nodesWithCoords = mapped.filter(node => node.latitude !== 0 && node.longitude !== 0);
+    console.log('[MapData] 经纬度为0过滤数量:', mapped.length - nodesWithCoords.length, '映射后数:', mapped.length);
+
+    return nodesWithCoords;
+  }, [allNodesData]);
+
+  // 连接数据 - 使用全量通道数据构建连接关系
   const connectionData: NodeConnectionData[] = useMemo(() => {
-    return [];
-  }, []);
+    if (!allNodesData?.channels || !allNodesData?.nodes) return [];
+
+    const totalChannels = allNodesData.channels.length;
+    // 创建节点ID集合，用于快速查找
+    const nodeIdSet = new Set(allNodesData.nodes.map(node => node.node_id));
+
+    const filteredChannels = allNodesData.channels.filter(channel => {
+      // 确保两个节点都存在
+      return nodeIdSet.has(channel.node1) && nodeIdSet.has(channel.node2);
+    });
+
+    console.log('[ConnectionData] 缺失节点过滤数量:', totalChannels - filteredChannels.length, '总通道数:', totalChannels);
+
+    return filteredChannels.map(channel => ({
+      fromNodeId: channel.node1,
+      toNodeId: channel.node2,
+      channelOutpoint: channel.channel_outpoint,
+    }));
+  }, [allNodesData]);
   console.log(mapData, connectionData,'===')
 
   // 列定义（只有服务端支持的字段才标记 sortable）
@@ -258,7 +304,7 @@ export const Nodes = () => {
       key: "channels",
       label: "Channels",
       width: "w-32",
-      sortable: false, // 服务端未提供按 channel_count 排序
+      sortable: true, // 服务端已支持按 channel_count 排序
     },
     {
       key: "region",
@@ -318,7 +364,7 @@ export const Nodes = () => {
       
       {/* Network Map */}
       <GlassCardContainer>
-        {isLoading ? (
+        {allNodesLoading ? (
           <div className="flex items-center justify-center h-[600px]">
             <div className="text-muted-foreground">Loading nodes data...</div>
           </div>
@@ -328,6 +374,7 @@ export const Nodes = () => {
             connections={connectionData}
             height="600px"
             title="Global Nodes Distribution"
+            mock={isMockMode}
           />
         )}
       </GlassCardContainer>
@@ -357,36 +404,31 @@ export const Nodes = () => {
 
 
       <GlassCardContainer>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-muted-foreground">Loading nodes list...</div>
+        <Table<NodeData>
+          columns={columns}
+          data={tableData}
+          onSort={handleSort}
+          className="min-h-[528px]"
+          loading={isLoading}
+          loadingText="Loading nodes list..."
+        />
+
+        {!isLoading && tableData.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            className="mt-4"
+          />
+        )}
+
+        {!isLoading && tableData.length === 0 && (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <div className="text-center">
+              <div className="text-lg font-medium mb-2">No nodes found</div>
+              <div className="text-sm">No nodes available</div>
+            </div>
           </div>
-        ) : (
-          <>
-            <Table<NodeData>
-              columns={columns}
-              data={tableData}
-              onSort={handleSort}
-            />
-
-            {tableData.length > 0 && (
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                className="mt-4"
-              />
-            )}
-
-            {tableData.length === 0 && (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <div className="text-center">
-                  <div className="text-lg font-medium mb-2">No nodes found</div>
-                  <div className="text-sm">No nodes available</div>
-                </div>
-              </div>
-            )}
-          </>
         )}
       </GlassCardContainer>
     </div>
