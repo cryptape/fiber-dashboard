@@ -197,7 +197,7 @@ export default function ChannelDetailPage() {
             name={node1Info.node_name || "Unknown Node"}
             status="Active"
             hash={node1Info.node_id}
-            location={node1Info.city && node1Info.country ? `${node1Info.city}, ${node1Info.country}` : node1Info.country || "Unknown"}
+            location={node1Info.city && node1Info.country_or_region ? `${node1Info.city}, ${node1Info.country_or_region}` : node1Info.country_or_region || "Unknown"}
             lastSeen={formatTimestamp(node1Info.announce_timestamp)}
             topExtra={
               <div className="flex items-center justify-between">
