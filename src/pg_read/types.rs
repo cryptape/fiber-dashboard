@@ -14,7 +14,7 @@ use crate::{
 };
 
 const SELECT_HOURLY_NODES_SQL: &str = "
-SELECT DISTINCT ON (n.node_id)
+SELECT
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
   n.node_name,
@@ -28,10 +28,9 @@ SELECT DISTINCT ON (n.node_id)
   n.loc,
   n.channel_count
 FROM {nodes} n
-WHERE n.bucket >= $1::timestamp
-ORDER BY n.node_id, {sort_by} {order}";
+ORDER BY {sort_by} {order}";
 
-const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
+const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT
   channel_outpoint,
   bucket AS last_seen_hour,
   node1,
@@ -227,7 +226,7 @@ impl HourlyNodeInfoDBRead {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql_count = format!(
             "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp and country_or_region = $2",
-            params.net.online_nodes_hourly()
+            params.net.mv_online_nodes()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(hour_bucket)
@@ -237,7 +236,7 @@ impl HourlyNodeInfoDBRead {
             .get(0);
         let sql = format!(
             r#"
-        SELECT DISTINCT ON (node_id)
+        SELECT
             node_id,
             bucket AS last_seen_hour,
             node_name,
@@ -252,9 +251,9 @@ impl HourlyNodeInfoDBRead {
             channel_count
         FROM {}
         WHERE bucket >= $1::timestamp and country_or_region = $2
-        ORDER BY node_id, {} {}
+        ORDER BY {} {}
     "#,
-            params.net.online_nodes_hourly(),
+            params.net.mv_online_nodes(),
             params.sort_by.as_str(),
             params.order.as_str()
         );
@@ -275,7 +274,7 @@ impl HourlyNodeInfoDBRead {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql_count = format!(
             "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp AND ((POSITION($2 IN n.node_id) > 0) OR (POSITION($2 IN n.node_name) > 0))",
-            params.net.online_nodes_hourly()
+            params.net.mv_online_nodes()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(hour_bucket)
@@ -285,7 +284,7 @@ impl HourlyNodeInfoDBRead {
             .get(0);
         let sql = format!(
             r#"
-        SELECT DISTINCT ON (node_id)
+        SELECT
             node_id,
             bucket AS last_seen_hour,
             node_name,
@@ -299,9 +298,9 @@ impl HourlyNodeInfoDBRead {
             loc,
             channel_count
         FROM {}
-        WHERE bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
-        ORDER BY node_id, {} {} "#,
-            params.net.online_nodes_hourly(),
+        WHERE n.bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
+        ORDER BY {} {} "#,
+            params.net.mv_online_nodes(),
             params.sort_by.as_str(),
             params.order.as_str()
         );
@@ -322,7 +321,7 @@ impl HourlyNodeInfoDBRead {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql_count = format!(
             "SELECT COUNT(DISTINCT n.node_id) FROM {} n WHERE n.bucket >= $1::timestamp",
-            params.net.online_nodes_hourly()
+            params.net.mv_online_nodes()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(hour_bucket)
@@ -330,7 +329,7 @@ impl HourlyNodeInfoDBRead {
             .await?
             .get(0);
         let sql = SELECT_HOURLY_NODES_SQL
-            .replace("{nodes}", params.net.online_nodes_hourly())
+            .replace("{nodes}", params.net.mv_online_nodes())
             .replace("{sort_by}", params.sort_by.as_str())
             .replace("{order}", params.order.as_str());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
@@ -411,7 +410,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
             capacity: {
                 let mut capacity_bytes = [0u8; 16];
                 faster_hex::hex_decode(info.capacity.as_bytes(), &mut capacity_bytes).unwrap();
-                u128::from_le_bytes(capacity_bytes)
+                u128::from_be_bytes(capacity_bytes)
             },
             chain_hash: {
                 let mut hash_bytes = [0u8; 32];
@@ -633,7 +632,7 @@ impl HourlyChannelInfoDBRead {
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let sql_count = format!(
             "SELECT COUNT(DISTINCT channel_outpoint) FROM {} n WHERE n.bucket >= $1::timestamp",
-            params.net.online_channels_hourly()
+            params.net.mv_online_channels()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(hour_bucket)
@@ -641,7 +640,7 @@ impl HourlyChannelInfoDBRead {
             .await?
             .get(0);
         let sql = SELECT_HOURLY_CHANNELS_SQL
-            .replace("{1}", params.net.online_channels_hourly())
+            .replace("{1}", params.net.mv_online_channels())
             .replace("{2}", params.net.udt_infos());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
@@ -664,7 +663,7 @@ impl HourlyChannelInfoDBRead {
         }
         let sql_count = format!(
             "SELECT COUNT(DISTINCT channel_outpoint) FROM {} n WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp",
-            params.net.online_channels_hourly()
+            params.net.mv_online_channels()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(start)
@@ -673,7 +672,7 @@ impl HourlyChannelInfoDBRead {
             .await?
             .get(0);
         let sql = SELECT_MONTHLY_CHANNELS_SQL
-            .replace("{1}", params.net.online_channels_hourly())
+            .replace("{1}", params.net.mv_online_channels())
             .replace("{2}", params.net.udt_infos());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(start)

@@ -279,7 +279,7 @@ impl From<(ChannelInfo, Network)> for ChannelInfoDBSchema {
             channel_outpoint: hex_string(channel_info.channel_outpoint.as_bytes()),
             node1: String::from_utf8(channel_info.node1.to_vec()).unwrap(),
             node2: String::from_utf8(channel_info.node2.to_vec()).unwrap(),
-            capacity: hex_string(channel_info.capacity.to_le_bytes().as_ref()),
+            capacity: hex_string(channel_info.capacity.to_be_bytes().as_ref()),
             chain_hash: hex_string(channel_info.chain_hash.as_bytes()),
             udt_type_script: channel_info
                 .udt_type_script

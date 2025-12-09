@@ -1,7 +1,9 @@
 use std::{sync::LazyLock, vec};
 
 use fiber_dashbord_backend::{
-    RpcClient, create_pg_pool, get_pg_pool, init_db,
+    RpcClient,
+    clock_timer::ClockTimer,
+    create_pg_pool, get_pg_pool, init_db,
     pg_write::{
         ChannelInfoDBSchema, channel_states_monitor, daily_statistics, from_rpc_to_db_schema,
         init_global_cache, insert_batch,
@@ -34,6 +36,7 @@ fn main() {
         init_global_cache(pool).await;
         tokio::spawn(daily_commit());
         tokio::spawn(timed_commit_states());
+        tokio::spawn(hourly_fresh());
 
         http_server().await;
     });
@@ -302,7 +305,7 @@ async fn timed_commit_states() {
 
 async fn daily_commit() {
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(60 * 60 * 4)).await;
+        let trigger_time = ClockTimer::new_daily(0, 11, false).tick().await;
         let pool = get_pg_pool();
         daily_statistics(
             pool,
@@ -311,6 +314,33 @@ async fn daily_commit() {
         )
         .await
         .unwrap();
-        log::info!("Daily statistics committed");
+        log::info!("Daily statistics committed at {}", trigger_time);
+    }
+}
+
+async fn hourly_fresh() {
+    loop {
+        let trigger_time = ClockTimer::new_hourly(10, 30, false).tick().await;
+        let pool = get_pg_pool();
+        let nets = NETS.iter();
+        for net in nets {
+            let refresh_nodes_sql = format!(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
+                net.mv_online_nodes()
+            );
+            let refresh_channels_sql = format!(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
+                net.mv_online_channels()
+            );
+            sqlx::query(&refresh_nodes_sql)
+                .execute(pool)
+                .await
+                .expect("Failed to refresh continuous aggregate");
+            sqlx::query(&refresh_channels_sql)
+                .execute(pool)
+                .await
+                .expect("Failed to refresh continuous aggregate");
+        }
+        log::info!("Hourly continuous aggregates refreshed at {}", trigger_time);
     }
 }
