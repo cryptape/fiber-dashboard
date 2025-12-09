@@ -117,10 +117,19 @@ export const Nodes = () => {
   const { data: allNodesData, isLoading: allNodesLoading } = useQuery({
     queryKey: ['allNodesForMap', currentNetwork],
     queryFn: async () => {
+      const startTime = performance.now();
+      console.log('[MapData时间统计] 开始获取全量节点和通道数据');
+      
       const [nodes, channels] = await Promise.all([
         apiClient.fetchAllActiveNodes(),
         apiClient.fetchAllActiveChannels(),
       ]);
+      
+      const endTime = performance.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
+      console.log(`[MapData时间统计] 数据获取完成，耗时: ${duration}s`);
+      console.log(`[MapData时间统计] 节点数量: ${nodes.length}, 通道数量: ${channels.length}`);
+      
       return { nodes, channels };
     },
     staleTime: 300000, // 5分钟缓存
@@ -226,7 +235,13 @@ export const Nodes = () => {
 
   // 转换为地图数据格式 - 使用全量节点数据
   const mapData: NodeMapData[] = useMemo(() => {
-    if (!allNodesData?.nodes) return [];
+    const startTime = performance.now();
+    console.log('[MapData时间统计] 开始计算mapData');
+    
+    if (!allNodesData?.nodes) {
+      console.log('[MapData时间统计] 无数据，返回空数组');
+      return [];
+    }
 
     const total = allNodesData.nodes.length;
     const nodesWithLoc = allNodesData.nodes.filter(node => node.loc);
@@ -247,6 +262,10 @@ export const Nodes = () => {
 
     const nodesWithCoords = mapped.filter(node => node.latitude !== 0 && node.longitude !== 0);
     console.log('[MapData] 经纬度为0过滤数量:', mapped.length - nodesWithCoords.length, '映射后数:', mapped.length);
+
+    const endTime = performance.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`[MapData时间统计] mapData计算完成，耗时: ${duration}s, 最终节点数: ${nodesWithCoords.length}`);
 
     return nodesWithCoords;
   }, [allNodesData]);
@@ -281,12 +300,11 @@ export const Nodes = () => {
       label: 'Node ID',
       width: 'w-36',
       sortable: false,
-      render: (value, row) => {
+      render: (value) => {
         const shortId = (value as string).slice(0, 8) + '...' + (value as string).slice(-4);
         return (
           <span
-            className="text-primary cursor-pointer hover:underline font-mono text-xs"
-            onClick={() => router.push(`/node/${row.nodeId}`)}
+            className="text-primary font-mono text-xs"
             title={value as string}
           >
             {shortId}
@@ -363,9 +381,9 @@ export const Nodes = () => {
       />
       
       {/* Network Map */}
-      <GlassCardContainer>
+      <GlassCardContainer className="overflow-hidden">
         {allNodesLoading ? (
-          <div className="flex items-center justify-center h-[600px]">
+          <div className="flex items-center justify-center h-[400px] md:h-[600px]">
             <div className="text-muted-foreground">Loading nodes data...</div>
           </div>
         ) : (
@@ -373,17 +391,18 @@ export const Nodes = () => {
             nodes={mapData}
             connections={connectionData}
             height="600px"
+            mobileHeight="400px"
             title="Global Nodes Distribution"
             mock={isMockMode}
           />
         )}
       </GlassCardContainer>
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <span className="type-h2">
           Active Nodes
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <SearchInput
             value={searchValue}
             placeholder="Search nodes by ID or name"
@@ -391,19 +410,20 @@ export const Nodes = () => {
               setSearchValue(value);
             }}
             onSearch={handleSearch}
+            className="w-full sm:w-80"
           />
           <CustomSelect
             options={locationOptions}
             value={selectedRegion}
             onChange={handleRegionChange}
             placeholder="All Locations"
-            className="w-[180px]"
+            className="w-full sm:w-[180px]"
           />
         </div>
       </div>
 
 
-      <GlassCardContainer>
+      <GlassCardContainer className="overflow-x-auto">
         <Table<NodeData>
           columns={columns}
           data={tableData}
@@ -411,6 +431,7 @@ export const Nodes = () => {
           className="min-h-[528px]"
           loading={isLoading}
           loadingText="Loading nodes list..."
+          onRowClick={(row) => router.push(`/node/${row.nodeId}`)}
         />
 
         {!isLoading && tableData.length > 0 && (

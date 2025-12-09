@@ -112,20 +112,13 @@ export const NodeDetail = () => {
     {
       key: "channelId",
       label: "Channel ID",
-      width: "w-100",
-      render: (value) => (
-        <button
-          onClick={() => router.push(`/channel/${value}`)}
-          className="text-primary hover:underline cursor-pointer text-left truncate w-full"
-        >
-          {value as string}
-        </button>
-      ),
+      width: "w-[240px]",
+      className: "truncate",
     },
     {
       key: "status",
       label: "Status",
-      width: "w-32",
+      width: "w-[140px]",
       render: (value) => (
         <StatusBadge text={value as string} status={value as "Active" | "Inactive"} />
       ),
@@ -133,24 +126,24 @@ export const NodeDetail = () => {
     {
       key: "capacity",
       label: "Capacity (CKB)",
-      width: "w-40",
+      width: "w-[160px]",
       sortable: false,
       render: (value) => (
-        <span className="text-purple font-semibold truncate block">
+        <div className="text-purple font-semibold truncate">
           {value as string}
-        </span>
+        </div>
       ),
     },
     {
       key: "createdOn",
       label: "Created on",
-      width: "w-36",
+      width: "w-[192px]",
       sortable: true,
     },
     {
       key: "lastCommittedOn",
       label: "Last committed on",
-      width: "w-50",
+      width: "w-[192px]",
       sortable: true,
     },
   ];
@@ -163,10 +156,6 @@ export const NodeDetail = () => {
         hash={nodeInfo?.node_id || ""}
         location={locationText}
         lastSeen={lastSeenText}
-        onCopyHash={() => {
-          const text = nodeInfo?.node_id || "";
-          if (text) navigator.clipboard.writeText(text);
-        }}
       />
       
       {/* KPI 卡片 */}
@@ -186,7 +175,9 @@ export const NodeDetail = () => {
           unit="CKB"
         />
       </div>
-      <SectionHeader title={`Channels(${totalChannels})`} />
+      <div className="pt-3">
+        <SectionHeader title={`Channels(${totalChannels})`} />
+      </div>
       
       {/* 表格和分页 */}
       <GlassCardContainer className="mt-4">
@@ -202,6 +193,7 @@ export const NodeDetail = () => {
           loading={channelsLoading}
           loadingText="Loading channels..."
           className="min-h-[528px]"
+          onRowClick={(row) => router.push(`/channel/${row.channelId}`)}
         />
         
         {!channelsLoading && paginatedData.length > 0 && (

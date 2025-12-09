@@ -28,6 +28,7 @@ interface NodeNetworkMapProps {
   connections?: NodeConnectionData[];
   currentNodeId?: string;
   height?: string;
+  mobileHeight?: string; // 移动端高度
   className?: string;
   title?: string;
   mock?: boolean; // Mock模式：对相同经纬度节点添加随机偏移
@@ -38,6 +39,7 @@ export default function NodeNetworkMap({
   connections = [],
   currentNodeId,
   height = "600px",
+  mobileHeight,
   className = "",
   title = "Global Nodes Distribution",
   mock = false,
@@ -358,11 +360,13 @@ export default function NodeNetworkMap({
     });
 
     // 使用保存的缩放和中心位置，如果不存在则使用默认值
+    // 根据屏幕宽度判断是否为移动端，只在移动端将地图中心往上移
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     const zoom = currentZoom ?? 1.2;
-    const mainCenter = currentCenter ?? [0, 20];
+    const mainCenter = currentCenter ?? (isMobile ? [0, -15] : [0, 0]); // 移动端向上移动，桌面端和平板不移动
     const shadowCenter: [number, number] = currentCenter 
       ? [currentCenter[0], currentCenter[1] + 5] 
-      : [0, 25];
+      : (isMobile ? [0, -10] : [0, 5]); // 阴影层对应调整
 
     const option: echarts.EChartsOption = {
       backgroundColor: "transparent",
@@ -564,7 +568,18 @@ export default function NodeNetworkMap({
           symbolSize: (value: unknown, params: unknown) => {
             const p = params as { data?: { channelCount?: number } };
             const channelCount = p.data?.channelCount || 0;
-            // 根据 channelCount 计算大小，范围 12-24
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+            
+            // 移动端节点统一缩小
+            if (isMobile) {
+              if (channelCount >= 40) return 12;
+              if (channelCount >= 30) return 10;
+              if (channelCount >= 20) return 9;
+              if (channelCount >= 10) return 6;
+              return 8;
+            }
+            
+            // 桌面端和平板保持原大小
             if (channelCount >= 40) return 16;
             if (channelCount >= 30) return 14;
             if (channelCount >= 20) return 12;
@@ -674,14 +689,33 @@ export default function NodeNetworkMap({
       <div
         ref={chartRef}
         style={{
-          height,
+          height: mobileHeight && typeof window !== 'undefined' && window.innerWidth < 768 ? mobileHeight : height,
           position: "relative",
           // filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.01))",
         }}
+        className="w-full"
       />
 
-      {/* 左下角图例 */}
-      <div className="absolute left-4 bottom-4 z-10 flex flex-col gap-2">
+      {/* 移动端左下角：Show channels 按钮 */}
+      <div className="absolute left-1 bottom-16 z-10 md:hidden">
+        <ChannelsToggle 
+          showChannels={showChannels} 
+          onToggle={() => setShowChannels(!showChannels)} 
+        />
+      </div>
+
+      {/* 移动端右下角：缩放控件 */}
+      <div className="absolute right-1 bottom-16 z-10 md:hidden">
+        <MapZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
+      </div>
+
+      {/* 移动端底部：图例 */}
+      <div className="absolute bottom-1 left-1 right-1 z-10 md:hidden">
+        <ChannelsLegend />
+      </div>
+
+      {/* 桌面端左下角控件（图例 + Toggle）*/}
+      <div className="hidden md:flex absolute left-4 bottom-4 z-10 flex-col gap-2">
         <ChannelsLegend />
         <ChannelsToggle 
           showChannels={showChannels} 
@@ -689,8 +723,8 @@ export default function NodeNetworkMap({
         />
       </div>
 
-      {/* 右下角缩放控制 */}
-      <div className="absolute right-4 bottom-4 z-10">
+      {/* 桌面端右下角缩放控制 */}
+      <div className="hidden md:block absolute right-4 bottom-4 z-10">
         <MapZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
       </div>
 

@@ -15,7 +15,9 @@ import { formatCompactNumber, hexToDecimal } from "@/lib/utils";
 export default function ChannelDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const channelOutpoint = params.channelOutpoint ? decodeURIComponent(params.channelOutpoint as string) : "";
+  const channelOutpoint = params.channelOutpoint
+    ? decodeURIComponent(params.channelOutpoint as string)
+    : "";
   const { apiClient, currentNetwork } = useNetwork();
 
   // 获取通道信息
@@ -64,10 +66,12 @@ export default function ChannelDetailPage() {
         <div className="card-zed p-8 text-center">
           <h2 className="text-xl font-semibold mb-2">Channel Not Found</h2>
           <p className="text-secondary">
-            The channel with ID {channelOutpoint} could not be found or is not accessible.
+            The channel with ID {channelOutpoint} could not be found or is not
+            accessible.
           </p>
           <p className="text-sm text-secondary mt-2">
-            Error: {channelError?.message || stateError?.message || "Unknown error"}
+            Error:{" "}
+            {channelError?.message || stateError?.message || "Unknown error"}
           </p>
         </div>
       </div>
@@ -108,7 +112,7 @@ export default function ChannelDetailPage() {
 
   const formatTimestamp = (timestamp: string | number) => {
     let date: Date;
-    
+
     if (typeof timestamp === "string") {
       if (timestamp.startsWith("0x")) {
         // 十六进制格式，需要转换
@@ -123,23 +127,21 @@ export default function ChannelDetailPage() {
     } else {
       date = new Date(timestamp);
     }
-    
+
     // 检查是否是有效日期
     if (isNaN(date.getTime())) {
       return "Invalid Date";
     }
-    
-    return date.toLocaleString("en-US", { 
-      month: "short", 
-      day: "numeric", 
+
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit"
+      second: "2-digit",
     });
   };
-
-
 
   return (
     <div className="flex flex-col gap-5">
@@ -167,8 +169,11 @@ export default function ChannelDetailPage() {
       </div>
 
       {/* Channel Transactions */}
-      <SectionHeader title={`Channel Transactions (${channelState.txs.length})`} />
-     
+      <div className="mt-3">
+        <SectionHeader
+          title={`Channel Transactions (${channelState.txs.length})`}
+        />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {channelState.txs.length > 0 ? (
           channelState.txs.map((tx, index) => (
@@ -178,6 +183,7 @@ export default function ChannelDetailPage() {
               showStatus={false}
               hash={tx.tx_hash}
               topRightLabel={`BLOCK #${tx.block_number}`}
+              commitmentArgs={tx.commitment_args ?? "-"}
             />
           ))
         ) : (
@@ -188,7 +194,9 @@ export default function ChannelDetailPage() {
       </div>
 
       {/* Nodes */}
-      <SectionHeader title="Nodes" />
+      <div className="mt-3">
+        <SectionHeader title="Nodes" />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Node 1 */}
@@ -197,15 +205,21 @@ export default function ChannelDetailPage() {
             name={node1Info.node_name || "Unknown Node"}
             status="Active"
             hash={node1Info.node_id}
-            location={node1Info.city && node1Info.country_or_region ? `${node1Info.city}, ${node1Info.country_or_region}` : node1Info.country_or_region || "Unknown"}
+            location={
+              node1Info.city && node1Info.country_or_region
+                ? `${node1Info.city}, ${node1Info.country_or_region}`
+                : node1Info.country_or_region || "Unknown"
+            }
             lastSeen={formatTimestamp(node1Info.announce_timestamp)}
             topExtra={
               <div className="flex items-center justify-between">
-                <div className="type-button1 text-secondary">
-                  NODE #1
-                </div>
+                <div className="type-label text-secondary">NODE #1</div>
                 <button
-                  onClick={() => router.push(`/node/${encodeURIComponent(node1Info.node_id)}`)}
+                  onClick={() =>
+                    router.push(
+                      `/node/${encodeURIComponent(node1Info.node_id)}`
+                    )
+                  }
                   className="type-button1 text-purple cursor-pointer hover:underline"
                 >
                   View details
@@ -223,15 +237,21 @@ export default function ChannelDetailPage() {
             name={node2Info.node_name || "Unknown Node"}
             status="Active"
             hash={node2Info.node_id}
-            location={node2Info.city && node2Info.country_or_region ? `${node2Info.city}, ${node2Info.country_or_region}` : node2Info.country_or_region || "Unknown"}
+            location={
+              node2Info.city && node2Info.country_or_region
+                ? `${node2Info.city}, ${node2Info.country_or_region}`
+                : node2Info.country_or_region || "Unknown"
+            }
             lastSeen={formatTimestamp(node2Info.announce_timestamp)}
             topExtra={
               <div className="flex items-center justify-between">
-                <div className="type-button1 text-secondary">
-                  NODE #2
-                </div>  
+                <div className="type-label text-secondary">NODE #2</div>
                 <button
-                  onClick={() => router.push(`/node/${encodeURIComponent(node2Info.node_id)}`)}
+                  onClick={() =>
+                    router.push(
+                      `/node/${encodeURIComponent(node2Info.node_id)}`
+                    )
+                  }
                   className="type-button1 text-purple cursor-pointer hover:underline"
                 >
                   View details

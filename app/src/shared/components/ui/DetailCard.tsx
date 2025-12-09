@@ -2,6 +2,7 @@ import React from "react";
 import { GlassCardContainer } from "./GlassCardContainer";
 import { StatusBadge, StatusType } from "./StatusBadge";
 import Image from "next/image";
+import { CopyButton } from "./CopyButton";
 
 export interface DetailCardProps {
   /** 节点名称 */
@@ -20,14 +21,14 @@ export interface DetailCardProps {
   createdOn?: string;
   /** 最后提交时间 */
   lastCommitted?: string;
+  /** Commitment Args */
+  commitmentArgs?: string;
   /** 右上角标签（如 Block Number） */
   topRightLabel?: string;
   /** 顶部额外内容（如 NODE #1 标签） */
   topExtra?: React.ReactNode;
   /** 自定义类名 */
   className?: string;
-  /** 复制哈希的回调函数 */
-  onCopyHash?: () => void;
 }
 
 export const DetailCard: React.FC<DetailCardProps> = ({
@@ -39,15 +40,11 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   lastSeen,
   createdOn,
   lastCommitted,
+  commitmentArgs,
   topRightLabel,
   topExtra,
   className = "",
-  onCopyHash,
 }) => {
-  const handleCopyHash = () => {
-    navigator.clipboard.writeText(hash);
-    onCopyHash?.();
-  };
 
   return (
     <GlassCardContainer className={className}>
@@ -71,23 +68,17 @@ export const DetailCard: React.FC<DetailCardProps> = ({
         </div>
 
         {/* 哈希值和复制按钮 */}
-        <div className="inline-flex justify-start items-center gap-2 w-full">
-          <div className="text-purple text-base leading-7 font-['Lato'] break-all flex-1">
+        <div className="inline-flex justify-start items-start gap-2 w-full">
+          <div className="text-body text-secondary w-32 flex-shrink-0">
+            Tx hash:
+          </div>
+          <div className="text-purple text-sm leading-5 break-all flex-1">
             {hash}
           </div>
-          <button
-            onClick={handleCopyHash}
-            className="w-4 h-4 relative cursor-pointer hover:opacity-70 transition-opacity flex-shrink-0"
-            aria-label="复制哈希"
-          >
-            <Image
-              src="/copy.svg"
-              alt="复制"
-              width={16}
-              height={16}
-              className="w-full h-full"
-            />
-          </button>
+          <CopyButton
+            text={hash}
+            ariaLabel="复制哈希"
+          />
         </div>
 
         {/* 位置和最后出现时间 */}
@@ -133,6 +124,24 @@ export const DetailCard: React.FC<DetailCardProps> = ({
                   Last committed: {lastCommitted}
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Commitment Args */}
+        {commitmentArgs && (
+          <div className="inline-flex justify-start items-start gap-2 w-full">
+            <div className="text-body text-secondary w-32 flex-shrink-0">
+              Commitment Args:
+            </div>
+            <div className="text-purple text-sm leading-5 break-all flex-1">
+              {commitmentArgs}
+            </div>
+            {commitmentArgs !== "-" && (
+              <CopyButton
+                text={commitmentArgs}
+                ariaLabel="复制 Commitment Args"
+              />
             )}
           </div>
         )}

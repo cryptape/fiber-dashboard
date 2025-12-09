@@ -103,7 +103,7 @@ export function CustomMenu({
       {isOpen && (
         <div 
           ref={menuRef}
-          className="glass-card absolute top-[52px] right-0 left-0 p-5 rounded-2xl flex flex-col justify-start items-center gap-3 z-[9999]"
+          className=" bg-popover absolute top-[52px] right-0 left-0 p-5 rounded-2xl flex flex-col justify-start items-center gap-3 z-[9999]"
         >
           {/* 菜单项部分 */}
           <div className="self-stretch flex flex-col justify-start items-start">

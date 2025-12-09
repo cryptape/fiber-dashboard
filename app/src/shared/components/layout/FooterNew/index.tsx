@@ -1,4 +1,8 @@
+"use client";
+
 import Image from 'next/image';
+import { useState } from 'react';
+import { Tooltip } from '@/shared/components/ui/Tooltip';
 import './index.css';
 
 const footerLinks = {
@@ -21,6 +25,8 @@ const footerLinks = {
 };
 
 export default function FooterNew() {
+  const [hoveredLink, setHoveredLink] = useState<string | null>(null);
+
   return (
     <footer className="footer-responsive glass-card glass-card-border w-full">
       <div className="flex flex-col gap-5">
@@ -39,16 +45,22 @@ export default function FooterNew() {
             </div>
             <div className="flex gap-2">
               {footerLinks.social.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.href}
-                  target={link.href.startsWith('http') ? '_blank' : undefined}
-                  rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  className="w-10 h-10 rounded-lg flex justify-center items-center hover:opacity-80 transition-opacity"
-                  style={{ border: '1px solid #FFF', background: 'rgba(255, 255, 255, 0.30)' }}
-                >
-                  <Image src={link.icon} alt={link.name} width={16} height={16} />
-                </a>
+                <Tooltip key={link.name} content={link.name} show={hoveredLink === link.name}>
+                  <a
+                    href={link.href}
+                    target={link.href.startsWith('http') ? '_blank' : undefined}
+                    rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    className="w-10 h-10 rounded-lg flex justify-center items-center transition-all"
+                    style={{ 
+                      border: '1px solid #FFF', 
+                      background: hoveredLink === link.name ? 'var(--surface-popover)' : 'rgba(255, 255, 255, 0.30)' 
+                    }}
+                    onMouseEnter={() => setHoveredLink(link.name)}
+                    onMouseLeave={() => setHoveredLink(null)}
+                  >
+                    <Image src={link.icon} alt={link.name} width={16} height={16} />
+                  </a>
+                </Tooltip>
               ))}
             </div>
           </div>

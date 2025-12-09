@@ -150,6 +150,9 @@
   .text-on {
     color: var(--text-on);
   }
+  .text-on-color {
+    color: var(--text-on);
+  }
 
   .bg-layer {
     background-color: var(--surface-layer);

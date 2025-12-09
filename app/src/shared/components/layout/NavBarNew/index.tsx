@@ -93,6 +93,18 @@ export default function NavBarNew() {
     getTabIdFromPath(pathname)
   );
 
+  // 监听页面滚动，控制背景色
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 64);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // 监听路由变化,同步更新 selectedTab
   useEffect(() => {
     const tabId = getTabIdFromPath(pathname);
@@ -113,11 +125,14 @@ export default function NavBarNew() {
   };
 
   return (
-    <nav className="navbar-fixed z-50">
+    <nav className={`navbar-fixed z-50 transition-colors duration-300 ${isScrolled ? 'navbar-scrolled' : ''}`}>
       <div className="flex items-center justify-between relative h-12">
         {/* Left item - Logo */}
         <div className="flex items-center">
-          <div className="glass-card flex justify-center items-center w-12 h-12 p-2.5 rounded-full shrink-0 lg:w-[207px] lg:h-12 lg:gap-2.5 lg:rounded-[40px]">
+          <div 
+            className="glass-card flex justify-center items-center w-12 h-12 p-2.5 rounded-full shrink-0 lg:w-[207px] lg:h-12 lg:gap-2.5 lg:rounded-[40px] cursor-pointer"
+            onClick={() => router.push('/')}
+          >
             {/* Desktop Logo */}
             <div className="hidden lg:flex items-center gap-2">
               <Image src="/logo_m.svg" alt="Fiber" width={17} height={24} />

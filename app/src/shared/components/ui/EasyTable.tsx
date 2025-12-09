@@ -52,7 +52,7 @@ export const EasyTable = ({
             {actionText && onActionClick && (
               <button
                 onClick={onActionClick}
-                className="text-purple type-caption hover:opacity-80 hover:underline transition-opacity cursor-pointer"
+                className="text-purple type-button2 hover:opacity-80 hover:underline transition-opacity cursor-pointer"
               >
                 {actionText}
               </button>

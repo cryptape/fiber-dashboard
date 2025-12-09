@@ -205,10 +205,9 @@ export const Channels = () => {
       label: "Channel ID",
       width: "w-120", // 固定宽度
       sortable: false,
-      render: (value, row) => (
+      render: (value) => (
         <span
-          className="text-primary cursor-pointer hover:underline truncate block w-full"
-          onClick={() => router.push(`/channel/${row.channelId}`)}
+          className="text-primary truncate block w-full"
           title={value as string} // 鼠标悬停显示完整ID
         >
           {value as string}
@@ -231,13 +230,13 @@ export const Channels = () => {
     {
       key: "createdOn",
       label: "Created on",
-      width: "w-40",
+      width: "w-192",
       sortable: true,
     },
     {
       key: "lastCommitted",
       label: "Last committed",
-      width: "w-40",
+      width: "w-192",
       sortable: true,
     },
   ];
@@ -341,6 +340,7 @@ export const Channels = () => {
           loading={isLoading}
           loadingText="Loading channels..."
           className="min-h-[528px]"
+          onRowClick={(row) => router.push(`/channel/${row.channelId}`)}
         />
 
         {!isLoading && tableData.length > 0 && (

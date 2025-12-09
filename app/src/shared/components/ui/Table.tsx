@@ -26,6 +26,7 @@ export interface TableProps<T = Record<string, unknown>> {
   className?: string;
   loading?: boolean;
   loadingText?: string;
+  onRowClick?: (row: T) => void;
 }
 
 export const Table = <T extends Record<string, unknown>>({
@@ -37,6 +38,7 @@ export const Table = <T extends Record<string, unknown>>({
   className = '',
   loading = false,
   loadingText = 'Loading...',
+  onRowClick,
 }: TableProps<T>) => {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey || null);
   const [sortState, setSortState] = useState<SortState>(defaultSortState);
@@ -66,9 +68,9 @@ export const Table = <T extends Record<string, unknown>>({
 
   return (
     <Tooltip.Provider delayDuration={200}>
-      <div className="relative">
+      <div className="relative w-full">
         <div className={`w-full overflow-x-auto ${className}`}>
-          <div className="flex flex-col min-w-max">
+          <div className="flex flex-col" style={{ minWidth: '800px' }}>
             {/* Table Header */}
             <div className="inline-flex">
               {columns.map((column) => {
@@ -109,11 +111,11 @@ export const Table = <T extends Record<string, unknown>>({
                           {column.infoTooltip && (
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="bg-[var(--bg-layer)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-primary type-body shadow-lg max-w-[240px] z-50"
+                                className="bg-[var(--surface-inverse)] rounded-lg px-3 py-2 text-sm text-on-color type-body shadow-lg max-w-[240px] z-50"
                                 sideOffset={5}
                               >
                                 {column.infoTooltip}
-                                <Tooltip.Arrow className="fill-[var(--bg-layer)]" />
+                                <Tooltip.Arrow className="fill-[var(--surface-inverse)]" />
                               </Tooltip.Content>
                             </Tooltip.Portal>
                           )}
@@ -130,7 +132,25 @@ export const Table = <T extends Record<string, unknown>>({
               {data.map((row, rowIndex) => (
                 <div
                   key={rowIndex}
-                  className="border-b border-color inline-flex"
+                  className={`border-b border-color inline-flex transition-colors ${
+                    onRowClick ? 'cursor-pointer' : ''
+                  }`}
+                  style={{
+                    ...(onRowClick && {
+                      transition: 'background-color 0.2s',
+                    }),
+                  }}
+                  onMouseEnter={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-layer-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = '';
+                    }
+                  }}
+                  onClick={() => onRowClick?.(row)}
                 >
                   {columns.map((column) => (
                     <div
@@ -139,15 +159,20 @@ export const Table = <T extends Record<string, unknown>>({
                         column.width || 'flex-1'
                       }`}
                     >
-                      <div
-                        className={`text-sm leading-5 w-full ${
-                          column.className || 'text-primary font-normal'
-                        }`}
-                      >
-                        {column.render
-                          ? column.render(row[column.key], row)
-                          : (row[column.key] as ReactNode)}
-                      </div>
+                      {column.render ? (
+                        <div className="w-full min-w-0">
+                          {column.render(row[column.key], row)}
+                        </div>
+                      ) : (
+                        <div
+                          className={`text-sm leading-5 w-full min-w-0 text-primary font-normal ${
+                            column.className || ''
+                          }`}
+                          title={String(row[column.key] || '')}
+                        >
+                          {row[column.key] as ReactNode}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
