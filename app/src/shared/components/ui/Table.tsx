@@ -72,7 +72,7 @@ export const Table = <T extends Record<string, unknown>>({
         <div className={`w-full overflow-x-auto ${className}`}>
           <div className="flex flex-col" style={{ minWidth: '800px' }}>
             {/* Table Header */}
-            <div className="inline-flex">
+            <div className="flex w-full">
               {columns.map((column) => {
                 const isCurrentSort = sortKey === column.key;
                 const currentSortState = isCurrentSort ? sortState : 'none';
@@ -132,7 +132,7 @@ export const Table = <T extends Record<string, unknown>>({
               {data.map((row, rowIndex) => (
                 <div
                   key={rowIndex}
-                  className={`border-b border-color inline-flex transition-colors ${
+                  className={`border-b border-color flex w-full transition-colors ${
                     onRowClick ? 'cursor-pointer' : ''
                   }`}
                   style={{
@@ -165,7 +165,7 @@ export const Table = <T extends Record<string, unknown>>({
                         </div>
                       ) : (
                         <div
-                          className={`text-sm leading-5 w-full min-w-0 text-primary font-normal ${
+                          className={`text-sm leading-5 w-full text-primary font-normal truncate ${
                             column.className || ''
                           }`}
                           title={String(row[column.key] || '')}

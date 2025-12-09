@@ -6,20 +6,24 @@
   right: var(--spacing-mobile);
 }
 
-/* Scrolled state - only on tablet and desktop */
-@media (min-width: 768px) {
-  .navbar-fixed.navbar-scrolled {
-    top: 0;
-    left: 0;
-    right: 0;
-    background-color: white;
-    box-shadow: 0 1px 4px 0 rgba(15, 15, 16, 0.10);
-  }
+/* Scrolled state - applies to all devices */
+.navbar-fixed.navbar-scrolled {
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  box-shadow: 0 1px 4px 0 rgba(15, 15, 16, 0.10);
+}
 
+.navbar-fixed.navbar-scrolled > div {
+  height: 64px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--spacing-mobile);
+}
+
+@media (min-width: 768px) {
   .navbar-fixed.navbar-scrolled > div {
-    height: 64px;
-    max-width: 100%;
-    margin: 0 auto;
     padding: 0 var(--spacing-tablet);
   }
 }

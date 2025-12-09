@@ -111,8 +111,8 @@ export const NodeDetail = () => {
   const columns: ColumnDef<ChannelData>[] = [
     {
       key: "channelId",
-      label: "Channel ID",
-      width: "w-[240px]",
+      label: "Channel Outpoint",
+      width: "flex-1",
       className: "truncate",
     },
     {
@@ -180,7 +180,7 @@ export const NodeDetail = () => {
       </div>
       
       {/* 表格和分页 */}
-      <GlassCardContainer className="mt-4">
+      <GlassCardContainer className="mt-4 relative min-h-[528px]">
         <Table 
           columns={columns} 
           data={paginatedData}
@@ -203,6 +203,14 @@ export const NodeDetail = () => {
               totalPages={totalPages}
               onPageChange={setCurrentPage}
             />
+          </div>
+        )}
+
+        {!channelsLoading && paginatedData.length === 0 && (
+          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
+            <div className="text-muted-foreground">
+              No channels found
+            </div>
           </div>
         )}
       </GlassCardContainer>

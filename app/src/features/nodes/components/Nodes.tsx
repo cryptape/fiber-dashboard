@@ -298,16 +298,17 @@ export const Nodes = () => {
     {
       key: 'nodeId',
       label: 'Node ID',
-      width: 'w-36',
+      width: 'w-32 lg:flex-1 lg:min-w-32',
       sortable: false,
       render: (value) => {
-        const shortId = (value as string).slice(0, 8) + '...' + (value as string).slice(-4);
+        // const shortId = (value as string).slice(0, 8) + '...' + (value as string).slice(-4);
         return (
           <span
-            className="text-primary font-mono text-xs"
+            className="text-primary font-mono text-xs truncate block"
             title={value as string}
           >
-            {shortId}
+            {/* {shortId} */}
+            {value as string}
           </span>
         );
       },
@@ -315,8 +316,13 @@ export const Nodes = () => {
     {
       key: "nodeName",
       label: "Node name",
-      width: "flex-1",
+      width: "w-48 md:w-60",
       sortable: false,
+      render: (value) => (
+        <div className="truncate text-primary text-sm min-w-0" title={String(value)}>
+          {value as string}
+        </div>
+      ),
     },
     {
       key: "channels",
@@ -423,7 +429,7 @@ export const Nodes = () => {
       </div>
 
 
-      <GlassCardContainer className="overflow-x-auto">
+      <GlassCardContainer className="overflow-x-auto relative min-h-[528px]">
         <Table<NodeData>
           columns={columns}
           data={tableData}
@@ -444,8 +450,8 @@ export const Nodes = () => {
         )}
 
         {!isLoading && tableData.length === 0 && (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            <div className="text-center">
+          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
               <div className="text-lg font-medium mb-2">No nodes found</div>
               <div className="text-sm">No nodes available</div>
             </div>

@@ -202,16 +202,12 @@ export const Channels = () => {
   const columns: ColumnDef<ChannelData>[] = [
     {
       key: "channelId",
-      label: "Channel ID",
-      width: "w-120", // 固定宽度
-      sortable: false,
+      label: "Channel Outpoint",
+      width: "w-64 lg:flex-1 lg:min-w-64",
       render: (value) => (
-        <span
-          className="text-primary truncate block w-full"
-          title={value as string} // 鼠标悬停显示完整ID
-        >
+        <div className="truncate min-w-0 text-primary text-sm" title={String(value)}>
           {value as string}
-        </span>
+        </div>
       ),
     },
     {
@@ -223,20 +219,20 @@ export const Channels = () => {
     {
       key: "capacity",
       label: "Capacity (CKB)",
-      width: "w-40",
+      width: "w-60",
       sortable: true,
       className: "text-purple-400 font-semibold",
     },
     {
       key: "createdOn",
       label: "Created on",
-      width: "w-192",
+      width: "w-60",
       sortable: true,
     },
     {
       key: "lastCommitted",
       label: "Last committed",
-      width: "w-192",
+      width: "w-60",
       sortable: true,
     },
   ];
@@ -309,28 +305,31 @@ export const Channels = () => {
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
       />
-      <div className="flex gap-4">
+      <div className="flex gap-2 md:gap-4">
         <StatusIndicator
           text={`Open (${getStateCount("open")})`}
           color="#208C73"
           mode={selectedState === "open" ? "dark" : "light"}
           onClick={() => handleStateChange("open")}
+          className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
           text={`Committing (${getStateCount("commitment")})`}
           color="#FAB83D"
           mode={selectedState === "commitment" ? "dark" : "light"}
           onClick={() => handleStateChange("commitment")}
+          className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
           text={`Closed (${getStateCount("closed")})`}
           color="#B34846"
           mode={selectedState === "closed" ? "dark" : "light"}
           onClick={() => handleStateChange("closed")}
+          className="flex-1 min-w-0 md:flex-initial"
         />
       </div>
 
-      <GlassCardContainer>
+      <GlassCardContainer className="relative min-h-[528px]">
         <Table<ChannelData>
           columns={columns}
           data={tableData}
@@ -353,8 +352,10 @@ export const Channels = () => {
         )}
 
         {!isLoading && tableData.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            No {selectedState} channels found
+          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
+            <div className="text-muted-foreground">
+              No {selectedState} channels found
+            </div>
           </div>
         )}
       </GlassCardContainer>
