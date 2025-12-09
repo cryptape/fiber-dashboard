@@ -165,6 +165,29 @@ create index idx_node_hourly_country_or_region_time
 create index idx_node_hourly_channel_count_time
   ON online_nodes_hourly(channel_count, bucket DESC);
 
+CREATE MATERIALIZED VIEW mv_online_nodes as 
+SELECT DISTINCT ON (node_id) 
+    node_id,
+    node_name,
+    addresses,
+    announce_timestamp,
+    chain_hash,
+    auto_accept_min_ckb_funding_amount,
+    country_or_region,
+    city,
+    region,
+    loc,
+    channel_count,
+    bucket
+FROM online_nodes_hourly
+WHERE bucket >= now() - interval '6 hour';
+
+CREATE UNIQUE INDEX idx_mv_online_nodes_node_id ON mv_online_nodes(node_id);
+create index idx_mv_online_nodes_node_name ON mv_online_nodes(node_name);
+create index idx_mv_online_nodes_country_or_region ON mv_online_nodes(country_or_region);
+create index idx_mv_online_nodes_channel_count ON mv_online_nodes(channel_count);
+create index idx_mv_online_nodes_bucket ON mv_online_nodes(bucket);
+
 CREATE MATERIALIZED VIEW online_channels_hourly
 WITH (timescaledb.continuous) AS
 SELECT
@@ -213,6 +236,36 @@ create index idx_channels_hourly_node2
 create index idx_channels_hourly_outpoint_time
   ON online_channels_hourly(channel_outpoint, bucket DESC);
 
+CREATE MATERIALIZED VIEW mv_online_channels as 
+SELECT DISTINCT ON (channel_outpoint)
+    channel_outpoint,
+    node1,
+    node2,
+    capacity,
+    chain_hash,
+    udt_type_script,
+    created_timestamp,
+    update_of_node1_timestamp,
+    update_of_node1_enabled,
+    update_of_node1_outbound_liquidity,
+    update_of_node1_tlc_expiry_delta,
+    update_of_node1_tlc_minimum_value,
+    update_of_node1_fee_rate,
+    update_of_node2_timestamp,
+    update_of_node2_enabled,
+    update_of_node2_outbound_liquidity,
+    update_of_node2_tlc_expiry_delta,
+    update_of_node2_tlc_minimum_value,
+    update_of_node2_fee_rate,
+    bucket
+FROM online_channels_hourly
+WHERE bucket >= now() - interval '6 hour';
+
+CREATE UNIQUE INDEX idx_mv_online_channels_outpoint ON mv_online_channels(channel_outpoint);
+create index idx_mv_online_channels_node1 ON mv_online_channels(node1);
+create index idx_mv_online_channels_node2 ON mv_online_channels(node2);
+create index idx_mv_online_channels_capacity ON mv_online_channels(capacity);
+create index idx_mv_online_channels_create_time ON mv_online_channels(created_timestamp);
 
 --- testnet
 
@@ -383,6 +436,29 @@ create index idx_node_hourly_country_or_region_time_testnet
 create index idx_node_hourly_channel_count_time_testnet
   ON online_nodes_hourly_testnet(channel_count, bucket DESC);
 
+CREATE MATERIALIZED VIEW mv_online_nodes_testnet as 
+SELECT DISTINCT ON (node_id) 
+    node_id,
+    node_name,
+    addresses,
+    announce_timestamp,
+    chain_hash,
+    auto_accept_min_ckb_funding_amount,
+    country_or_region,
+    city,
+    region,
+    loc,
+    channel_count,
+    bucket
+FROM online_nodes_hourly_testnet
+WHERE bucket >= now() - interval '6 hour';
+
+CREATE UNIQUE INDEX idx_mv_online_nodes_node_id_testnet ON mv_online_nodes_testnet(node_id);
+create index idx_mv_online_nodes_node_name_testnet ON mv_online_nodes_testnet(node_name);
+create index idx_mv_online_nodes_country_or_region_testnet ON mv_online_nodes_testnet(country_or_region);
+create index idx_mv_online_nodes_channel_count_testnet ON mv_online_nodes_testnet(channel_count);
+create index idx_mv_online_nodes_bucket_testnet ON mv_online_nodes_testnet(bucket);
+
 CREATE MATERIALIZED VIEW online_channels_hourly_testnet
 WITH (timescaledb.continuous) AS
 SELECT
@@ -430,3 +506,34 @@ create index idx_channels_hourly_node2_testnet
 
 create index idx_channels_hourly_outpoint_time_testnet
   ON online_channels_hourly_testnet(channel_outpoint, bucket DESC);
+
+CREATE MATERIALIZED VIEW mv_online_channels_testnet as 
+SELECT DISTINCT ON (channel_outpoint)
+    channel_outpoint,
+    node1,
+    node2,
+    capacity,
+    chain_hash,
+    udt_type_script,
+    created_timestamp,
+    update_of_node1_timestamp,
+    update_of_node1_enabled,
+    update_of_node1_outbound_liquidity,
+    update_of_node1_tlc_expiry_delta,
+    update_of_node1_tlc_minimum_value,
+    update_of_node1_fee_rate,
+    update_of_node2_timestamp,
+    update_of_node2_enabled,
+    update_of_node2_outbound_liquidity,
+    update_of_node2_tlc_expiry_delta,
+    update_of_node2_tlc_minimum_value,
+    update_of_node2_fee_rate,
+    bucket
+FROM online_channels_hourly_testnet
+WHERE bucket >= now() - interval '6 hour';
+
+CREATE UNIQUE INDEX idx_mv_online_channels_outpoint_testnet ON mv_online_channels_testnet(channel_outpoint);
+create index idx_mv_online_channels_node1_testnet ON mv_online_channels_testnet(node1);
+create index idx_mv_online_channels_node2_testnet ON mv_online_channels_testnet(node2);
+create index idx_mv_online_channels_capacity_testnet ON mv_online_channels_testnet(capacity);
+create index idx_mv_online_channels_create_time_testnet ON mv_online_channels_testnet(created_timestamp);

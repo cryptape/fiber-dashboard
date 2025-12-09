@@ -207,11 +207,20 @@ pub async fn daily_statistics(
     start_time: Option<DateTime<Utc>>,
     nets: impl Iterator<Item = &Network>,
 ) -> Result<(), sqlx::Error> {
+    use chrono::Timelike;
     use sqlx::Row;
 
     let now = Utc::now();
 
-    let end_time = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
+    let end_time = now
+        .with_hour(0)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap()
+        .with_nanosecond(0)
+        .unwrap();
     let start_time = start_time.unwrap_or(end_time - Duration::days(1));
 
     for net in nets {
@@ -263,7 +272,7 @@ pub async fn daily_statistics(
                     let raw: String = row.get("capacity");
                     let mut buf = [0u8; 16];
                     faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                    u128::from_le_bytes(buf)
+                    u128::from_be_bytes(buf)
                 };
                 (day_bucket, capacity)
             })
@@ -334,11 +343,11 @@ fn summarize_data(
                     return DailySummary {
                         date: dt,
                         channels_count: 0,
-                        capacity_average: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                        capacity_min: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                        capacity_max: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                        capacity_median: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                        capacity_sum: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
+                        capacity_average: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                        capacity_min: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                        capacity_max: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                        capacity_median: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                        capacity_sum: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
                         nodes_count,
                     };
                 }
@@ -362,22 +371,22 @@ fn summarize_data(
                 DailySummary {
                     date: dt,
                     channels_count: count as i64,
-                    capacity_average: faster_hex::hex_string(average.to_le_bytes().as_ref()),
-                    capacity_min: faster_hex::hex_string(min.to_le_bytes().as_ref()),
-                    capacity_max: faster_hex::hex_string(max.to_le_bytes().as_ref()),
-                    capacity_median: faster_hex::hex_string(median.to_le_bytes().as_ref()),
-                    capacity_sum: faster_hex::hex_string(sum.to_le_bytes().as_ref()),
+                    capacity_average: faster_hex::hex_string(average.to_be_bytes().as_ref()),
+                    capacity_min: faster_hex::hex_string(min.to_be_bytes().as_ref()),
+                    capacity_max: faster_hex::hex_string(max.to_be_bytes().as_ref()),
+                    capacity_median: faster_hex::hex_string(median.to_be_bytes().as_ref()),
+                    capacity_sum: faster_hex::hex_string(sum.to_be_bytes().as_ref()),
                     nodes_count,
                 }
             } else {
                 DailySummary {
                     date: dt,
                     channels_count: 0,
-                    capacity_average: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                    capacity_min: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                    capacity_max: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                    capacity_median: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
-                    capacity_sum: faster_hex::hex_string(0u128.to_le_bytes().as_ref()),
+                    capacity_average: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                    capacity_min: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                    capacity_max: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                    capacity_median: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                    capacity_sum: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
                     nodes_count,
                 }
             }
@@ -420,7 +429,7 @@ pub async fn channel_states_monitor(
                 let last_block_number = {
                     let mut buf = [0u8; 8];
                     hex_decode(raw_last_block_number.as_bytes(), &mut buf).unwrap();
-                    u64::from_le_bytes(buf)
+                    u64::from_be_bytes(buf)
                 };
                 let tx_hash = {
                     let mut buf = [0u8; 32];
@@ -493,7 +502,7 @@ pub async fn channel_states_monitor(
                 let last_block_number = {
                     let mut buf = [0u8; 8];
                     hex_decode(raw_last_block_number.as_bytes(), &mut buf).unwrap();
-                    u64::from_le_bytes(buf)
+                    u64::from_be_bytes(buf)
                 };
                 let tx_hash = {
                     let mut buf = [0u8; 32];
@@ -1067,7 +1076,7 @@ impl ChannelStateUpdate {
             sqlx::query(&sql)
                 .bind(hex_string(cu.txs.last().unwrap().0.as_bytes()))
                 .bind(hex_string(
-                    cu.last_block_number.value().to_le_bytes().as_ref(),
+                    cu.last_block_number.value().to_be_bytes().as_ref(),
                 ))
                 .bind(
                     cu.last_commitment_args
@@ -1121,7 +1130,7 @@ impl ChannelStateUpdate {
             |mut b, (outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args)| {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
-                    .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                    .push_bind(hex_string(block_number.value().to_be_bytes().as_ref()))
                     .push_bind(timestamp)
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));
@@ -1183,10 +1192,10 @@ impl ChannelGroup {
         query_builder.push_values(groups.iter(), |mut b, cg| {
             b.push_bind(hex_string(cg.outpoint.as_bytes()))
                 .push_bind(hex_string(cg.funding_args.as_bytes()))
-                .push_bind(hex_string(cg.capacity.to_le_bytes().as_ref()))
+                .push_bind(hex_string(cg.capacity.to_be_bytes().as_ref()))
                 .push_bind(hex_string(cg.txs.last().unwrap().0.as_bytes()))
                 .push_bind(hex_string(
-                    cg.last_block_number.value().to_le_bytes().as_ref(),
+                    cg.last_block_number.value().to_be_bytes().as_ref(),
                 ))
                 .push_bind(chrono::DateTime::from_timestamp_millis(
                     cg.create_time as i64,
@@ -1236,7 +1245,7 @@ impl ChannelGroup {
             |mut b, (outpoint, tx_hash, block_number, timestamp, witness_args, commitment_args)| {
                 b.push_bind(hex_string(outpoint.as_bytes()))
                     .push_bind(hex_string(tx_hash.as_bytes()))
-                    .push_bind(hex_string(block_number.value().to_le_bytes().as_ref()))
+                    .push_bind(hex_string(block_number.value().to_be_bytes().as_ref()))
                     .push_bind(timestamp)
                     .push_bind(witness_args.as_ref().map(|a| hex_string(a.as_bytes())))
                     .push_bind(commitment_args.as_ref().map(|a| hex_string(a.as_bytes())));

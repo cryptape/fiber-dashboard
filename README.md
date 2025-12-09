@@ -14,7 +14,7 @@ http api default on 8080, method list:
 /channel_count_by_state
 /channel_info?channel_outpoint=0x..
 /node_info?node_id=0x..
-/channels_by_node_id?node_id=0x..&page=0&sort_by=create_time/last_commit_time&order=asc/desc
+/channels_by_node_id?node_id=0x..&page=0&sort_by=create_time/last_commit_time/capacity&order=asc/desc
 /nodes_by_region?region=HK&page=0&sort_by=region/last_seen/channel_count&order=asc/desc
 /nodes_fuzzy_by_name?node_name=Cr&page=0&sort_by=region/last_seen/channel_count&order=asc/desc
 /channel_capacity_distribution
