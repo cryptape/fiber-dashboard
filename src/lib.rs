@@ -1,3 +1,4 @@
+pub mod clock_timer;
 pub mod http_server;
 mod ip_location;
 pub(crate) mod pg_read;
@@ -80,6 +81,20 @@ impl Network {
         match self {
             Network::Mainnet => "online_channels_hourly",
             Network::Testnet => "online_channels_hourly_testnet",
+        }
+    }
+
+    pub fn mv_online_nodes(&self) -> &str {
+        match self {
+            Network::Mainnet => "mv_online_nodes",
+            Network::Testnet => "mv_online_nodes_testnet",
+        }
+    }
+
+    pub fn mv_online_channels(&self) -> &str {
+        match self {
+            Network::Mainnet => "mv_online_channels",
+            Network::Testnet => "mv_online_channels_testnet",
         }
     }
 

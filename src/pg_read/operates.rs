@@ -143,7 +143,7 @@ pub(crate) async fn query_channels_by_node_id(
             from {} n
             WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
         ",
-        params.net.online_channels_hourly(),
+        params.net.mv_online_channels(),
     );
     let total_count: i64 = sqlx::query(&sql_count)
         .bind(hour_bucket)
@@ -153,7 +153,7 @@ pub(crate) async fn query_channels_by_node_id(
         .get("total_count");
     let sql = format!(
         "
-            select DISTINCT ON (n.channel_outpoint)
+            select
             n.channel_outpoint, 
             n.bucket as last_seen_hour, 
             n.capacity,
@@ -163,9 +163,9 @@ pub(crate) async fn query_channels_by_node_id(
             from {} n
             left join {} c on n.channel_outpoint = c.channel_outpoint
             WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
-            ORDER BY n.channel_outpoint, {} {}
+            ORDER BY {} {}
         ",
-        params.net.online_channels_hourly(),
+        params.net.mv_online_channels(),
         params.net.channel_states(),
         params.sort_by.as_str(),
         params.order.as_str(),
@@ -197,7 +197,13 @@ pub(crate) async fn query_channels_by_node_id(
         .map(|row| Channel {
             channel_outpoint: format!("0x{}", row.get::<String, _>("channel_outpoint")),
             last_seen_hour: row.get("last_seen_hour"),
-            capacity: row.get("capacity"),
+            capacity: {
+                let be_hex: String = row.get("capacity");
+                let mut buf = vec![0u8; be_hex.len() / 2];
+                faster_hex::hex_decode(be_hex.as_bytes(), &mut buf).unwrap();
+                buf.reverse();
+                format!("0x{}", faster_hex::hex_string(&buf))
+            },
             created_timestamp: row.get("created_timestamp"),
             state: row.get("state"),
             last_commit_time: row.get("last_commit_time"),
@@ -452,7 +458,7 @@ pub async fn query_analysis_hourly(
                         let raw: String = row.get("capacity");
                         let mut buf = [0u8; 16];
                         faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                        u128::from_le_bytes(buf)
+                        u128::from_be_bytes(buf)
                     };
                     capacity
                 })
@@ -635,7 +641,11 @@ pub async fn query_analysis(
                     let mut values = Vec::new();
                     for name in table.name.to_sql().split(", ") {
                         let value: String = row.get(name);
-                        values.push(serde_json::Value::String(format!("0x{}", value)));
+                        let mut buf = vec![0u8; value.len() / 2];
+                        faster_hex::hex_decode(value.as_bytes(), &mut buf).unwrap();
+                        buf.reverse();
+                        let hex_string = faster_hex::hex_string(&buf);
+                        values.push(serde_json::Value::String(format!("0x{}", hex_string)));
                     }
                     table
                         .points
@@ -689,7 +699,11 @@ pub async fn query_channel_state(
             }
             if capacity.is_empty() {
                 let raw: String = row.get("capacity");
-                capacity = format!("0x{}", raw);
+                let mut buf = vec![0u8; raw.len() / 2];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                buf.reverse();
+                let hex_string = faster_hex::hex_string(&buf);
+                capacity = format!("0x{}", hex_string);
             }
 
             let raw_tx_hash: String = row.get("tx_hash");
@@ -807,13 +821,25 @@ pub(crate) async fn group_channel_by_state(
         .map(|row| {
             let channel_outpoint: String = row.get("channel_outpoint");
             let funding_args: String = row.get("funding_args");
-            let last_block_number: String = row.get("last_block_number");
+            let last_block_number: String = {
+                let raw: String = row.get("last_block_number");
+                let mut buf = vec![0u8; raw.len() / 2];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                buf.reverse();
+                faster_hex::hex_string(&buf)
+            };
             let last_tx_hash: String = row.get("last_tx_hash");
             let last_commitment_args: Option<String> = row.get("last_commitment_args");
             let create_time: DateTime<Utc> = row.get("create_time");
             let last_commit_time: DateTime<Utc> = row.get("last_commit_time");
             let tx_count: i64 = row.get("tx_count");
-            let capacity: String = row.get("capacity");
+            let capacity: String = {
+                let raw: String = row.get("capacity");
+                let mut buf = vec![0u8; raw.len() / 2];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                buf.reverse();
+                faster_hex::hex_string(&buf)
+            };
             (
                 format!("0x{}", channel_outpoint),
                 format!("0x{}", funding_args),
@@ -911,11 +937,11 @@ pub async fn query_channel_capacity_distribution(
     let hour_bucket = chrono::Utc::now() - chrono::Duration::hours(3);
     let sql = format!(
         r#"
-        SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity, bucket AS last_seen_hour from {}
+        SELECT channel_outpoint, capacity, bucket AS last_seen_hour from {}
         WHERE bucket >= $1::timestamp
         ORDER BY channel_outpoint, bucket DESC
     "#,
-        net.online_channels_hourly()
+        net.mv_online_channels()
     );
 
     let rows = sqlx::query(&sql)
@@ -928,7 +954,7 @@ pub async fn query_channel_capacity_distribution(
                 let raw: String = row.get("capacity");
                 let mut buf = [0u8; 16];
                 faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                u128::from_le_bytes(buf)
+                u128::from_be_bytes(buf)
             };
             capacity / 1000
         })
