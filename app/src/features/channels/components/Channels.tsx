@@ -71,6 +71,7 @@ export const Channels = () => {
     const mapping: Record<string, string> = {
       'createdOn': 'create_time',
       'lastCommitted': 'last_commit_time',
+      'capacity': 'capacity',
     };
     return mapping[frontendKey] || 'last_commit_time';
   };
@@ -251,7 +252,7 @@ export const Channels = () => {
       key: "capacity",
       label: "Capacity (CKB)",
       width: "w-60",
-      sortable: false,
+      sortable: true,
       className: "text-purple-400 font-semibold",
     },
     {

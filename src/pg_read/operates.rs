@@ -677,12 +677,13 @@ pub async fn query_channel_state(
         from {states} 
         join {txs} on {txs}.channel_outpoint = {states}.channel_outpoint 
         where {states}.channel_outpoint = $1
+        order by {txs}.block_number ASC
     "#,
     );
     let mut funding_args: JsonBytes = JsonBytes::default();
     let mut state: String = String::new();
     let mut capacity: String = String::new();
-    let mut rows = sqlx::query(&sql)
+    let rows = sqlx::query(&sql)
         .bind(faster_hex::hex_string(outpoint.as_bytes()))
         .fetch_all(pool)
         .await?
@@ -712,7 +713,13 @@ pub async fn query_channel_state(
             let raw_commitment_args: Option<String> = row.get("commitment_args");
             let raw_timestamp: DateTime<Utc> = row.get("timestamp");
             let tx_hash = format!("0x{}", raw_tx_hash);
-            let block_number = format!("0x{}", raw_block_number);
+            let block_number = {
+                let mut buf = vec![0u8; raw_block_number.len() / 2];
+                faster_hex::hex_decode(raw_block_number.as_bytes(), &mut buf).unwrap();
+                buf.reverse();
+                let hex_string = faster_hex::hex_string(&buf);
+                format!("0x{}", hex_string)
+            };
             let timestamp = raw_timestamp.to_rfc3339();
 
             let witness_args = raw_witness_args.map(|args| format!("0x{}", args));
@@ -726,14 +733,6 @@ pub async fn query_channel_state(
             )
         })
         .collect::<Vec<_>>();
-
-    let to_u64 = |s: &str| -> u64 {
-        let s = s.trim_start_matches("0x");
-        let mut buf = [0u8; 8];
-        faster_hex::hex_decode(s.as_bytes(), &mut buf).unwrap();
-        u64::from_le_bytes(buf)
-    };
-    rows.sort_unstable_by(|a, b| to_u64(&a.1).cmp(&to_u64(&b.1)));
 
     #[derive(Serialize, Deserialize, Debug)]
     struct Txs {
@@ -799,7 +798,7 @@ pub(crate) async fn group_channel_by_state(
             channel_tx_count as (
                 select channel_outpoint, count(*) as tx_count from channel_tx group by channel_outpoint
             )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.capacity, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
+        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
         from {} n
         left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
         where state = $1 
