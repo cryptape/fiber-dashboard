@@ -421,6 +421,8 @@ pub(crate) enum ChannelStateSortBy {
     #[default]
     #[serde(rename = "last_commit_time")]
     LastCommitTime,
+    #[serde(rename = "capacity")]
+    Capacity,
 }
 
 impl ChannelStateSortBy {
@@ -428,6 +430,7 @@ impl ChannelStateSortBy {
         match self {
             ChannelStateSortBy::CreateTime => "create_time",
             ChannelStateSortBy::LastCommitTime => "last_commit_time",
+            ChannelStateSortBy::Capacity => "capacity",
         }
     }
 }
