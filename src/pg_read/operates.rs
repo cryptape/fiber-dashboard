@@ -798,7 +798,7 @@ pub(crate) async fn group_channel_by_state(
             channel_tx_count as (
                 select channel_outpoint, count(*) as tx_count from channel_tx group by channel_outpoint
             )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.capacity, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
+        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
         from {} n
         left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
         where state = $1 
