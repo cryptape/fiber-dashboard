@@ -43,7 +43,7 @@ export const SearchInput = ({
   };
 
   return (
-    <div className={`w-80 h-10 px-3 py-2.5 bg-layer/30 rounded-[40px]  glass-card backdrop-blur-[5px] inline-flex items-center gap-2 ${className}`}>
+    <div className={`h-10 px-3 py-2.5 bg-layer/30 rounded-[40px] glass-card backdrop-blur-[5px] inline-flex items-center gap-2 ${className || 'w-80'}`}>
       <SearchIcon className="text-secondary flex-shrink-0" />
       <input
         type="text"
@@ -51,7 +51,7 @@ export const SearchInput = ({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="flex-1 bg-transparent outline-none text-base font-medium leading-5 text-primary placeholder:text-tertiary"
+        className="flex-1 bg-transparent outline-none text-base font-medium leading-5 text-primary placeholder:text-tertiary min-w-0"
       />
     </div>
   );

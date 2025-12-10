@@ -7,20 +7,32 @@ type Props = {
 };
 
 export function ChannelsToggle({ showChannels, onToggle, className }: Props) {
-  const baseClass = "p-4 bg-popover rounded inline-flex justify-start items-center gap-2 cursor-pointer";
+  const baseClass = "p-2 md:p-4 bg-popover rounded inline-flex justify-start items-center gap-1.5 md:gap-2 cursor-pointer";
   const rootClass = className ? `${baseClass} ${className}` : baseClass;
 
   return (
     <div className={rootClass} onClick={onToggle}>
-      <div className="w-6 h-6 p-1 relative inline-flex flex-col justify-center items-center">
-        <div className={`w-4 h-4 rounded-sm transition-colors ${showChannels ? 'bg-purple' : 'bg-border'}`} />
+      <div className="relative inline-flex justify-center items-center flex-shrink-0" style={{ width: '14px', height: '14px' }}>
+        <div className="rounded-sm bg-purple transition-colors" style={{ width: '14px', height: '14px' }} />
         {showChannels && (
-          <div className="w-6 h-6 left-[12px] top-[21px] absolute overflow-hidden pointer-events-none">
-            <div className="w-3 h-2.5 left-[6px] top-[7px] absolute text-on" style={{ backgroundColor: 'var(--text-on)' }} />
-          </div>
+          <svg 
+            className="absolute pointer-events-none" 
+            width="9" 
+            height="9"
+            viewBox="0 0 12 12" 
+            fill="none"
+          >
+            <path 
+              d="M2 6L5 9L10 3" 
+              stroke="white" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            />
+          </svg>
         )}
       </div>
-      <div className="justify-start text-primary text-sm font-normal leading-5">
+      <div className="justify-start text-primary text-[11px] md:text-sm font-normal leading-4 md:leading-5 whitespace-nowrap">
         Show channels
       </div>
     </div>

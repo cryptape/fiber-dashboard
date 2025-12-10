@@ -36,6 +36,8 @@ import {
   ChannelStateApiResponseSchema,
   GroupChannelsByStateResponse,
   GroupChannelsByStateResponseSchema,
+  ChannelsByNodeIdResponse,
+  ChannelsByNodeIdResponseSchema,
 } from "./types";
 import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
 
@@ -94,20 +96,67 @@ export class APIClient {
     }
   }
 
-  async getActiveNodesByPage(page: number = 0): Promise<NodeResponse> {
+  async getActiveNodesByPage(
+    page: number = 0,
+    sortBy?: string,
+    order?: string,
+    pageSize: number = 10
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_hourly?page=${page}&page_size=${pageSize}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
     return this.apiRequest<NodeResponse>(
-      `/nodes_hourly?page=${page}`,
+      endpoint,
       undefined,
       NodeResponseSchema
     );
   }
 
+  async searchNodesByName(
+    nodeName: string,
+    page: number = 0,
+    sortBy?: string,
+    order?: string,
+    pageSize: number = 10
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_fuzzy_by_name?node_name=${encodeURIComponent(nodeName)}&page=${page}&page_size=${pageSize}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
+    return this.apiRequest<NodeResponse>(
+      endpoint,
+      undefined,
+      NodeResponseSchema
+    );
+  }
+
+  async getNodesByRegion(
+    region: string,
+    page: number = 0,
+    sortBy?: string,
+    order?: string,
+    pageSize: number = 10
+  ): Promise<NodeResponse> {
+    let endpoint = `/nodes_by_region?region=${encodeURIComponent(region)}&page=${page}&page_size=${pageSize}`;
+    if (sortBy) endpoint += `&sort_by=${sortBy}`;
+    if (order) endpoint += `&order=${order}`;
+    return this.apiRequest<NodeResponse>(
+      endpoint,
+      undefined,
+      NodeResponseSchema
+    );
+  }
+
+  async getAllRegions(): Promise<string[]> {
+    return this.apiRequest<string[]>('/all_region');
+  }
+
   async getHistoricalNodesByPage(
     page: number = 0,
     start?: string,
-    end?: string
+    end?: string,
+    pageSize: number = 10
   ): Promise<NodeResponse> {
-    let endpoint = `/nodes_nearly_monthly?page=${page}`;
+    let endpoint = `/nodes_nearly_monthly?page=${page}&page_size=${pageSize}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
     return this.apiRequest<NodeResponse>(
@@ -117,9 +166,12 @@ export class APIClient {
     );
   }
 
-  async getActiveChannelsByPage(page: number = 0): Promise<ChannelResponse> {
+  async getActiveChannelsByPage(
+    page: number = 0,
+    pageSize: number = 10
+  ): Promise<ChannelResponse> {
     return this.apiRequest<ChannelResponse>(
-      `/channels_hourly?page=${page}`,
+      `/channels_hourly?page=${page}&page_size=${pageSize}`,
       undefined,
       ChannelResponseSchema
     );
@@ -128,9 +180,10 @@ export class APIClient {
   async getHistoricalChannelsByPage(
     page: number = 0,
     start?: string,
-    end?: string
+    end?: string,
+    pageSize: number = 10
   ): Promise<ChannelResponse> {
-    let endpoint = `/channels_nearly_monthly?page=${page}`;
+    let endpoint = `/channels_nearly_monthly?page=${page}&page_size=${pageSize}`;
     if (start) endpoint += `&start=${start}`;
     if (end) endpoint += `&end=${end}`;
     return this.apiRequest<ChannelResponse>(
@@ -159,9 +212,13 @@ export class APIClient {
     );
   }
 
-  async getActiveAnalysis(): Promise<ActiveAnalysis> {
+  async getActiveAnalysis(end?: string): Promise<ActiveAnalysis> {
+    let endpoint = `/analysis_hourly`;
+    if (end) {
+      endpoint += `?end=${encodeURIComponent(end)}`;
+    }
     return this.apiRequest<ActiveAnalysis>(
-      `/analysis_hourly`,
+      endpoint,
       undefined,
       ActiveAnalysisSchema
     );
@@ -201,10 +258,11 @@ export class APIClient {
 
   async getGroupChannelsByState(
     state: ChannelState,
-    page: number = 0
+    page: number = 0,
+    pageSize: number = 10
   ): Promise<GroupChannelsByStateResponse> {
     return this.apiRequest<GroupChannelsByStateResponse>(
-      `/group_channel_by_state?state=${state}&page=${page}`,
+      `/group_channel_by_state?state=${state}&page=${page}&page_size=${pageSize}`,
       undefined,
       GroupChannelsByStateResponseSchema
     );
@@ -236,14 +294,41 @@ export class APIClient {
     return rawResponse.node_info;
   }
 
+  async getChannelCapacityDistribution(): Promise<Record<string, number>> {
+    return this.apiRequest<Record<string, number>>(
+      `/channel_capacity_distribution`
+    );
+  }
+
+  async getChannelCountByState(): Promise<Record<string, number>> {
+    return this.apiRequest<Record<string, number>>(
+      `/channel_count_by_state`
+    );
+  }
+
+  async getChannelsByNodeId(
+    nodeId: string,
+    page: number = 0,
+    sortBy: "create_time" | "last_commit_time" = "last_commit_time",
+    order: "asc" | "desc" = "desc",
+    pageSize: number = 10
+  ): Promise<ChannelsByNodeIdResponse> {
+    return this.apiRequest<ChannelsByNodeIdResponse>(
+      `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}&page_size=${pageSize}`,
+      undefined,
+      ChannelsByNodeIdResponseSchema
+    );
+  }
+
   async fetchAllActiveNodes(): Promise<RustNodeInfo[]> {
     const allNodes: RustNodeInfo[] = [];
     let page = 0;
     let hasMore = true;
+    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
-        const response = await this.getActiveNodesByPage(page);
+        const response = await this.getActiveNodesByPage(page, undefined, undefined, PAGE_SIZE);
         const nodes = response.nodes || [];
         allNodes.push(...nodes);
 
@@ -268,10 +353,11 @@ export class APIClient {
     const allChannels: RustChannelInfo[] = [];
     let page = 0;
     let hasMore = true;
+    const PAGE_SIZE = 500;
 
     while (hasMore) {
       try {
-        const response = await this.getActiveChannelsByPage(page);
+        const response = await this.getActiveChannelsByPage(page, PAGE_SIZE);
         const channels = response.channels || [];
         allChannels.push(...channels);
 
@@ -384,8 +470,91 @@ export class APIClient {
     timeRange: "hourly" | "monthly" | "yearly"
   ): Promise<KpiData> {
     if (timeRange === "hourly") {
-      // Use active analysis for hourly data
-      return this.fetchKpiData();
+      // Use active analysis for hourly data and compare with last week
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Fetch current data and last week data in parallel
+      const [currentData, lastWeekData] = await Promise.all([
+        this.getActiveAnalysis(),
+        this.getActiveAnalysis(oneWeekAgo.toISOString()),
+      ]);
+
+      const totalNodes = +currentData.total_nodes;
+      const totalChannels = +currentData.channel_len;
+      const totalCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.total_capacity
+      );
+      const averageChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.avg_capacity
+      );
+      const maxChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.max_capacity
+      );
+      const minChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.min_capacity
+      );
+      const medianChannelCapacity = APIUtils.parseChannelCapacityToCKB(
+        currentData.median_capacity
+      );
+
+      // Calculate changes from last week
+      const lastWeekTotalCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.total_capacity
+      );
+      const lastWeekTotalNodes = +lastWeekData.total_nodes;
+      const lastWeekTotalChannels = +lastWeekData.channel_len;
+      const lastWeekAvgCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.avg_capacity
+      );
+      const lastWeekMaxCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.max_capacity
+      );
+      const lastWeekMinCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.min_capacity
+      );
+      const lastWeekMedianCapacity = APIUtils.parseChannelCapacityToCKB(
+        lastWeekData.median_capacity
+      );
+
+      return {
+        totalCapacity,
+        totalNodes,
+        totalChannels,
+        averageChannelCapacity,
+        maxChannelCapacity,
+        minChannelCapacity,
+        medianChannelCapacity,
+        // Calculate percentage changes (rounded to 2 decimal places)
+        totalCapacityChange:
+          lastWeekTotalCapacity > 0
+            ? parseFloat((((totalCapacity - lastWeekTotalCapacity) / lastWeekTotalCapacity) * 100).toFixed(2))
+            : 0,
+        totalNodesChange:
+          lastWeekTotalNodes > 0
+            ? parseFloat((((totalNodes - lastWeekTotalNodes) / lastWeekTotalNodes) * 100).toFixed(2))
+            : 0,
+        totalChannelsChange:
+          lastWeekTotalChannels > 0
+            ? parseFloat((((totalChannels - lastWeekTotalChannels) / lastWeekTotalChannels) * 100).toFixed(2))
+            : 0,
+        averageChannelCapacityChange:
+          lastWeekAvgCapacity > 0
+            ? parseFloat((((averageChannelCapacity - lastWeekAvgCapacity) / lastWeekAvgCapacity) * 100).toFixed(2))
+            : 0,
+        maxChannelCapacityChange:
+          lastWeekMaxCapacity > 0
+            ? parseFloat((((maxChannelCapacity - lastWeekMaxCapacity) / lastWeekMaxCapacity) * 100).toFixed(2))
+            : 0,
+        minChannelCapacityChange:
+          lastWeekMinCapacity > 0
+            ? parseFloat((((minChannelCapacity - lastWeekMinCapacity) / lastWeekMinCapacity) * 100).toFixed(2))
+            : 0,
+        medianChannelCapacityChange:
+          lastWeekMedianCapacity > 0
+            ? parseFloat((((medianChannelCapacity - lastWeekMedianCapacity) / lastWeekMedianCapacity) * 100).toFixed(2))
+            : 0,
+      };
     } else {
       // Use history analysis for monthly/yearly data
       // monthly: 最近3个月, yearly: 最近2年
@@ -657,32 +826,43 @@ export class APIClient {
     start?: string,
     end?: string
   ) {
-    const [nodes, channels] = await Promise.all(
-      timeRange === "hourly"
-        ? [
-            this.fetchAllActiveNodes(),
-            this.fetchAllActiveChannels(),
-          ]
-        : [
-            this.fetchAllHistoricalNodes(start, end),
-            this.fetchAllHistoricalChannels(start, end),
-          ]
-    );
+    // 使用 nodes_hourly 接口的排序功能，按 channel_count 排序获取前 limit 个节点
+    // 服务端已经提供了 channel_count 字段和排序功能，不需要再调用 channels_hourly 接口合并数据
+    if (timeRange === "hourly") {
+      // 使用服务端排序：sort_by=channel_count&order=desc
+      const response = await this.getActiveNodesByPage(0, "channel_count", "desc");
+      const nodes = response.nodes || [];
+      
+      // 服务端已按 channel_count 降序排序，直接取前 limit 个
+      return nodes
+        .slice(0, limit)
+        .map(node => ({
+          id: node.node_id,
+          node_id: node.node_id,
+          channel_count: node.channel_count || 0,
+        }));
+    } else {
+      // monthly 模式暂时保持原有逻辑
+      const [nodes, channels] = await Promise.all([
+        this.fetchAllHistoricalNodes(start, end),
+        this.fetchAllHistoricalChannels(start, end),
+      ]);
 
-    const nodesWithInfo = APIUtils.getNodeChannelInfoFromChannels(
-      nodes,
-      channels
-    );
+      const nodesWithInfo = APIUtils.getNodeChannelInfoFromChannels(
+        nodes,
+        channels
+      );
 
-    // 按总容量降序排序，取前 limit 个
-    return nodesWithInfo
-      .sort((a, b) => b.totalCapacity - a.totalCapacity)
-      .slice(0, limit)
-      .map(node => ({
-        id: node.node_id,
-        node_id: node.node_id,
-        capacity: node.totalCapacity,
-      }));
+      // 按 channel_count 降序排序，取前 limit 个
+      return nodesWithInfo
+        .sort((a, b) => b.totalChannels - a.totalChannels)
+        .slice(0, limit)
+        .map(node => ({
+          id: node.node_id,
+          node_id: node.node_id,
+          channel_count: node.totalChannels,
+        }));
+    }
   }
 
   async fetchHistoricalDashboardData(
@@ -856,7 +1036,7 @@ export class APIUtils {
     // country -> node count
     const nodeCountByCountry = new Map<string, number>();
     nodes.forEach(node => {
-      const country = node.country || "Unknown";
+      const country = node.country_or_region || "Unknown";
       nodeCountByCountry.set(
         country,
         (nodeCountByCountry.get(country) || 0) + 1
@@ -866,7 +1046,7 @@ export class APIUtils {
     // node_id -> country
     const nodeToCountry = new Map<string, string>();
     nodes.forEach(node => {
-      nodeToCountry.set(node.node_id, node.country || "Unknown");
+      nodeToCountry.set(node.node_id, node.country_or_region || "Unknown");
     });
 
     // node_id -> capacity
@@ -948,7 +1128,7 @@ export class APIUtils {
     // 处理节点数据
     nodes.forEach(node => {
       const city = node.city || "Unknown City";
-      const country = node.country || "Unknown";
+      const country = node.country_or_region || "Unknown";
       const countryCode = getCountryCode(country);
       const coordinates = parseCoordinates(node.loc);
 
@@ -973,7 +1153,7 @@ export class APIUtils {
     // node_id -> country 映射（用于容量计算）
     const nodeToCountry = new Map<string, string>();
     nodes.forEach(node => {
-      nodeToCountry.set(node.node_id, node.country || "Unknown");
+      nodeToCountry.set(node.node_id, node.country_or_region || "Unknown");
     });
 
     // 城市 -> 容量映射
@@ -1089,8 +1269,8 @@ export class APIUtils {
           nodeId: node.node_id,
           nodeName: node.node_name,
           city: node.city || "Unknown City",
-          country: node.country || "Unknown",
-          countryCode: getCountryCode(node.country || "Unknown"),
+          country: node.country_or_region || "Unknown",
+          countryCode: getCountryCode(node.country_or_region || "Unknown"),
           latitude: coordinates[0],
           longitude: coordinates[1],
           capacity:

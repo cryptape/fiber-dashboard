@@ -80,7 +80,7 @@ export default function KpiCard({
         {onViewDetails && (
           <button 
             onClick={onViewDetails}
-            className="type-caption text-purple cursor-pointer hover:underline"
+            className="type-button2 text-purple cursor-pointer hover:underline"
           >
             View details
           </button>

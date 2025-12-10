@@ -24,6 +24,9 @@ export interface TableProps<T = Record<string, unknown>> {
   defaultSortKey?: string;
   defaultSortState?: SortState;
   className?: string;
+  loading?: boolean;
+  loadingText?: string;
+  onRowClick?: (row: T) => void;
 }
 
 export const Table = <T extends Record<string, unknown>>({
@@ -33,6 +36,9 @@ export const Table = <T extends Record<string, unknown>>({
   defaultSortKey,
   defaultSortState = 'none',
   className = '',
+  loading = false,
+  loadingText = 'Loading...',
+  onRowClick,
 }: TableProps<T>) => {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey || null);
   const [sortState, setSortState] = useState<SortState>(defaultSortState);
@@ -62,93 +68,125 @@ export const Table = <T extends Record<string, unknown>>({
 
   return (
     <Tooltip.Provider delayDuration={200}>
-      <div className={`w-full overflow-x-auto ${className}`}>
-        <div className="flex flex-col min-w-max">
-          {/* Table Header */}
-          <div className="inline-flex">
-            {columns.map((column) => {
-              const isCurrentSort = sortKey === column.key;
-              const currentSortState = isCurrentSort ? sortState : 'none';
-              
-              return (
-                <div
-                  key={column.key}
-                  data-showinfo={column.showInfo || false}
-                  data-sortable={column.sortable || false}
-                  className={`h-12 px-3 py-2.5 border-b-2 border-color flex items-center ${
-                    column.width || 'flex-1'
-                  } ${column.sortable ? 'cursor-pointer' : ''} ${
-                    column.width?.startsWith('flex') ? 'justify-start' : 'justify-between'
-                  }`}
-                  onClick={() => handleSort(column.key, column.sortable)}
-                >
-                  <div className="text-secondary text-base font-medium leading-5">
-                    {column.label}
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                    {column.sortable && (
-                      <SortIcon state={currentSortState} />
-                    )}
-                    {column.showInfo && (
-                      <Tooltip.Root>
-                        <Tooltip.Trigger asChild>
-                          <Image
-                            src="/info.svg"
-                            alt="info"
-                            width={16}
-                            height={16}
-                            className="opacity-100 cursor-help"
-                          />
-                        </Tooltip.Trigger>
-                        {column.infoTooltip && (
-                          <Tooltip.Portal>
-                            <Tooltip.Content
-                              className="bg-[var(--bg-layer)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-primary type-body shadow-lg max-w-[240px] z-50"
-                              sideOffset={5}
-                            >
-                              {column.infoTooltip}
-                              <Tooltip.Arrow className="fill-[var(--bg-layer)]" />
-                            </Tooltip.Content>
-                          </Tooltip.Portal>
-                        )}
-                      </Tooltip.Root>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Table Body */}
-          <div className="flex flex-col">
-            {data.map((row, rowIndex) => (
-              <div
-                key={rowIndex}
-                className="border-b border-color inline-flex"
-              >
-                {columns.map((column) => (
+      <div className="relative w-full">
+        <div className={`w-full overflow-x-auto ${className}`}>
+          <div className="flex flex-col" style={{ minWidth: '800px' }}>
+            {/* Table Header */}
+            <div className="flex w-full">
+              {columns.map((column) => {
+                const isCurrentSort = sortKey === column.key;
+                const currentSortState = isCurrentSort ? sortState : 'none';
+                
+                return (
                   <div
                     key={column.key}
-                    className={`h-12 px-3 py-2.5 flex items-center gap-2.5 min-w-0 ${
+                    data-showinfo={column.showInfo || false}
+                    data-sortable={column.sortable || false}
+                    className={`h-12 px-3 py-2.5 border-b-2 border-color flex items-center ${
                       column.width || 'flex-1'
+                    } ${column.sortable ? 'cursor-pointer' : ''} ${
+                      column.width?.startsWith('flex') ? 'justify-start' : 'justify-between'
                     }`}
+                    onClick={() => handleSort(column.key, column.sortable)}
                   >
-                    <div
-                      className={`text-sm leading-5 w-full ${
-                        column.className || 'text-primary font-normal'
-                      }`}
-                    >
-                      {column.render
-                        ? column.render(row[column.key], row)
-                        : (row[column.key] as ReactNode)}
+                    <div className="text-secondary text-base font-medium leading-5">
+                      {column.label}
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      {column.sortable && (
+                        <SortIcon state={currentSortState} />
+                      )}
+                      {column.showInfo && (
+                        <Tooltip.Root>
+                          <Tooltip.Trigger asChild>
+                            <Image
+                              src="/info.svg"
+                              alt="info"
+                              width={16}
+                              height={16}
+                              className="opacity-100 cursor-help"
+                            />
+                          </Tooltip.Trigger>
+                          {column.infoTooltip && (
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="bg-[var(--surface-inverse)] rounded-lg px-3 py-2 text-sm text-on-color type-body shadow-lg max-w-[240px] z-50"
+                                sideOffset={5}
+                              >
+                                {column.infoTooltip}
+                                <Tooltip.Arrow className="fill-[var(--surface-inverse)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          )}
+                        </Tooltip.Root>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            ))}
+                );
+              })}
+            </div>
+
+            {/* Table Body */}
+            <div className="flex flex-col">
+              {data.map((row, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className={`border-b border-color flex w-full transition-colors ${
+                    onRowClick ? 'cursor-pointer' : ''
+                  }`}
+                  style={{
+                    ...(onRowClick && {
+                      transition: 'background-color 0.2s',
+                    }),
+                  }}
+                  onMouseEnter={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-layer-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = '';
+                    }
+                  }}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  {columns.map((column) => (
+                    <div
+                      key={column.key}
+                      className={`h-12 px-3 py-2.5 flex items-center gap-2.5 min-w-0 ${
+                        column.width || 'flex-1'
+                      }`}
+                    >
+                      {column.render ? (
+                        <div className="w-full min-w-0">
+                          {column.render(row[column.key], row)}
+                        </div>
+                      ) : (
+                        <div
+                          className={`text-sm leading-5 w-full text-primary font-normal truncate ${
+                            column.className || ''
+                          }`}
+                          title={String(row[column.key] || '')}
+                        >
+                          {row[column.key] as ReactNode}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="absolute top-12 left-0 right-0 bottom-0 flex items-center justify-center">
+            <div className="text-muted-foreground">{loadingText}</div>
+          </div>
+        )}
       </div>
     </Tooltip.Provider>
   );

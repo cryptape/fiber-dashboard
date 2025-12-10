@@ -28,8 +28,10 @@ interface NodeNetworkMapProps {
   connections?: NodeConnectionData[];
   currentNodeId?: string;
   height?: string;
+  mobileHeight?: string; // 移动端高度
   className?: string;
   title?: string;
+  mock?: boolean; // Mock模式：对相同经纬度节点添加随机偏移
 }
 
 export default function NodeNetworkMap({
@@ -37,14 +39,19 @@ export default function NodeNetworkMap({
   connections = [],
   currentNodeId,
   height = "600px",
+  mobileHeight,
   className = "",
   title = "Global Nodes Distribution",
+  mock = false,
 }: NodeNetworkMapProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [showChannels, setShowChannels] = useState(true);
+  const [showChannels, setShowChannels] = useState(false);
   const router = useRouter();
+  
+  // 缓存节点偏移量，避免切换时节点乱跑
+  const nodeOffsetsRef = useRef<Map<string, { lng: number; lat: number }>>(new Map());
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -52,6 +59,7 @@ export default function NodeNetworkMap({
     // 初始化图表（透明背景）
     chartInstance.current = echarts.init(chartRef.current, null, {
       renderer: "canvas",
+      useDirtyRect: false, // 禁用脏矩形优化，确保所有元素都渲染
     });
 
     // 设置响应式
@@ -155,7 +163,7 @@ export default function NodeNetworkMap({
 
     // 转换节点数据为散点图数据
     // 先映射所有节点数据
-    const allNodeData = nodes
+    const rawScatterData = nodes
       .map(node => {
         const channelCount = nodeChannelCount.get(node.nodeId) || 0;
         console.log(
@@ -181,32 +189,67 @@ export default function NodeNetworkMap({
           nodeColor: getNodeColor(channelCount),
           isCurrentNode: node.nodeId === currentNodeId,
         };
-      })
-      .filter(item => item.channelCount > 0);
+      });
 
-    // 按经纬度分组，保留 channelCount 最多的节点
-    const coordMap = new Map<string, (typeof allNodeData)[0]>();
-    allNodeData.forEach(item => {
+    const allNodeData = rawScatterData.filter(item => item.channelCount > 0);
+    console.log('[NodeNetworkMap] channelCount为0过滤数量:', rawScatterData.length - allNodeData.length, '原始节点数:', rawScatterData.length);
+
+    // 对相同经纬度的节点添加随机偏移，而不是去重
+    const coordCountMap = new Map<string, number>();
+    let nodeScatterData;
+    
+    if (mock) {
+      // Mock模式：对相同经纬度的节点添加随机偏移
+      console.log('[NodeNetworkMap] Mock模式：启用随机偏移');
+      nodeScatterData = allNodeData.map(item => {
       const key = `${item.value[0]},${item.value[1]}`;
-      const existing = coordMap.get(key);
-      // 如果当前坐标没有节点，或者当前节点的 channelCount 更多，则保留当前节点
-      if (!existing || item.channelCount > existing.channelCount) {
-        coordMap.set(key, item);
+      const count = coordCountMap.get(key) || 0;
+      coordCountMap.set(key, count + 1);
+
+      // 如果是重复经纬度，添加随机偏移（50度范围内）
+      if (count > 0) {
+        const offsetRange = 50;
+        // 检查缓存中是否已有该节点的偏移量
+        let offset = nodeOffsetsRef.current.get(item.nodeId);
+        if (!offset) {
+          // 第一次遇到该节点，生成随机偏移量并缓存
+          offset = {
+            lng: (Math.random() - 0.5) * offsetRange,
+            lat: (Math.random() - 0.5) * offsetRange,
+          };
+          nodeOffsetsRef.current.set(item.nodeId, offset);
+        }
+        return {
+          ...item,
+          value: [item.value[0] + offset.lng, item.value[1] + offset.lat] as [number, number],
+        };
       }
+      return item;
     });
 
-    const nodeScatterData = Array.from(coordMap.values());
-    console.log(
-      "[NodeNetworkMap] 去重后节点数量：",
-      nodeScatterData.length,
-      "原始数量：",
-      allNodeData.length
-    );
+      const duplicateCount = Array.from(coordCountMap.values()).filter(c => c > 1).reduce((sum, c) => sum + c - 1, 0);
+      console.log('[NodeNetworkMap] 相同经纬度节点数（已添加偏移）:', duplicateCount, '最终节点数:', nodeScatterData.length);
+    } else {
+      // 正常模式：按经纬度去重，保留 channelCount 最多的节点
+      console.log('[NodeNetworkMap] 正常模式：按经纬度去重');
+      const coordMap = new Map<string, (typeof allNodeData)[0]>();
+      allNodeData.forEach(item => {
+        const key = `${item.value[0]},${item.value[1]}`;
+        const existing = coordMap.get(key);
+        if (!existing || item.channelCount > existing.channelCount) {
+          coordMap.set(key, item);
+        }
+      });
+
+      nodeScatterData = Array.from(coordMap.values());
+      console.log('[NodeNetworkMap] 重复经纬度去重数量:', allNodeData.length - nodeScatterData.length, '最终节点数:', nodeScatterData.length);
+    }
+    console.log('[NodeNetworkMap] 前5个节点数据示例:', nodeScatterData.slice(0, 5).map(n => ({ name: n.name, value: n.value, channelCount: n.channelCount })));
 
     console.log(nodeScatterData, "nodeScatterData");
-    // 创建节点ID到坐标的映射
+    // 创建节点ID到坐标的映射（使用偏移后的坐标）
     const nodeMap = new Map(
-      nodes.map(node => [node.nodeId, [node.longitude, node.latitude]])
+      nodeScatterData.map(node => [node.nodeId, node.value])
     );
 
     // 分组连线数据（按节点对分组，处理多条连线的情况）
@@ -251,19 +294,24 @@ export default function NodeNetworkMap({
     });
 
     const linesData = Array.from(connectionGroups.values());
+    console.log('[NodeNetworkMap] 连线数据数量:', linesData.length, '原始连接数:', connections.length);
+    // 打印 count 最大的前 10 条连线
+    const topLines = [...linesData].sort((a, b) => b.count - a.count).slice(0, 10);
+    console.log('[NodeNetworkMap] count最大的10条连线:', topLines.map(l => ({ from: l.node1Name, to: l.node2Name, count: l.count })));
 
     // 生成连线系列和图例数据（根据连接数量分组）
     const baseColor = "#59ABE6"; // 蓝色连线
     const connectionRanges = [
-      { min: 1, max: 1, width: 1, opacity: 1, label: "1 Channel" },
-      { min: 2, max: 2, width: 1, opacity: 1, label: "2 Channels" },
-      { min: 3, max: 3, width: 1, opacity: 1, label: "3 Channels" },
+      { min: 1, max: 1, width: 0.5, opacity: 0.15, label: "1 Channel" },
+      { min: 2, max: 3, width: 1, opacity: 0.25, label: "2-3 Channels" },
+      { min: 4, max: 6, width: 1.5, opacity: 0.4, label: "4-6 Channels" },
+      { min: 7, max: 9, width: 2, opacity: 0.6, label: "7-9 Channels" },
       {
-        min: 4,
+        min: 10,
         max: Infinity,
-        width: 1,
-        opacity: 1,
-        label: "4+ Channels",
+        width: 3,
+        opacity: 0.8,
+        label: "10+ Channels",
       },
     ];
 
@@ -277,6 +325,7 @@ export default function NodeNetworkMap({
 
       if (filteredData.length > 0) {
         const seriesName = `${range.label} (${filteredData.length})`;
+        console.log(`[NodeNetworkMap] ${seriesName} - width: ${range.width}`);
         lineSeries.push({
           name: seriesName,
           type: "lines",
@@ -295,24 +344,33 @@ export default function NodeNetworkMap({
             width: range.width,
             opacity: range.opacity,
             curveness: 0,
+            type: 'solid',
+          },
+          emphasis: {
+            lineStyle: {
+              width: range.width + 1,
+            },
           },
           silent: false,
-          progressive: 100,
-          progressiveThreshold: 500,
+          progressive: 0,
+          progressiveThreshold: 9999,
         });
         legendData.push(seriesName);
       }
     });
 
     // 使用保存的缩放和中心位置，如果不存在则使用默认值
+    // 根据屏幕宽度判断是否为移动端，只在移动端将地图中心往上移
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     const zoom = currentZoom ?? 1.2;
-    const mainCenter = currentCenter ?? [0, 20];
+    const mainCenter = currentCenter ?? (isMobile ? [0, -15] : [0, 0]); // 移动端向上移动，桌面端和平板不移动
     const shadowCenter: [number, number] = currentCenter 
       ? [currentCenter[0], currentCenter[1] + 5] 
-      : [0, 25];
+      : (isMobile ? [0, -10] : [0, 5]); // 阴影层对应调整
 
     const option: echarts.EChartsOption = {
       backgroundColor: "transparent",
+      animation: false, // 全局禁用动画
       title: title
         ? {
             text: title,
@@ -505,9 +563,35 @@ export default function NodeNetworkMap({
           coordinateSystem: "geo",
           geoIndex: 1, // 使用主地图层
           zlevel: 3, // 节点在最上层
-          z: 2,
+          z: 3, // 提高z-index确保在最上层
           data: nodeScatterData,
-          symbolSize: 16,
+          symbolSize: (value: unknown, params: unknown) => {
+            const p = params as { data?: { channelCount?: number } };
+            const channelCount = p.data?.channelCount || 0;
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+            
+            // 移动端节点统一缩小
+            if (isMobile) {
+              if (channelCount >= 40) return 12;
+              if (channelCount >= 30) return 10;
+              if (channelCount >= 20) return 9;
+              if (channelCount >= 10) return 6;
+              return 8;
+            }
+            
+            // 桌面端和平板保持原大小
+            if (channelCount >= 40) return 16;
+            if (channelCount >= 30) return 14;
+            if (channelCount >= 20) return 12;
+            if (channelCount >= 10) return 8;
+            return 12;
+          },
+          large: false, // 禁用大数据模式
+          largeThreshold: 9999, // 设置很大的阈值
+          progressive: 0, // 禁用渐进式渲染
+          progressiveThreshold: 9999, // 设置很大的阈值
+          animation: false, // 禁用动画，确保一次性渲染所有点
+          clip: false, // 不裁剪
           itemStyle: {
             borderColor: "#FFFFFF",
             borderWidth: 1,
@@ -534,6 +618,8 @@ export default function NodeNetworkMap({
       ],
     };
 
+    console.log('[NodeNetworkMap] 连线系列数量:', lineSeries.length, '节点系列: 1', '总系列数:', lineSeries.length + 1);
+    console.log('[NodeNetworkMap] 传给 ECharts 的节点数据数量:', nodeScatterData.length);
     chartInstance.current.setOption(option, {
       notMerge: true, // 不合并配置，完全替换
       lazyUpdate: false,
@@ -603,14 +689,33 @@ export default function NodeNetworkMap({
       <div
         ref={chartRef}
         style={{
-          height,
+          height: mobileHeight && typeof window !== 'undefined' && window.innerWidth < 768 ? mobileHeight : height,
           position: "relative",
           // filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.01))",
         }}
+        className="w-full"
       />
 
-      {/* 左下角图例 */}
-      <div className="absolute left-4 bottom-4 z-10 flex flex-col gap-2">
+      {/* 移动端左下角：Show channels 按钮 */}
+      <div className="absolute left-1 bottom-16 z-10 md:hidden">
+        <ChannelsToggle 
+          showChannels={showChannels} 
+          onToggle={() => setShowChannels(!showChannels)} 
+        />
+      </div>
+
+      {/* 移动端右下角：缩放控件 */}
+      <div className="absolute right-1 bottom-16 z-10 md:hidden">
+        <MapZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
+      </div>
+
+      {/* 移动端底部：图例 */}
+      <div className="absolute bottom-1 left-1 right-1 z-10 md:hidden">
+        <ChannelsLegend />
+      </div>
+
+      {/* 桌面端左下角控件（图例 + Toggle）*/}
+      <div className="hidden md:flex absolute left-4 bottom-4 z-10 flex-col gap-2">
         <ChannelsLegend />
         <ChannelsToggle 
           showChannels={showChannels} 
@@ -618,8 +723,8 @@ export default function NodeNetworkMap({
         />
       </div>
 
-      {/* 右下角缩放控制 */}
-      <div className="absolute right-4 bottom-4 z-10">
+      {/* 桌面端右下角缩放控制 */}
+      <div className="hidden md:block absolute right-4 bottom-4 z-10">
         <MapZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
       </div>
 

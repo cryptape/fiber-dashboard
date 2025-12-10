@@ -23,7 +23,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 
   return (
     <div
-      className={`h-6 px-2 rounded-full border flex justify-center items-center gap-1 ${statusStyles} ${className}`.trim()}
+      className={`h-6 px-2 rounded-full border inline-flex justify-center items-center gap-1 ${statusStyles} ${className}`.trim()}
     >
       <div className="text-sm leading-5">{text}</div>
     </div>

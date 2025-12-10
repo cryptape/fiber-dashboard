@@ -64,11 +64,12 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
       onClick={onClick}
     >
       <div 
-        className={`w-2 h-2 rounded-full ${getDotStyle().className || ""}`}
+        className={`w-2 h-2 rounded-full flex-shrink-0 ${getDotStyle().className || ""}`}
         style={getDotStyle().style}
       />
       <div
-        className={`text-base font-medium leading-5 ${currentModeStyle.text}`}
+        className={`text-base font-medium leading-5 ${currentModeStyle.text} truncate block md:inline`}
+        title={text}
       >
         {text}
       </div>
