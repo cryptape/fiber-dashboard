@@ -29,6 +29,13 @@ export interface DetailCardProps {
   topExtra?: React.ReactNode;
   /** 自定义类名 */
   className?: string;
+  /** 额外的键值对字段（在 commitmentArgs 下方显示） */
+  extraFields?: Array<{
+    key: string;
+    label: string;
+    value: string;
+    copyable?: boolean;
+  }>;
 }
 
 export const DetailCard: React.FC<DetailCardProps> = ({
@@ -44,6 +51,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   topRightLabel,
   topExtra,
   className = "",
+  extraFields,
 }) => {
 
   return (
@@ -145,6 +153,24 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             )}
           </div>
         )}
+
+        {/* 额外字段 */}
+        {extraFields && extraFields.map((field) => (
+          <div key={field.key} className="inline-flex justify-start items-start gap-2 w-full">
+            <div className="text-body text-secondary w-32 flex-shrink-0">
+              {field.label}:
+            </div>
+            <div className="text-purple text-sm leading-5 break-all flex-1">
+              {field.value}
+            </div>
+            {field.copyable && field.value !== "-" && (
+              <CopyButton
+                text={field.value}
+                ariaLabel={`复制 ${field.label}`}
+              />
+            )}
+          </div>
+        ))}
       </div>
     </GlassCardContainer>
   );

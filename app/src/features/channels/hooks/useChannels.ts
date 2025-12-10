@@ -14,13 +14,19 @@ export const channelQueryKeys = {
 };
 
 // Custom hooks for channel data
-export function useChannelsByState(state: ChannelState, page: number = 0) {
+export function useChannelsByState(
+  state: ChannelState, 
+  page: number = 0,
+  sortBy: string = 'last_commit_time',
+  order: 'asc' | 'desc' = 'desc'
+) {
   const { apiClient, currentNetwork } = useNetwork();
 
   return useQuery({
-    queryKey: [...channelQueryKeys.byState(state, page), currentNetwork],
-    queryFn: () => apiClient.getGroupChannelsByState(state, page),
+    queryKey: [...channelQueryKeys.byState(state, page), currentNetwork, sortBy, order],
+    queryFn: () => apiClient.getGroupChannelsByState(state, page, 10, sortBy, order),
     refetchInterval: 300000, // 5 minutes
+    staleTime: 0, // 确保每次排序都重新请求
   });
 }
 

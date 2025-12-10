@@ -45,8 +45,15 @@ export const NodeDetail = () => {
     queryKey: ["node-channels", nodeId, currentNetwork, currentPage, sortKey, sortState],
     queryFn: () => {
       // 将前端的 sortKey 映射到后端的 sort_by
-      const sortBy = sortKey === 'createdOn' ? 'create_time' : 'last_commit_time';
+      const sortByMapping: Record<string, "create_time" | "last_commit_time" | "capacity"> = {
+        'createdOn': 'create_time',
+        'lastCommittedOn': 'last_commit_time',
+        'capacity': 'capacity',
+      };
+      const sortBy = sortByMapping[sortKey] || 'last_commit_time';
       const order = sortState === 'ascending' ? 'asc' : 'desc';
+      console.log('[NodeDetail] Sort params - sortKey:', sortKey, 'sortState:', sortState);
+      console.log('[NodeDetail] Backend params - sortBy:', sortBy, 'order:', order);
       return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order);
     },
     enabled: !!nodeId,
@@ -127,7 +134,7 @@ export const NodeDetail = () => {
       key: "capacity",
       label: "Capacity (CKB)",
       width: "w-[160px]",
-      sortable: false,
+      sortable: true,
       render: (value) => (
         <div className="text-purple font-semibold truncate">
           {value as string}
