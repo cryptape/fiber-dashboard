@@ -697,7 +697,7 @@ export default function NodeNetworkMap({
       />
 
       {/* 移动端左下角：Show channels 按钮 */}
-      <div className="absolute left-1 bottom-16 z-10 md:hidden">
+      <div className="absolute left-1 z-10 md:hidden" style={{ bottom: '68px' }}>
         <ChannelsToggle 
           showChannels={showChannels} 
           onToggle={() => setShowChannels(!showChannels)} 
@@ -705,7 +705,7 @@ export default function NodeNetworkMap({
       </div>
 
       {/* 移动端右下角：缩放控件 */}
-      <div className="absolute right-1 bottom-16 z-10 md:hidden">
+      <div className="absolute right-1 z-10 md:hidden" style={{ bottom: '68px' }}>
         <MapZoomControls onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
       </div>
 

@@ -58,13 +58,32 @@ export const Channels = () => {
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1); // 1-based for display
   const [selectedState, setSelectedState] = useState<ChannelState>("open");
-  const [sortKey, setSortKey] = useState<string>("transactions");
-  const [sortState, setSortState] = useState<SortState>("descending");
+  const [sortKey, setSortKey] = useState<string>("");
+  const [sortState, setSortState] = useState<SortState>("none");
   const PAGE_SIZE = 10; // 每页显示10条
   const { apiClient, currentNetwork } = useNetwork();
   
   // 计算后端页码（从1开始转换为从0开始）
   const backendPage = currentPage - 1;
+
+  // 将前端的 sortKey 映射到后端的 sort_by 字段
+  const getBackendSortBy = (frontendKey: string): string => {
+    const mapping: Record<string, string> = {
+      'createdOn': 'create_time',
+      'lastCommitted': 'last_commit_time',
+      'capacity': 'capacity',
+    };
+    return mapping[frontendKey] || 'last_commit_time';
+  };
+
+  // 将前端的 sortState 映射到后端的 order
+  const getBackendOrder = (state: SortState): 'asc' | 'desc' => {
+    return state === 'ascending' ? 'asc' : 'desc';
+  };
+
+  // 计算实际的排序参数
+  const backendSortBy = sortKey ? getBackendSortBy(sortKey) : 'last_commit_time';
+  const backendOrder = sortState !== 'none' ? getBackendOrder(sortState) : 'desc';
 
   // 使用新的后端聚合接口获取容量分布数据
   const { data: capacityDistribution, dataUpdatedAt: capacityDistributionUpdatedAt } = useQuery({
@@ -86,10 +105,18 @@ export const Channels = () => {
     console.log("[Channels] channelCountByState:", channelCountByState);
   }, [capacityDistribution, channelCountByState]);
 
+  // 调试日志:查看排序参数
+  useEffect(() => {
+    console.log("[Channels] Sort params - sortKey:", sortKey, "sortState:", sortState);
+    console.log("[Channels] Backend params - backendSortBy:", backendSortBy, "backendOrder:", backendOrder);
+  }, [sortKey, sortState, backendSortBy, backendOrder]);
+
   // 使用服务端分页接口获取指定状态的通道数据
   const { data: channelsData, isLoading, refetch, dataUpdatedAt: channelsDataUpdatedAt } = useChannelsByState(
     selectedState,
-    backendPage
+    backendPage,
+    backendSortBy,
+    backendOrder
   );
   
   // 从返回数据中提取 total_count
@@ -148,7 +175,8 @@ export const Channels = () => {
   // Convert API data to table format - 直接使用当前页的数据
   const tableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
     // 将容量从十六进制 Shannon 转换为 CKB
-    const capacityInShannon = hexToDecimal(channel.capacity);
+    // 注意：服务端返回的是小端序，需要先反转字节序
+    const capacityInShannon = hexToDecimal(channel.capacity, true); // 传入 true 表示小端序
     const capacityInCKB = Number(capacityInShannon) / 100_000_000;
     
     // 格式化时间
@@ -173,10 +201,40 @@ export const Channels = () => {
     };
   }) || [];
 
+  // 调试日志：查看后端返回的原始数据和转换后的数据
+  useEffect(() => {
+    if (channelsData?.list && channelsData.list.length > 0) {
+      console.log("[Channels Debug] 后端返回的原始 capacity 数据（小端序）：");
+      const capacityDebug = channelsData.list.map((channel: BasicChannelInfo, index: number) => {
+        const capacityInShannon = hexToDecimal(channel.capacity, true); // 小端序转换
+        const capacityInCKB = Number(capacityInShannon) / 100_000_000;
+        return {
+          index: index + 1,
+          hex_little_endian: channel.capacity,
+          shannon: capacityInShannon.toString(),
+          ckb: capacityInCKB,
+          formatted: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+        };
+      });
+      console.table(capacityDebug);
+      console.log("[Channels Debug] 当前排序参数 -", {
+        sortKey,
+        sortState,
+        backendSortBy,
+        backendOrder
+      });
+    }
+  }, [channelsData, sortKey, sortState, backendSortBy, backendOrder]);
+
   // Reset to first page when state changes
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedState]);
+
+  // Reset to first page when sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sortKey, sortState]);
 
   // 列定义
   // 计算最后更新时间
@@ -214,14 +272,18 @@ export const Channels = () => {
       key: "transactions",
       label: "Transactions",
       width: "w-40",
-      sortable: true,
+      sortable: false,
     },
     {
       key: "capacity",
       label: "Capacity (CKB)",
       width: "w-60",
       sortable: true,
-      className: "text-purple-400 font-semibold",
+      render: (value) => (
+        <div className="text-purple font-semibold truncate">
+          {value as string}
+        </div>
+      ),
     },
     {
       key: "createdOn",
@@ -248,7 +310,6 @@ export const Channels = () => {
   const handleSort = (key: string, state: SortState) => {
     setSortKey(key);
     setSortState(state);
-    setCurrentPage(1); // Reset to first page when sorting
   };
 
   const handlePageChange = (page: number) => {

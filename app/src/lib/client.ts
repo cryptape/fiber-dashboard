@@ -259,10 +259,12 @@ export class APIClient {
   async getGroupChannelsByState(
     state: ChannelState,
     page: number = 0,
-    pageSize: number = 10
+    pageSize: number = 10,
+    sortBy: string = 'last_commit_time',
+    order: 'asc' | 'desc' = 'desc'
   ): Promise<GroupChannelsByStateResponse> {
     return this.apiRequest<GroupChannelsByStateResponse>(
-      `/group_channel_by_state?state=${state}&page=${page}&page_size=${pageSize}`,
+      `/group_channel_by_state?state=${state}&page=${page}&page_size=${pageSize}&sort_by=${sortBy}&order=${order}`,
       undefined,
       GroupChannelsByStateResponseSchema
     );
@@ -309,7 +311,7 @@ export class APIClient {
   async getChannelsByNodeId(
     nodeId: string,
     page: number = 0,
-    sortBy: "create_time" | "last_commit_time" = "last_commit_time",
+    sortBy: "create_time" | "last_commit_time" | "capacity" = "last_commit_time",
     order: "asc" | "desc" = "desc",
     pageSize: number = 10
   ): Promise<ChannelsByNodeIdResponse> {
@@ -1394,7 +1396,7 @@ export class APIUtils {
       typeof capacity === "string"
         ? capacity.startsWith("0x") && capacity.length === 34
           ? u128LittleEndianToDecimal(capacity)
-          : hexToDecimal(capacity)
+          : hexToDecimal(capacity, true) // 服务端返回的是小端序，需要转换
         : BigInt(capacity);
     return Number(capacityInShannons) / SHANNONS_PER_CKB;
   }

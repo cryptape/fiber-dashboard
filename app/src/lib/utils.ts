@@ -5,11 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function hexToDecimal(hex: string): bigint {
-  if (hex.startsWith("0x")) {
-    return BigInt(hex);
+export function hexToDecimal(hex: string, isLittleEndian: boolean = false): bigint {
+  let hexStr = hex.startsWith("0x") ? hex.slice(2) : hex;
+  
+  if (isLittleEndian) {
+    // 小端序：每两个字符为一组，反转字节序
+    const bytes = hexStr.match(/.{2}/g) || [];
+    hexStr = bytes.reverse().join('');
   }
-  return BigInt("0x" + hex);
+  
+  return BigInt("0x" + hexStr);
 }
 
 /**

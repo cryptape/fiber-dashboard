@@ -12,7 +12,7 @@ export function MapZoomControls({ onZoomIn, onZoomOut, className }: Props) {
   const baseClass = "inline-flex justify-start items-start gap-2 md:gap-3 md:flex-col";
   const rootClass = className ? `${baseClass} ${className}` : baseClass;
 
-  const buttonClass = "w-10 h-10 md:w-12 md:h-12 p-2 md:p-2.5 bg-popover rounded inline-flex justify-center items-center gap-2.5 cursor-pointer hover:bg-layer transition-colors";
+  const buttonClass = "w-8 h-8 md:w-10 md:h-10 p-2 md:p-2.5 bg-popover rounded inline-flex justify-center items-center gap-2.5 cursor-pointer hover:bg-layer transition-colors";
 
   return (
     <div className={rootClass}>

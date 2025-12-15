@@ -13,6 +13,8 @@ export interface DetailCardProps {
   showStatus?: boolean;
   /** 哈希值 */
   hash: string;
+  /** 是否显示哈希值标签 */
+  showHashLabel?: boolean;
   /** 地理位置 */
   location?: string;
   /** 最后出现时间 */
@@ -29,6 +31,13 @@ export interface DetailCardProps {
   topExtra?: React.ReactNode;
   /** 自定义类名 */
   className?: string;
+  /** 额外的键值对字段（在 commitmentArgs 下方显示） */
+  extraFields?: Array<{
+    key: string;
+    label: string;
+    value: string;
+    copyable?: boolean;
+  }>;
 }
 
 export const DetailCard: React.FC<DetailCardProps> = ({
@@ -36,6 +45,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   status = "Active",
   showStatus = true,
   hash,
+  showHashLabel = true,
   location,
   lastSeen,
   createdOn,
@@ -44,6 +54,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   topRightLabel,
   topExtra,
   className = "",
+  extraFields,
 }) => {
 
   return (
@@ -69,9 +80,11 @@ export const DetailCard: React.FC<DetailCardProps> = ({
 
         {/* 哈希值和复制按钮 */}
         <div className="inline-flex justify-start items-start gap-2 w-full">
-          <div className="text-body text-secondary w-32 flex-shrink-0">
-            Tx hash:
-          </div>
+          {showHashLabel && (
+            <div className="text-body text-secondary w-32 flex-shrink-0">
+              Tx hash:
+            </div>
+          )}
           <div className="text-purple text-sm leading-5 break-all flex-1">
             {hash}
           </div>
@@ -145,6 +158,24 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             )}
           </div>
         )}
+
+        {/* 额外字段 */}
+        {extraFields && extraFields.map((field) => (
+          <div key={field.key} className="inline-flex justify-start items-start gap-2 w-full">
+            <div className="text-body text-secondary w-32 flex-shrink-0">
+              {field.label}:
+            </div>
+            <div className="text-purple text-sm leading-5 break-all flex-1">
+              {field.value}
+            </div>
+            {field.copyable && field.value !== "-" && (
+              <CopyButton
+                text={field.value}
+                ariaLabel={`复制 ${field.label}`}
+              />
+            )}
+          </div>
+        ))}
       </div>
     </GlassCardContainer>
   );

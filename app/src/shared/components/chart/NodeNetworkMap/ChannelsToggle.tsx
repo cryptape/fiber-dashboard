@@ -7,13 +7,22 @@ type Props = {
 };
 
 export function ChannelsToggle({ showChannels, onToggle, className }: Props) {
-  const baseClass = "p-2 md:p-4 bg-popover rounded inline-flex justify-start items-center gap-1.5 md:gap-2 cursor-pointer";
+  const baseClass = "h-8 md:h-10 lg:h-14 px-2 py-1 md:p-2 lg:p-4 bg-popover rounded inline-flex justify-start items-center gap-1.5 md:gap-2 cursor-pointer";
   const rootClass = className ? `${baseClass} ${className}` : baseClass;
 
   return (
     <div className={rootClass} onClick={onToggle}>
       <div className="relative inline-flex justify-center items-center flex-shrink-0" style={{ width: '14px', height: '14px' }}>
-        <div className="rounded-sm bg-purple transition-colors" style={{ width: '14px', height: '14px' }} />
+        <div 
+          className="rounded-sm transition-colors" 
+          style={{ 
+            width: '14px', 
+            height: '14px',
+            backgroundColor: showChannels ? '#8B5CF6' : 'transparent',
+            border: showChannels ? 'none' : '1px solid #d9d9d9',
+            borderRadius: '2px'
+          }} 
+        />
         {showChannels && (
           <svg 
             className="absolute pointer-events-none" 

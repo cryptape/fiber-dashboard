@@ -26,6 +26,7 @@ export interface EasyTableProps {
   className?: string;
   loading?: boolean;
   loadingText?: string;
+  onRowClick?: (row: TableRow) => void;
 }
 
 export const EasyTable = ({
@@ -37,6 +38,7 @@ export const EasyTable = ({
   className = "",
   loading = false,
   loadingText = "Loading...",
+  onRowClick,
 }: EasyTableProps) => {
   return (
     <GlassCardContainer className={className}>
@@ -82,7 +84,27 @@ export const EasyTable = ({
           <div className="min-h-[156px] w-full">
             {data.map((row) => (
               <React.Fragment key={row.id}>
-                <div className="self-stretch h-12 flex justify-start items-center">
+                <div
+                  className={`self-stretch h-12 flex justify-start items-center transition-colors ${
+                    onRowClick ? 'cursor-pointer' : ''
+                  }`}
+                  style={{
+                    ...(onRowClick && {
+                      transition: 'background-color 0.2s',
+                    }),
+                  }}
+                  onMouseEnter={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-layer-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (onRowClick) {
+                      e.currentTarget.style.backgroundColor = '';
+                    }
+                  }}
+                  onClick={() => onRowClick?.(row)}
+                >
                   {columns.map((column) => (
                     <div
                       key={`${row.id}-${column.key}`}
