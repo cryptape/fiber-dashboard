@@ -175,7 +175,8 @@ export const Channels = () => {
   // Convert API data to table format - 直接使用当前页的数据
   const tableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
     // 将容量从十六进制 Shannon 转换为 CKB
-    const capacityInShannon = hexToDecimal(channel.capacity);
+    // 注意：服务端返回的是小端序，需要先反转字节序
+    const capacityInShannon = hexToDecimal(channel.capacity, true); // 传入 true 表示小端序
     const capacityInCKB = Number(capacityInShannon) / 100_000_000;
     
     // 格式化时间
@@ -199,6 +200,31 @@ export const Channels = () => {
       lastCommitted: formatDate(channel.last_commit_time),
     };
   }) || [];
+
+  // 调试日志：查看后端返回的原始数据和转换后的数据
+  useEffect(() => {
+    if (channelsData?.list && channelsData.list.length > 0) {
+      console.log("[Channels Debug] 后端返回的原始 capacity 数据（小端序）：");
+      const capacityDebug = channelsData.list.map((channel: BasicChannelInfo, index: number) => {
+        const capacityInShannon = hexToDecimal(channel.capacity, true); // 小端序转换
+        const capacityInCKB = Number(capacityInShannon) / 100_000_000;
+        return {
+          index: index + 1,
+          hex_little_endian: channel.capacity,
+          shannon: capacityInShannon.toString(),
+          ckb: capacityInCKB,
+          formatted: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+        };
+      });
+      console.table(capacityDebug);
+      console.log("[Channels Debug] 当前排序参数 -", {
+        sortKey,
+        sortState,
+        backendSortBy,
+        backendOrder
+      });
+    }
+  }, [channelsData, sortKey, sortState, backendSortBy, backendOrder]);
 
   // Reset to first page when state changes
   useEffect(() => {
@@ -253,7 +279,11 @@ export const Channels = () => {
       label: "Capacity (CKB)",
       width: "w-60",
       sortable: true,
-      className: "text-purple-400 font-semibold",
+      render: (value) => (
+        <div className="text-purple font-semibold truncate">
+          {value as string}
+        </div>
+      ),
     },
     {
       key: "createdOn",

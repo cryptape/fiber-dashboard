@@ -151,6 +151,7 @@ export default function ChannelDetailPage() {
         name="Channel"
         status={getStatusFromState(channelState.state)}
         hash={channelInfo.channel_outpoint}
+        showHashLabel={false}
         createdOn={formatTimestamp(channelInfo.created_timestamp)}
         lastCommitted={formatTimestamp(channelInfo.commit_timestamp)}
       />
@@ -159,7 +160,13 @@ export default function ChannelDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <KpiCard
           label="CAPACITY"
-          value={formatCompactNumber(channelInfo.capacity)}
+          value={(() => {
+            // 将容量从十六进制 Shannon 转换为 CKB
+            // 注意：服务端返回的是小端序，需要先反转字节序
+            const capacityInShannon = hexToDecimal(channelInfo.capacity, true);
+            const capacityInCKB = Number(capacityInShannon) / 100_000_000;
+            return formatCompactNumber(capacityInCKB);
+          })()}
           unit="CKB"
         />
         <KpiCard
@@ -205,6 +212,7 @@ export default function ChannelDetailPage() {
             name={node1Info.node_name || "Unknown Node"}
             status="Active"
             hash={node1Info.node_id}
+            showHashLabel={false}
             location={
               node1Info.city && node1Info.country_or_region
                 ? `${node1Info.city}, ${node1Info.country_or_region}`
@@ -220,7 +228,7 @@ export default function ChannelDetailPage() {
                       `/node/${encodeURIComponent(node1Info.node_id)}`
                     )
                   }
-                  className="type-button1 text-purple cursor-pointer hover:underline"
+                  className="type-button2 text-purple cursor-pointer hover:underline"
                 >
                   View details
                 </button>
@@ -237,6 +245,7 @@ export default function ChannelDetailPage() {
             name={node2Info.node_name || "Unknown Node"}
             status="Active"
             hash={node2Info.node_id}
+            showHashLabel={false}
             location={
               node2Info.city && node2Info.country_or_region
                 ? `${node2Info.city}, ${node2Info.country_or_region}`
@@ -252,7 +261,7 @@ export default function ChannelDetailPage() {
                       `/node/${encodeURIComponent(node2Info.node_id)}`
                     )
                   }
-                  className="type-button1 text-purple cursor-pointer hover:underline"
+                  className="type-button2 text-purple cursor-pointer hover:underline"
                 >
                   View details
                 </button>

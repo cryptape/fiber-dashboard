@@ -6,7 +6,7 @@ type Props = {
 
 export function ChannelsLegend({ className }: Props) {
   // 移动端：横向布局，标题和格子在同一行（3:7 比例），数字在颜色块下方；桌面端：纵向布局，数字在颜色块右侧
-  const baseClass = "bg-layer backdrop-blur-sm rounded p-2 md:p-4 w-full md:w-44";
+  const baseClass = "bg-layer backdrop-blur-sm rounded p-2 md:p-2 lg:p-4 w-full md:w-44";
   const rootClass = className ? `${baseClass} ${className}` : baseClass;
 
   return (
@@ -48,18 +48,18 @@ export function ChannelsLegend({ className }: Props) {
         <div className="type-label text-secondary leading-4 text-xs mb-2"># OF CHANNELS</div>
         <div className="flex items-center gap-2">
           <div className="inline-flex flex-col justify-center items-start">
-            <div className="w-8 h-10" style={{ backgroundColor: '#2F1C96' }} />
-            <div className="w-8 h-10" style={{ backgroundColor: '#5034C4' }} />
-            <div className="w-8 h-10" style={{ backgroundColor: '#7459E6' }} />
-            <div className="w-8 h-10" style={{ backgroundColor: '#B8A8F4' }} />
-            <div className="w-8 h-10" style={{ backgroundColor: '#E6E2FB' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#2F1C96' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#5034C4' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#7459E6' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#B8A8F4' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#E6E2FB' }} />
           </div>
           <div className="inline-flex flex-col justify-start items-start">
-            <div className="h-10 text-tertiary text-xs font-normal leading-4 flex items-center">♾️</div>
-            <div className="h-10 text-tertiary text-xs font-normal leading-4 flex items-center">40</div>
-            <div className="h-10 text-tertiary text-xs font-normal leading-4 flex items-center">30</div>
-            <div className="h-10 text-tertiary text-xs font-normal leading-4 flex items-center">20</div>
-            <div className="h-10 text-tertiary text-xs font-normal leading-4 flex items-center">10</div>
+            <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">♾️</div>
+            <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">40</div>
+            <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">30</div>
+            <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">20</div>
+            <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">10</div>
           </div>
         </div>
       </div>

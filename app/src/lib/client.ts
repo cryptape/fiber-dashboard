@@ -1396,7 +1396,7 @@ export class APIUtils {
       typeof capacity === "string"
         ? capacity.startsWith("0x") && capacity.length === 34
           ? u128LittleEndianToDecimal(capacity)
-          : hexToDecimal(capacity)
+          : hexToDecimal(capacity, true) // 服务端返回的是小端序，需要转换
         : BigInt(capacity);
     return Number(capacityInShannons) / SHANNONS_PER_CKB;
   }

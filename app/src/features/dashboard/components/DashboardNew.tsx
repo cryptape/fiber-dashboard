@@ -228,17 +228,15 @@ export const DashboardNew = () => {
             data={topNodes || []}
             loading={topNodesLoading}
             loadingText="Loading nodes ranking..."
+            onRowClick={(row) => router.push(`/node/${row.node_id}`)}
             columns={[
               {
                 key: "node_id",
                 label: "Node ID",
-                format: (value, row) => (
-                  <button
-                    onClick={() => router.push(`/node/${row.node_id}`)}
-                    className="text-primary hover:underline cursor-pointer text-left truncate w-full"
-                  >
+                format: (value) => (
+                  <div className="truncate w-full">
                     {String(value)}
-                  </button>
+                  </div>
                 ),
               },
               {

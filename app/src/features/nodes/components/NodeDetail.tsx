@@ -5,8 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
-import { APIUtils } from "@/lib/client";
-import { formatCompactNumber } from "@/lib/utils";
+import { hexToDecimal } from "@/lib/utils";
 
 interface ChannelData extends Record<string, unknown> {
   channelId: string;
@@ -95,12 +94,15 @@ export const NodeDetail = () => {
   // 将真实通道数据映射到表格所需结构
   const realChannelRows = useMemo(() => {
     return nodeChannels.map((ch) => {
-      const capacityCkb = APIUtils.parseChannelCapacityToCKB(ch.capacity);
+      // 将容量从十六进制 Shannon 转换为 CKB
+      // 注意：服务端返回的是小端序，需要先反转字节序
+      const capacityInShannon = hexToDecimal(ch.capacity, true); // 传入 true 表示小端序
+      const capacityInCKB = Number(capacityInShannon) / 100_000_000;
       
       return {
         channelId: ch.channel_outpoint,
         status: "Active" as const,
-        capacity: formatCompactNumber(capacityCkb),
+        capacity: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
         createdOn: ch.created_timestamp ? new Date(ch.created_timestamp).toLocaleDateString("en-US", {
           year: "numeric", month: "short", day: "numeric",
         }) : "-",
