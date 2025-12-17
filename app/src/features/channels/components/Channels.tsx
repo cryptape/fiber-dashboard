@@ -99,18 +99,6 @@ export const Channels = () => {
     refetchInterval: 300000, // 5分钟刷新
   });
 
-  // 调试日志:查看获取的数据
-  useEffect(() => {
-    console.log("[Channels] capacityDistribution:", capacityDistribution);
-    console.log("[Channels] channelCountByState:", channelCountByState);
-  }, [capacityDistribution, channelCountByState]);
-
-  // 调试日志:查看排序参数
-  useEffect(() => {
-    console.log("[Channels] Sort params - sortKey:", sortKey, "sortState:", sortState);
-    console.log("[Channels] Backend params - backendSortBy:", backendSortBy, "backendOrder:", backendOrder);
-  }, [sortKey, sortState, backendSortBy, backendOrder]);
-
   // 使用服务端分页接口获取指定状态的通道数据
   const { data: channelsData, isLoading, refetch, dataUpdatedAt: channelsDataUpdatedAt } = useChannelsByState(
     selectedState,
@@ -138,10 +126,7 @@ export const Channels = () => {
 
   // 计算容量分布数据 - 使用后端返回的分桶结果
   const capacityDistributionData = useMemo(() => {
-    console.log("[Channels] Processing capacity distribution, data:", capacityDistribution);
-    
     if (!capacityDistribution) {
-      console.log("[Channels] No capacity distribution data, returning empty");
       return CAPACITY_RANGES.map(range => ({ 
         label: range.label, 
         value: 0, 
@@ -163,7 +148,6 @@ export const Channels = () => {
       };
     });
     
-    console.log("[Channels] Final bar chart data:", result);
     return result;
   }, [capacityDistribution]);
 
@@ -175,8 +159,7 @@ export const Channels = () => {
   // Convert API data to table format - 直接使用当前页的数据
   const tableData: ChannelData[] = channelsData?.list?.map((channel: BasicChannelInfo) => {
     // 将容量从十六进制 Shannon 转换为 CKB
-    // 注意：服务端返回的是小端序，需要先反转字节序
-    const capacityInShannon = hexToDecimal(channel.capacity, true); // 传入 true 表示小端序
+    const capacityInShannon = hexToDecimal(channel.capacity);
     const capacityInCKB = Number(capacityInShannon) / 100_000_000;
     
     // 格式化时间
@@ -200,31 +183,6 @@ export const Channels = () => {
       lastCommitted: formatDate(channel.last_commit_time),
     };
   }) || [];
-
-  // 调试日志：查看后端返回的原始数据和转换后的数据
-  useEffect(() => {
-    if (channelsData?.list && channelsData.list.length > 0) {
-      console.log("[Channels Debug] 后端返回的原始 capacity 数据（小端序）：");
-      const capacityDebug = channelsData.list.map((channel: BasicChannelInfo, index: number) => {
-        const capacityInShannon = hexToDecimal(channel.capacity, true); // 小端序转换
-        const capacityInCKB = Number(capacityInShannon) / 100_000_000;
-        return {
-          index: index + 1,
-          hex_little_endian: channel.capacity,
-          shannon: capacityInShannon.toString(),
-          ckb: capacityInCKB,
-          formatted: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
-        };
-      });
-      console.table(capacityDebug);
-      console.log("[Channels Debug] 当前排序参数 -", {
-        sortKey,
-        sortState,
-        backendSortBy,
-        backendOrder
-      });
-    }
-  }, [channelsData, sortKey, sortState, backendSortBy, backendOrder]);
 
   // Reset to first page when state changes
   useEffect(() => {

@@ -5,13 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function hexToDecimal(hex: string, isLittleEndian: boolean = false): bigint {
-  let hexStr = hex.startsWith("0x") ? hex.slice(2) : hex;
+export function hexToDecimal(hex: string): bigint {
+  const hexStr = hex.startsWith("0x") ? hex.slice(2) : hex;
   
-  if (isLittleEndian) {
-    // 小端序：每两个字符为一组，反转字节序
-    const bytes = hexStr.match(/.{2}/g) || [];
-    hexStr = bytes.reverse().join('');
+  // 处理空字符串或 "0" 的情况
+  if (!hexStr || hexStr === "0") {
+    return BigInt(0);
   }
   
   return BigInt("0x" + hexStr);
@@ -130,11 +129,11 @@ export function formatCompactNumber(
   };
 
   if (absValue >= 1e9) {
-    return `${sign}${formatWithPrecision(absValue / 1e9)}b`;
+    return `${sign}${formatWithPrecision(absValue / 1e9)}B`;
   } else if (absValue >= 1e6) {
-    return `${sign}${formatWithPrecision(absValue / 1e6)}m`;
+    return `${sign}${formatWithPrecision(absValue / 1e6)}M`;
   } else if (absValue >= 1e3) {
-    return `${sign}${formatWithPrecision(absValue / 1e3)}k`;
+    return `${sign}${formatWithPrecision(absValue / 1e3)}K`;
   } else {
     // For numbers less than 1000, show as is
     if (precision === null) {
