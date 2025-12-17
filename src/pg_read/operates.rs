@@ -199,10 +199,7 @@ pub(crate) async fn query_channels_by_node_id(
             last_seen_hour: row.get("last_seen_hour"),
             capacity: {
                 let be_hex: String = row.get("capacity");
-                let mut buf = vec![0u8; be_hex.len() / 2];
-                faster_hex::hex_decode(be_hex.as_bytes(), &mut buf).unwrap();
-                buf.reverse();
-                format!("0x{}", faster_hex::hex_string(&buf))
+                format!("0x{}", &be_hex)
             },
             created_timestamp: row.get("created_timestamp"),
             state: row.get("state"),
@@ -641,11 +638,7 @@ pub async fn query_analysis(
                     let mut values = Vec::new();
                     for name in table.name.to_sql().split(", ") {
                         let value: String = row.get(name);
-                        let mut buf = vec![0u8; value.len() / 2];
-                        faster_hex::hex_decode(value.as_bytes(), &mut buf).unwrap();
-                        buf.reverse();
-                        let hex_string = faster_hex::hex_string(&buf);
-                        values.push(serde_json::Value::String(format!("0x{}", hex_string)));
+                        values.push(serde_json::Value::String(format!("0x{}", value)));
                     }
                     table
                         .points
@@ -700,11 +693,7 @@ pub async fn query_channel_state(
             }
             if capacity.is_empty() {
                 let raw: String = row.get("capacity");
-                let mut buf = vec![0u8; raw.len() / 2];
-                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                buf.reverse();
-                let hex_string = faster_hex::hex_string(&buf);
-                capacity = format!("0x{}", hex_string);
+                capacity = format!("0x{}", raw);
             }
 
             let raw_tx_hash: String = row.get("tx_hash");
@@ -713,13 +702,7 @@ pub async fn query_channel_state(
             let raw_commitment_args: Option<String> = row.get("commitment_args");
             let raw_timestamp: DateTime<Utc> = row.get("timestamp");
             let tx_hash = format!("0x{}", raw_tx_hash);
-            let block_number = {
-                let mut buf = vec![0u8; raw_block_number.len() / 2];
-                faster_hex::hex_decode(raw_block_number.as_bytes(), &mut buf).unwrap();
-                buf.reverse();
-                let hex_string = faster_hex::hex_string(&buf);
-                format!("0x{}", hex_string)
-            };
+            let block_number = { format!("0x{}", raw_block_number) };
             let timestamp = raw_timestamp.to_rfc3339();
 
             let witness_args = raw_witness_args.map(|args| format!("0x{}", args));
@@ -820,25 +803,13 @@ pub(crate) async fn group_channel_by_state(
         .map(|row| {
             let channel_outpoint: String = row.get("channel_outpoint");
             let funding_args: String = row.get("funding_args");
-            let last_block_number: String = {
-                let raw: String = row.get("last_block_number");
-                let mut buf = vec![0u8; raw.len() / 2];
-                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                buf.reverse();
-                faster_hex::hex_string(&buf)
-            };
+            let last_block_number: String = row.get("last_block_number");
             let last_tx_hash: String = row.get("last_tx_hash");
             let last_commitment_args: Option<String> = row.get("last_commitment_args");
             let create_time: DateTime<Utc> = row.get("create_time");
             let last_commit_time: DateTime<Utc> = row.get("last_commit_time");
             let tx_count: i64 = row.get("tx_count");
-            let capacity: String = {
-                let raw: String = row.get("capacity");
-                let mut buf = vec![0u8; raw.len() / 2];
-                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                buf.reverse();
-                faster_hex::hex_string(&buf)
-            };
+            let capacity: String = row.get("capacity");
             (
                 format!("0x{}", channel_outpoint),
                 format!("0x{}", funding_args),
