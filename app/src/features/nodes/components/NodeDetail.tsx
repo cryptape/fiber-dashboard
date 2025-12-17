@@ -95,8 +95,7 @@ export const NodeDetail = () => {
   const realChannelRows = useMemo(() => {
     return nodeChannels.map((ch) => {
       // 将容量从十六进制 Shannon 转换为 CKB
-      // 注意：服务端返回的是小端序，需要先反转字节序
-      const capacityInShannon = hexToDecimal(ch.capacity, true); // 传入 true 表示小端序
+      const capacityInShannon = hexToDecimal(ch.capacity);
       const capacityInCKB = Number(capacityInShannon) / 100_000_000;
       
       return {
