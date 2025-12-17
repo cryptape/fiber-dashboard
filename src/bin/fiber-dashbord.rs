@@ -304,8 +304,9 @@ async fn timed_commit_states() {
 }
 
 async fn daily_commit() {
+    let mut clock_timer = ClockTimer::new_daily(0, 11, false);
     loop {
-        let trigger_time = ClockTimer::new_daily(0, 11, false).tick().await;
+        let trigger_time = clock_timer.tick().await;
         let pool = get_pg_pool();
         daily_statistics(
             pool,
@@ -319,8 +320,10 @@ async fn daily_commit() {
 }
 
 async fn hourly_fresh() {
+    let mut clock_timer = ClockTimer::new_interval_with_minute(5, 30, false);
     loop {
-        let trigger_time = ClockTimer::new_hourly(10, 30, false).tick().await;
+        let trigger_time = clock_timer.tick().await;
+
         let pool = get_pg_pool();
         let nets = NETS.iter();
         for net in nets {

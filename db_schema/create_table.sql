@@ -180,7 +180,8 @@ SELECT DISTINCT ON (node_id)
     channel_count,
     bucket
 FROM online_nodes_hourly
-WHERE bucket >= now() - interval '6 hour';
+WHERE bucket >= now() - interval '6 hour'
+ORDER BY node_id, bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_nodes_node_id ON mv_online_nodes(node_id);
 create index idx_mv_online_nodes_node_name ON mv_online_nodes(node_name);
@@ -259,7 +260,8 @@ SELECT DISTINCT ON (channel_outpoint)
     update_of_node2_fee_rate,
     bucket
 FROM online_channels_hourly
-WHERE bucket >= now() - interval '6 hour';
+WHERE bucket >= now() - interval '6 hour'
+ORDER BY channel_outpoint, bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_channels_outpoint ON mv_online_channels(channel_outpoint);
 create index idx_mv_online_channels_node1 ON mv_online_channels(node1);
@@ -451,7 +453,8 @@ SELECT DISTINCT ON (node_id)
     channel_count,
     bucket
 FROM online_nodes_hourly_testnet
-WHERE bucket >= now() - interval '6 hour';
+WHERE bucket >= now() - interval '6 hour'
+ORDER BY node_id, bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_nodes_node_id_testnet ON mv_online_nodes_testnet(node_id);
 create index idx_mv_online_nodes_node_name_testnet ON mv_online_nodes_testnet(node_name);
@@ -530,7 +533,8 @@ SELECT DISTINCT ON (channel_outpoint)
     update_of_node2_fee_rate,
     bucket
 FROM online_channels_hourly_testnet
-WHERE bucket >= now() - interval '6 hour';
+WHERE bucket >= now() - interval '6 hour'
+ORDER BY channel_outpoint, bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_channels_outpoint_testnet ON mv_online_channels_testnet(channel_outpoint);
 create index idx_mv_online_channels_node1_testnet ON mv_online_channels_testnet(node1);

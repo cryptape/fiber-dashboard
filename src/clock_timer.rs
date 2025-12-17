@@ -8,6 +8,7 @@ pub struct ClockTimer {
 enum ScheduleType {
     Daily { hour: u32, minute: u32 },
     Hourly { minute: u32, second: u32 },
+    IntervalWithMinute { minute: u32, second: u32 },
 }
 
 impl ClockTimer {
@@ -21,6 +22,14 @@ impl ClockTimer {
     pub fn new_hourly(minute: u32, second: u32, run_immediately: bool) -> Self {
         ClockTimer {
             schedule_type: ScheduleType::Hourly { minute, second },
+            run_immediately,
+        }
+    }
+
+    /// trigger every `now / minute == 0` minutes at `second` seconds
+    pub fn new_interval_with_minute(minute: u32, second: u32, run_immediately: bool) -> Self {
+        ClockTimer {
+            schedule_type: ScheduleType::IntervalWithMinute { minute, second },
             run_immediately,
         }
     }
@@ -54,6 +63,17 @@ impl ClockTimer {
                     next = next + chrono::Duration::hours(1);
                 }
                 next
+            }
+            ScheduleType::IntervalWithMinute { minute, second } => {
+                let now_minute = now.minute();
+                let remainder = now_minute % minute;
+                let minutes_to_add = if remainder == 0 && now.second() == 0 {
+                    minute
+                } else {
+                    minute - remainder
+                };
+                now.with_second(second).unwrap().with_nanosecond(0).unwrap()
+                    + chrono::Duration::minutes(minutes_to_add as i64)
             }
         }
     }
