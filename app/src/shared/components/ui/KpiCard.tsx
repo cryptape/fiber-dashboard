@@ -7,12 +7,30 @@ import { GlassCardContainer } from "./GlassCardContainer";
  * @returns 格式化后的数字和单位对象
  */
 function formatNumber(value: string): { number: string; suffix: string } {
+  // 先尝试直接分离数字和后缀（如 "249.3K" -> { number: "249.3", suffix: "K" }）
+  const directMatch = value.match(/^([\d.,]+)([A-Z]*)$/);
+  if (directMatch && directMatch[2]) {
+    // 如果已经包含后缀，直接返回
+    return {
+      number: directMatch[1].replace(/,/g, ''),
+      suffix: directMatch[2]
+    };
+  }
+  
   // 移除逗号并转换为数字
   const numStr = value.replace(/,/g, '');
   const num = parseFloat(numStr);
   
   if (isNaN(num)) {
     return { number: value, suffix: '' };
+  }
+  
+  // 对于小于 1 的数字,保留更多小数位,不使用 compact 模式
+  if (num < 1 && num > 0) {
+    return { 
+      number: num.toFixed(2).replace(/\.?0+$/, ''), // 最多保留4位小数,去除尾部的0
+      suffix: '' 
+    };
   }
   
   // 使用 Intl.NumberFormat 的 compact notation

@@ -39,7 +39,7 @@ import {
   ChannelsByNodeIdResponse,
   ChannelsByNodeIdResponseSchema,
 } from "./types";
-import { hexToDecimal, u128LittleEndianToDecimal } from "./utils";
+import { hexToDecimal } from "./utils";
 
 export class APIClient {
   constructor(
@@ -1394,9 +1394,7 @@ export class APIUtils {
   static parseChannelCapacityToCKB(capacity: string | number): number {
     const capacityInShannons =
       typeof capacity === "string"
-        ? capacity.startsWith("0x") && capacity.length === 34
-          ? u128LittleEndianToDecimal(capacity)
-          : hexToDecimal(capacity, true) // 服务端返回的是小端序，需要转换
+        ? hexToDecimal(capacity) // 服务端返回的是正常十六进制
         : BigInt(capacity);
     return Number(capacityInShannons) / SHANNONS_PER_CKB;
   }

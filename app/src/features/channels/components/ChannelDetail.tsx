@@ -162,8 +162,7 @@ export default function ChannelDetailPage() {
           label="CAPACITY"
           value={(() => {
             // 将容量从十六进制 Shannon 转换为 CKB
-            // 注意：服务端返回的是小端序，需要先反转字节序
-            const capacityInShannon = hexToDecimal(channelInfo.capacity, true);
+            const capacityInShannon = hexToDecimal(channelInfo.capacity);
             const capacityInCKB = Number(capacityInShannon) / 100_000_000;
             return formatCompactNumber(capacityInCKB);
           })()}
