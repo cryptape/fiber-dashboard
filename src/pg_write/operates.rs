@@ -34,7 +34,6 @@ use std::{
 pub async fn from_rpc_to_db_schema(
     node_info: NodeInfo,
     net: Network,
-    node_channels_count: &HashMap<String, usize>,
 ) -> (
     NodeInfoDBSchema,
     Vec<UdtInfos>,
@@ -44,7 +43,7 @@ pub async fn from_rpc_to_db_schema(
     let node_id = String::from_utf8(node_info.node_id.to_vec()).unwrap();
     let announce_timestamp = DateTime::from_timestamp_millis(node_info.timestamp as i64).unwrap();
     let auto_accept_min_ckb_funding_amount =
-        hex_string(&node_info.auto_accept_min_ckb_funding_amount.to_le_bytes());
+        hex_string(&node_info.auto_accept_min_ckb_funding_amount.to_be_bytes());
 
     let mut udt_infos = vec![];
     let mut udt_dep_relations = vec![];
@@ -78,7 +77,7 @@ pub async fn from_rpc_to_db_schema(
                 args: hex_string(udt_cfg.script.args.as_bytes()),
                 auto_accept_amount: udt_cfg
                     .auto_accept_amount
-                    .map_or("NULL".to_string(), |v| hex_string(&v.to_le_bytes())),
+                    .map_or("NULL".to_string(), |v| hex_string(&v.to_be_bytes())),
             };
             udt_infos.push(udt_info);
             for dep in udt_cfg.cell_deps {
@@ -86,7 +85,7 @@ pub async fn from_rpc_to_db_schema(
                     let relation = UdtdepRelation {
                         outpoint_tx_hash: Some(hex_string(cell_dep.out_point.tx_hash.as_bytes())),
                         outpoint_index: Some(hex_string(
-                            &cell_dep.out_point.index.value().to_le_bytes(),
+                            &cell_dep.out_point.index.value().to_be_bytes(),
                         )),
                         dep_type: Some({
                             match cell_dep.dep_type {
@@ -142,7 +141,6 @@ pub async fn from_rpc_to_db_schema(
     let mut node_schema = NodeInfoDBSchema {
         node_name: node_info.node_name,
         addresses: serde_json::to_string(&node_info.addresses).unwrap(),
-        channel_count: *node_channels_count.get(&node_id).unwrap_or(&0),
         node_id,
         announce_timestamp,
         chain_hash: hex_string(node_info.chain_hash.as_bytes()),
@@ -466,10 +464,10 @@ pub async fn channel_states_monitor(
                             },
                         )
                     }
-                    "closed" => (
+                    "settled" => (
                         outpoint,
                         ChannelState {
-                            state: State::Closed,
+                            state: State::Settled,
                             net: Network::Mainnet,
                         },
                     ),
@@ -539,10 +537,10 @@ pub async fn channel_states_monitor(
                             },
                         )
                     }
-                    "closed" => (
+                    "settled" => (
                         outpoint,
                         ChannelState {
-                            state: State::Closed,
+                            state: State::Settled,
                             net: Network::Testnet,
                         },
                     ),
@@ -605,7 +603,7 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
 
     for (outpoint, state) in &mut channel_states.channels {
         match state.state.clone() {
-            State::Closed => {}
+            State::Settled => {}
             State::Funding { funding_args, .. } => {
                 let url = match state.net {
                     Network::Mainnet => {
@@ -677,10 +675,10 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                     };
                     match commitment_args {
                         None => {
-                            state.state = State::Closed;
+                            state.state = State::Settled;
                             s.entry(outpoint.clone())
                                 .and_modify(|csu: &mut ChannelStateUpdate| {
-                                    csu.state = DBState::Closed;
+                                    csu.state = DBState::Settled;
                                     csu.last_block_number = tc.block_number;
                                     csu.last_commit = header.inner.timestamp.value();
                                     csu.txs.push((
@@ -693,7 +691,7 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                                 })
                                 .or_insert(ChannelStateUpdate {
                                     outpoint: outpoint.clone(),
-                                    state: DBState::Closed,
+                                    state: DBState::Settled,
                                     last_block_number: tc.block_number,
                                     last_commit: header.inner.timestamp.value(),
                                     last_commitment_args: None,
@@ -925,10 +923,10 @@ async fn commitment_branch(
                     });
                 match next_commitment_args {
                     None => {
-                        state.state = State::Closed;
+                        state.state = State::Settled;
                         csus.entry(outpoint.clone())
                             .and_modify(|csu: &mut ChannelStateUpdate| {
-                                csu.state = DBState::Closed;
+                                csu.state = DBState::Settled;
                                 csu.last_block_number = tc.block_number;
                                 csu.last_commit = header.inner.timestamp.value();
                                 csu.txs.push((
@@ -941,7 +939,7 @@ async fn commitment_branch(
                             })
                             .or_insert(ChannelStateUpdate {
                                 outpoint: outpoint.clone(),
-                                state: DBState::Closed,
+                                state: DBState::Settled,
                                 last_block_number: tc.block_number,
                                 last_commit: header.inner.timestamp.value(),
                                 last_commitment_args: None,
@@ -997,7 +995,7 @@ async fn commitment_branch(
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum State {
     Funding {
         tx_hash: H256,
@@ -1009,7 +1007,7 @@ enum State {
         block_number: BlockNumber,
         commitment_args: JsonBytes,
     },
-    Closed,
+    Settled,
 }
 
 #[derive(Debug, Clone)]
@@ -1028,15 +1026,15 @@ pub enum DBState {
     Open,
     #[serde(alias = "commitment")]
     Commitment,
-    #[serde(alias = "closed")]
-    Closed,
+    #[serde(alias = "settled")]
+    Settled,
 }
 impl DBState {
     pub fn to_sql(&self) -> &str {
         match self {
             DBState::Open => "open",
             DBState::Commitment => "commitment",
-            DBState::Closed => "closed",
+            DBState::Settled => "settled",
         }
     }
 }
@@ -1172,7 +1170,7 @@ impl ChannelGroup {
                         block_number: self.txs.last().unwrap().1,
                         commitment_args: self.txs.last().unwrap().3.clone().unwrap(),
                     },
-                    DBState::Closed => State::Closed,
+                    DBState::Settled => State::Settled,
                 },
             },
         )
@@ -1365,7 +1363,7 @@ pub async fn new_channels(
                     });
                 match commitment_args {
                     None => {
-                        group.state = DBState::Closed;
+                        group.state = DBState::Settled;
                         group.last_block_number = tc.block_number;
                         group.last_commit_time = header.inner.timestamp.value();
                         group.txs.push((
@@ -1460,7 +1458,7 @@ pub async fn new_channels(
                         });
                     match commitment_args {
                         None => {
-                            group.state = DBState::Closed;
+                            group.state = DBState::Settled;
                             group.last_block_number = tc.block_number;
                             group.last_commit_time = header.inner.timestamp.value();
                             group.txs.push((

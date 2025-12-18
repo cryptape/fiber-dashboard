@@ -205,23 +205,13 @@ async fn timed_commit_states() {
                 }
             }
 
-            let node_channels_count = raw_channels.iter().fold(
-                std::collections::HashMap::<String, usize>::new(),
-                |mut acc, channel| {
-                    *acc.entry(String::from_utf8(channel.node1.to_vec()).unwrap())
-                        .or_default() += 1;
-                    *acc.entry(String::from_utf8(channel.node2.to_vec()).unwrap())
-                        .or_default() += 1;
-                    acc
-                },
-            );
             let mut node_schemas = Vec::with_capacity(raw_nodes.len());
             let mut udt_infos = Vec::new();
             let mut udt_dep_relations = Vec::new();
             let mut udt_node_relations = Vec::new();
             for node in raw_nodes {
                 let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
-                    from_rpc_to_db_schema(node, *net, &node_channels_count).await;
+                    from_rpc_to_db_schema(node, *net).await;
                 node_schemas.push(node_schema);
                 udt_infos.extend(udt_info);
                 udt_dep_relations.extend(udt_dep_relation);
@@ -320,7 +310,7 @@ async fn daily_commit() {
 }
 
 async fn hourly_fresh() {
-    let mut clock_timer = ClockTimer::new_interval_with_minute(5, 30, false);
+    let mut clock_timer = ClockTimer::new_interval_with_minute(5, 30, true);
     loop {
         let trigger_time = clock_timer.tick().await;
 

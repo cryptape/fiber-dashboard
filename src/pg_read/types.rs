@@ -61,6 +61,22 @@ WHERE bucket >= $1::timestamp
 ORDER BY channel_outpoint, bucket DESC";
 
 const SELECT_MONTHLY_NODES_SQL: &str = "
+WITH latest_channels AS (
+  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
+  FROM online_channels_hourly
+  WHERE bucket >= $1::timestamp and bucket < $2::timestamp
+  ORDER BY channel_outpoint, bucket DESC
+),
+channel_nodes AS (
+  SELECT node1 AS node, channel_outpoint FROM latest_channels
+  UNION ALL
+  SELECT node2 AS node, channel_outpoint FROM latest_channels
+),
+channel_counts AS (
+  SELECT node, COUNT(*) AS channel_count
+  FROM channel_nodes
+  GROUP BY node
+)
 SELECT DISTINCT ON (n.node_id)
   n.node_id as node_id,
   n.bucket AS last_seen_hour,
@@ -73,8 +89,9 @@ SELECT DISTINCT ON (n.node_id)
   n.city,
   n.region,
   n.loc,
-  n.channel_count
+  c.channel_count
 FROM {nodes} n
+LEFT JOIN channel_counts c ON n.node_id = c.node
 WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp
 ORDER BY n.node_id, n.bucket DESC";
 
@@ -152,7 +169,7 @@ impl From<HourlyNodeInfoDBRead> for HourlyNodeInfo {
                     &mut amount_bytes,
                 )
                 .unwrap();
-                u64::from_le_bytes(amount_bytes)
+                u64::from_be_bytes(amount_bytes)
             },
             country_or_region: info.country_or_region,
             city: info.city,
@@ -177,7 +194,7 @@ pub struct HourlyNodeInfoDBRead {
     pub city: Option<String>,
     pub region: Option<String>,
     pub loc: Option<String>,
-    pub channel_count: i32,
+    pub channel_count: i64,
 }
 
 impl HourlyNodeInfoDBRead {
@@ -205,7 +222,7 @@ impl HourlyNodeInfoDBRead {
             WHERE node_id = $1
             ORDER BY last_seen_hour DESC
             LIMIT 1",
-            net.node_infos()
+            net.mv_online_nodes()
         );
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
         let res = sqlx::query_as::<_, Self>(&sql)
@@ -426,7 +443,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                     outbound_liquidity: info.update_of_node1_outbound_liquidity.map(|ol| {
                         let mut ol_bytes = [0u8; 16];
                         faster_hex::hex_decode(ol.as_bytes(), &mut ol_bytes).unwrap();
-                        u128::from_le_bytes(ol_bytes)
+                        u128::from_be_bytes(ol_bytes)
                     }),
                     tlc_expiry_delta: {
                         let mut delta_bytes = [0u8; 8];
@@ -438,7 +455,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut delta_bytes,
                         )
                         .unwrap();
-                        u64::from_le_bytes(delta_bytes)
+                        u64::from_be_bytes(delta_bytes)
                     },
                     tlc_minimum_value: {
                         let mut min_value_bytes = [0u8; 16];
@@ -450,7 +467,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut min_value_bytes,
                         )
                         .unwrap();
-                        u128::from_le_bytes(min_value_bytes)
+                        u128::from_be_bytes(min_value_bytes)
                     },
                     fee_rate: {
                         let mut fee_rate_bytes = [0u8; 8];
@@ -459,7 +476,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut fee_rate_bytes,
                         )
                         .unwrap();
-                        u64::from_le_bytes(fee_rate_bytes)
+                        u64::from_be_bytes(fee_rate_bytes)
                     },
                 }
             }),
@@ -470,7 +487,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                     outbound_liquidity: info.update_of_node2_outbound_liquidity.map(|ol| {
                         let mut ol_bytes = [0u8; 16];
                         faster_hex::hex_decode(ol.as_bytes(), &mut ol_bytes).unwrap();
-                        u128::from_le_bytes(ol_bytes)
+                        u128::from_be_bytes(ol_bytes)
                     }),
                     tlc_expiry_delta: {
                         let mut delta_bytes = [0u8; 8];
@@ -482,7 +499,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut delta_bytes,
                         )
                         .unwrap();
-                        u64::from_le_bytes(delta_bytes)
+                        u64::from_be_bytes(delta_bytes)
                     },
                     tlc_minimum_value: {
                         let mut min_value_bytes = [0u8; 16];
@@ -494,7 +511,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut min_value_bytes,
                         )
                         .unwrap();
-                        u128::from_le_bytes(min_value_bytes)
+                        u128::from_be_bytes(min_value_bytes)
                     },
                     fee_rate: {
                         let mut fee_rate_bytes = [0u8; 8];
@@ -503,7 +520,7 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
                             &mut fee_rate_bytes,
                         )
                         .unwrap();
-                        u64::from_le_bytes(fee_rate_bytes)
+                        u64::from_be_bytes(fee_rate_bytes)
                     },
                 }
             }),
@@ -663,7 +680,7 @@ impl HourlyChannelInfoDBRead {
         }
         let sql_count = format!(
             "SELECT COUNT(DISTINCT channel_outpoint) FROM {} n WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp",
-            params.net.mv_online_channels()
+            params.net.online_channels_hourly()
         );
         let total_count: i64 = sqlx::query(&sql_count)
             .bind(start)
@@ -672,7 +689,7 @@ impl HourlyChannelInfoDBRead {
             .await?
             .get(0);
         let sql = SELECT_MONTHLY_CHANNELS_SQL
-            .replace("{1}", params.net.mv_online_channels())
+            .replace("{1}", params.net.online_channels_hourly())
             .replace("{2}", params.net.udt_infos());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(start)
