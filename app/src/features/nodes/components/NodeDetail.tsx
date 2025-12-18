@@ -1,4 +1,4 @@
-import { DetailCard, PageHeader, KpiCard, SectionHeader, Table, Pagination, GlassCardContainer, StatusBadge } from "@/shared/components/ui";
+import { DetailCard, PageHeader, KpiCard, SectionHeader, Table, Pagination, GlassCardContainer } from "@/shared/components/ui";
 import type { ColumnDef, SortState } from "@/shared/components/ui";
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ import { hexToDecimal } from "@/lib/utils";
 
 interface ChannelData extends Record<string, unknown> {
   channelId: string;
-  status: "Active" | "Inactive";
+  status: string;
   capacity: string;
   createdOn: string;
   lastCommittedOn: string;
@@ -100,7 +100,7 @@ export const NodeDetail = () => {
       
       return {
         channelId: ch.channel_outpoint,
-        status: "Active" as const,
+        status: ch.state,
         capacity: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
         createdOn: ch.created_timestamp ? new Date(ch.created_timestamp).toLocaleDateString("en-US", {
           year: "numeric", month: "short", day: "numeric",
@@ -127,9 +127,6 @@ export const NodeDetail = () => {
       key: "status",
       label: "Status",
       width: "w-[140px]",
-      render: (value) => (
-        <StatusBadge text={value as string} status={value as "Active" | "Inactive"} />
-      ),
     },
     {
       key: "capacity",

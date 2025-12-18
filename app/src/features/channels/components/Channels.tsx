@@ -121,7 +121,7 @@ export const Channels = () => {
   const pieChartData = [
     { name: "Open", value: getStateCount("open"), status: "Open" },
     { name: "Committing", value: getStateCount("commitment"), status: "Committing" },
-    { name: "Closed", value: getStateCount("closed"), status: "Closed" },
+    { name: "Settled", value: getStateCount("settled"), status: "Settled" },
   ];
 
   // 计算容量分布数据 - 使用后端返回的分桶结果
@@ -340,10 +340,10 @@ export const Channels = () => {
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
-          text={`Closed (${getStateCount("closed")})`}
+          text={`Settled (${getStateCount("settled")})`}
           color="#B34846"
-          mode={selectedState === "closed" ? "dark" : "light"}
-          onClick={() => handleStateChange("closed")}
+          mode={selectedState === "settled" ? "dark" : "light"}
+          onClick={() => handleStateChange("settled")}
           className="flex-1 min-w-0 md:flex-initial"
         />
       </div>
