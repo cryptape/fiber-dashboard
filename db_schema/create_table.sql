@@ -74,7 +74,6 @@ create table node_infos (
     city TEXT,
     region TEXT,
     loc TEXT,
-    channel_count INTEGER NOT NULL
 )
 WITH (
   timescaledb.hypertable,
@@ -138,8 +137,7 @@ SELECT
   last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
-  last(loc, time) AS loc,
-  last(channel_count, time) AS channel_count
+  last(loc, time) AS loc
 FROM node_infos
 -- group by node ID to ensure each node appears only once
 GROUP BY bucket, node_id
@@ -162,26 +160,41 @@ create index idx_node_hourly_name_time
   ON online_nodes_hourly(node_name, bucket DESC);
 create index idx_node_hourly_country_or_region_time
   ON online_nodes_hourly(country_or_region, bucket DESC);
-create index idx_node_hourly_channel_count_time
-  ON online_nodes_hourly(channel_count, bucket DESC);
 
 CREATE MATERIALIZED VIEW mv_online_nodes as 
+WITH latest_channels AS (
+  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
+  FROM online_channels_hourly
+  WHERE bucket >= now() - interval '3 hour'
+  ORDER BY channel_outpoint, bucket DESC
+),
+channel_nodes AS (
+  SELECT node1 AS node, channel_outpoint FROM latest_channels
+  UNION ALL
+  SELECT node2 AS node, channel_outpoint FROM latest_channels
+),
+channel_counts AS (
+  SELECT node, COUNT(*) AS channel_count
+  FROM channel_nodes
+  GROUP BY node
+)
 SELECT DISTINCT ON (node_id) 
-    node_id,
-    node_name,
-    addresses,
-    announce_timestamp,
-    chain_hash,
-    auto_accept_min_ckb_funding_amount,
-    country_or_region,
-    city,
-    region,
-    loc,
-    channel_count,
-    bucket
-FROM online_nodes_hourly
-WHERE bucket >= now() - interval '6 hour'
-ORDER BY node_id, bucket DESC;
+    n.node_id,
+    n.node_name,
+    n.addresses,
+    n.announce_timestamp,
+    n.chain_hash,
+    n.auto_accept_min_ckb_funding_amount,
+    n.country_or_region,
+    n.city,
+    n.region,
+    n.loc,
+    COALESCE(c.channel_count, 0) as channel_count,
+    n.bucket
+FROM online_nodes_hourly n
+LEFT JOIN channel_counts c ON n.node_id = c.node
+WHERE n.bucket >= now() - interval '6 hour'
+ORDER BY n.node_id, n.bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_nodes_node_id ON mv_online_nodes(node_id);
 create index idx_mv_online_nodes_node_name ON mv_online_nodes(node_name);
@@ -346,8 +359,7 @@ create table node_infos_testnet (
     country_or_region TEXT,
     city TEXT,
     region TEXT,
-    loc TEXT,
-    channel_count INTEGER NOT NULL
+    loc TEXT
 )
 WITH (
   timescaledb.hypertable,
@@ -411,8 +423,7 @@ SELECT
   last(country_or_region, time) AS country_or_region,
   last(city, time) AS city,
   last(region, time) AS region,
-  last(loc, time) AS loc,
-  last(channel_count, time) AS channel_count
+  last(loc, time) AS loc
 FROM node_infos_testnet
 -- group by node ID to ensure each node appears only once
 GROUP BY bucket, node_id
@@ -435,26 +446,41 @@ create index idx_node_hourly_name_time_testnet
   ON online_nodes_hourly_testnet(node_name, bucket DESC);
 create index idx_node_hourly_country_or_region_time_testnet
   ON online_nodes_hourly_testnet(country_or_region, bucket DESC);
-create index idx_node_hourly_channel_count_time_testnet
-  ON online_nodes_hourly_testnet(channel_count, bucket DESC);
 
 CREATE MATERIALIZED VIEW mv_online_nodes_testnet as 
-SELECT DISTINCT ON (node_id) 
-    node_id,
-    node_name,
-    addresses,
-    announce_timestamp,
-    chain_hash,
-    auto_accept_min_ckb_funding_amount,
-    country_or_region,
-    city,
-    region,
-    loc,
-    channel_count,
-    bucket
-FROM online_nodes_hourly_testnet
-WHERE bucket >= now() - interval '6 hour'
-ORDER BY node_id, bucket DESC;
+WITH latest_channels AS (
+  SELECT DISTINCT ON (channel_outpoint) channel_outpoint, node1, node2
+  FROM online_channels_hourly_testnet
+  WHERE bucket >= now() - interval '3 hour'
+  ORDER BY channel_outpoint, bucket DESC
+),
+channel_nodes AS (
+  SELECT node1 AS node, channel_outpoint FROM latest_channels
+  UNION ALL
+  SELECT node2 AS node, channel_outpoint FROM latest_channels
+),
+channel_counts AS (
+  SELECT node, COUNT(*) AS channel_count
+  FROM channel_nodes
+  GROUP BY node
+)
+SELECT DISTINCT ON (n.node_id) 
+    n.node_id,
+    n.node_name,
+    n.addresses,
+    n.announce_timestamp,
+    n.chain_hash,
+    n.auto_accept_min_ckb_funding_amount,
+    n.country_or_region,
+    n.city,
+    n.region,
+    n.loc,
+    COALESCE(c.channel_count, 0) as channel_count,
+    n.bucket
+FROM online_nodes_hourly_testnet n
+LEFT JOIN channel_counts c ON n.node_id = c.node
+WHERE n.bucket >= now() - interval '6 hour'
+ORDER BY n.node_id, n.bucket DESC;
 
 CREATE UNIQUE INDEX idx_mv_online_nodes_node_id_testnet ON mv_online_nodes_testnet(node_id);
 create index idx_mv_online_nodes_node_name_testnet ON mv_online_nodes_testnet(node_name);

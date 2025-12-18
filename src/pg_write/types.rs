@@ -15,7 +15,7 @@ pub const UDT_INFO_INSERT_SQL: &str =
     "insert into {} (id, name, code_hash, hash_type, args, auto_accept_amount) ";
 pub const UDT_DEP_RELATION_INSERT_SQL: &str = "insert into {} (outpoint_tx_hash, outpoint_index, dep_type, code_hash, hash_type, args, udt_info_id) ";
 pub const UDT_NODE_RELATION_INSERT_SQL: &str = "insert into {} (node_id, udt_info_id) ";
-pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country_or_region, city, region, loc, channel_count) ";
+pub const NODE_INFO_INSERT_SQL: &str = "insert into {} (time, node_name, addresses, node_id, announce_timestamp, chain_hash, auto_accept_min_ckb_funding_amount, country_or_region, city, region, loc) ";
 pub const CHANNEL_INFO_INSERT_SQL: &str = "insert into {} (
     time, channel_outpoint, node1, node2, capacity, chain_hash, udt_type_script, 
     created_timestamp, update_of_node1_timestamp, update_of_node1_enabled, 
@@ -153,7 +153,6 @@ pub struct NodeInfoDBSchema {
     pub city: String,
     pub region: String,
     pub loc: String,
-    pub channel_count: usize,
 }
 
 impl NodeInfoDBSchema {
@@ -180,8 +179,7 @@ impl NodeInfoDBSchema {
                 .push_bind(&node.country_or_region)
                 .push_bind(&node.city)
                 .push_bind(&node.region)
-                .push_bind(&node.loc)
-                .push_bind(node.channel_count as i32);
+                .push_bind(&node.loc);
         });
 
         query_builder.build().execute(conn).await?;
@@ -305,20 +303,20 @@ impl From<(ChannelInfo, Network)> for ChannelInfoDBSchema {
                 .as_ref()
                 .and_then(|info| {
                     info.outbound_liquidity
-                        .map(|v| hex_string(&v.to_le_bytes()))
+                        .map(|v| hex_string(&v.to_be_bytes()))
                 }),
             update_of_node1_tlc_expiry_delta: channel_info
                 .update_info_of_node1
                 .as_ref()
-                .map(|info| hex_string(&info.tlc_expiry_delta.to_le_bytes())),
+                .map(|info| hex_string(&info.tlc_expiry_delta.to_be_bytes())),
             update_of_node1_tlc_minimum_value: channel_info
                 .update_info_of_node1
                 .as_ref()
-                .map(|info| hex_string(&info.tlc_minimum_value.to_le_bytes())),
+                .map(|info| hex_string(&info.tlc_minimum_value.to_be_bytes())),
             update_of_node1_fee_rate: channel_info
                 .update_info_of_node1
                 .as_ref()
-                .map(|info| hex_string(&info.fee_rate.to_le_bytes())),
+                .map(|info| hex_string(&info.fee_rate.to_be_bytes())),
             update_of_node2_timestamp: channel_info
                 .update_info_of_node2
                 .as_ref()
@@ -332,20 +330,20 @@ impl From<(ChannelInfo, Network)> for ChannelInfoDBSchema {
                 .as_ref()
                 .and_then(|info| {
                     info.outbound_liquidity
-                        .map(|v| hex_string(&v.to_le_bytes()))
+                        .map(|v| hex_string(&v.to_be_bytes()))
                 }),
             update_of_node2_tlc_expiry_delta: channel_info
                 .update_info_of_node2
                 .as_ref()
-                .map(|info| hex_string(&info.tlc_expiry_delta.to_le_bytes())),
+                .map(|info| hex_string(&info.tlc_expiry_delta.to_be_bytes())),
             update_of_node2_tlc_minimum_value: channel_info
                 .update_info_of_node2
                 .as_ref()
-                .map(|info| hex_string(&info.tlc_minimum_value.to_le_bytes())),
+                .map(|info| hex_string(&info.tlc_minimum_value.to_be_bytes())),
             update_of_node2_fee_rate: channel_info
                 .update_info_of_node2
                 .as_ref()
-                .map(|info| hex_string(&info.fee_rate.to_le_bytes())),
+                .map(|info| hex_string(&info.fee_rate.to_be_bytes())),
         }
     }
 }

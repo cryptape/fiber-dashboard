@@ -272,7 +272,7 @@ pub async fn query_node_udt_relation(
                     amount.map(|amt| {
                         let mut buf = [0u8; 16];
                         faster_hex::hex_decode(amt.as_bytes(), &mut buf).unwrap();
-                        u128::from_le_bytes(buf)
+                        u128::from_be_bytes(buf)
                     })
                 },
                 cell_deps: Vec::new(),
@@ -313,7 +313,7 @@ pub async fn query_node_udt_relation(
                                     index: {
                                         let mut buf = [0; 4];
                                         faster_hex::hex_decode(index.as_bytes(), &mut buf).unwrap();
-                                        u32::from_le_bytes(buf).into()
+                                        u32::from_be_bytes(buf).into()
                                     },
                                 },
                                 dep_type: match row.get::<String, _>("dep_type").as_str() {
