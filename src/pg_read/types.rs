@@ -207,7 +207,7 @@ impl HourlyNodeInfoDBRead {
             "
             SELECT 
                 n.node_id as node_id,
-                n.time AS last_seen_hour,
+                n.bucket AS last_seen_hour,
                 n.node_name,
                 n.addresses,
                 n.announce_timestamp,
