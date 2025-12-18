@@ -106,10 +106,6 @@ export default function ChannelDetailPage() {
   }
 
   // 转换数据格式
-  const getStatusFromState = (state: string): "Active" | "Inactive" => {
-    return state === "open" ? "Active" : "Inactive";
-  };
-
   const formatTimestamp = (timestamp: string | number) => {
     let date: Date;
 
@@ -149,7 +145,7 @@ export default function ChannelDetailPage() {
       {/* Channel 基本信息卡片 */}
       <DetailCard
         name="Channel"
-        status={getStatusFromState(channelState.state)}
+        status={channelState.state}
         hash={channelInfo.channel_outpoint}
         showHashLabel={false}
         createdOn={formatTimestamp(channelInfo.created_timestamp)}

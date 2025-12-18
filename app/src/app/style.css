@@ -27,6 +27,10 @@
   --success-bg: #edfefa;
   --success-border: #d4eee8;
 
+  --warning-text: #d97706;
+  --warning-bg: #fef3c7;
+  --warning-border: #fde68a;
+
   --error-text: #b34846;
   --error-bg: #feeded;
   --error-border: #ebcfce;
@@ -183,6 +187,16 @@
   }
   .border-success {
     border-color: var(--success-border);
+  }
+
+  .text-warning {
+    color: var(--warning-text);
+  }
+  .bg-warning {
+    background-color: var(--warning-bg);
+  }
+  .border-warning {
+    border-color: var(--warning-border);
   }
 
   .text-error {
