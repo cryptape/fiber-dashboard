@@ -47,7 +47,7 @@ export const Dialog: React.FC<DialogProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center overflow-hidden transition-opacity hover:opacity-70"
+            className="flex h-8 w-8 items-center justify-center overflow-hidden transition-opacity hover:opacity-70 cursor-pointer"
             aria-label="Close dialog"
           >
             <svg
@@ -76,7 +76,7 @@ export const Dialog: React.FC<DialogProps> = ({
           {secondaryButtonText && (
             <button
               onClick={onSecondaryClick}
-              className="flex h-11 flex-1 items-center justify-center gap-2.5 rounded-full border-purple transition-opacity hover:opacity-80"
+              className="flex h-11 flex-1 items-center justify-center gap-2.5 rounded-full border-purple transition-opacity hover:opacity-80 cursor-pointer"
               style={{
                 outline: '1px solid var(--purple)',
                 outlineOffset: '-1px',
@@ -92,7 +92,7 @@ export const Dialog: React.FC<DialogProps> = ({
           )}
           <button
             onClick={onPrimaryClick || onClose}
-            className="bg-purple flex h-11 flex-1 items-center justify-center gap-2.5 rounded-full transition-opacity hover:opacity-90"
+            className="bg-purple flex h-11 flex-1 items-center justify-center gap-2.5 rounded-full transition-opacity hover:opacity-90 cursor-pointer"
           >
             <span className="type-button1 text-on-color">{primaryButtonText}</span>
           </button>

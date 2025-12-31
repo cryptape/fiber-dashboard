@@ -103,7 +103,7 @@ export const parseLockArgsV2 = (hex: string) => {
 /**
  * 解析 Witness V2
  */
-export const parseWitnessV2 = (hex: string) => {
+export const parseWitnessV2 = (hex: string): ParsedWitnessData => {
   const data = hex.startsWith('0x') ? hex.substring(2) : hex;
   let offset = 0;
 
@@ -113,7 +113,7 @@ export const parseWitnessV2 = (hex: string) => {
   const unlockCount = parseInt(data.substring(offset, offset + 2), 16);
   offset += 2;
 
-  const witnessData: Record<string, unknown> = { 
+  const witnessData: ParsedWitnessData = { 
     empty_witness_args: `0x${emptyWitnessArgs}`, 
     unlock_count: unlockCount 
   };
@@ -206,3 +206,44 @@ export const parseWitnessV2 = (hex: string) => {
 
   return witnessData;
 };
+
+// Type definitions for parsed witness data
+export interface HTLCData {
+  htlc_type: number;
+  payment_amount: bigint;
+  payment_hash: string;
+  remote_htlc_pubkey_hash: string;
+  local_htlc_pubkey_hash: string;
+  htlc_expiry: string;
+  htlc_expiry_timestamp: bigint;
+}
+
+export interface UnlockData {
+  unlock_type: number;
+  with_preimage: number;
+  signature: string;
+  preimage: string;
+}
+
+export interface SettlementData {
+  pending_htlc_count: number;
+  htlcs: HTLCData[];
+  settlement_remote_pubkey_hash: string;
+  settlement_remote_amount: bigint;
+  settlement_local_pubkey_hash: string;
+  settlement_local_amount: bigint;
+  unlocks: UnlockData[];
+}
+
+export interface RevocationData {
+  version: bigint;
+  pubkey: string;
+  signature: string;
+}
+
+export interface ParsedWitnessData {
+  empty_witness_args: string;
+  unlock_count: number;
+  settlement?: SettlementData;
+  revocation?: RevocationData;
+}

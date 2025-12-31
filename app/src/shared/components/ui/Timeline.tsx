@@ -146,7 +146,7 @@ export const TimelineEvent = <T extends Record<string, unknown>>({
                 {titleIcon && (
                   <button
                     onClick={() => hasTable && setIsExpanded(!isExpanded)}
-                    className={hasTable ? "cursor-pointer" : ""}
+                    className={hasTable ? "cursor-pointer" : "cursor-default"}
                   >
                     {titleIcon}
                   </button>
@@ -196,7 +196,7 @@ export const TimelineEvent = <T extends Record<string, unknown>>({
                   <button
                     key={idx}
                     onClick={link.onClick}
-                    className="text-purple text-xs font-medium leading-4 hover:opacity-80 transition-opacity"
+                    className="text-purple text-xs font-medium leading-4 hover:opacity-80 transition-opacity cursor-pointer"
                   >
                     {link.text}
                   </button>
