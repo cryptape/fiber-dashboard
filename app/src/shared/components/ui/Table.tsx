@@ -132,7 +132,9 @@ export const Table = <T extends Record<string, unknown>>({
               {data.map((row, rowIndex) => (
                 <div
                   key={rowIndex}
-                  className={`border-b border-color flex w-full transition-colors ${
+                  className={`flex w-full transition-colors ${
+                    rowIndex < data.length - 1 ? 'border-b border-color' : ''
+                  } ${
                     onRowClick ? 'cursor-pointer' : ''
                   }`}
                   style={{

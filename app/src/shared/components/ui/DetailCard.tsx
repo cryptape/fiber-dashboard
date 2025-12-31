@@ -88,6 +88,13 @@ export const DetailCard: React.FC<DetailCardProps> = ({
           )}
         </div>
 
+        {/* 最后出现时间 - 放在 name 下面 */}
+        {lastSeen && (
+          <div className="type-body text-secondary mt-2 mb-3">
+            Last seen: {lastSeen}
+          </div>
+        )}
+
         {/* 哈希值和复制按钮 */}
         <div className="inline-flex justify-start items-start gap-2 w-full">
           {showHashLabel && (
@@ -104,9 +111,9 @@ export const DetailCard: React.FC<DetailCardProps> = ({
           />
         </div>
 
-        {/* 位置和最后出现时间 */}
-        <div className="inline-flex justify-start items-start gap-6">
-          {location && (
+        {/* 位置 */}
+        {location && (
+          <div className="inline-flex justify-start items-start gap-6">
             <div className="flex justify-start items-center gap-1">
               <div className="w-4 h-4 relative">
                 <Image
@@ -119,16 +126,8 @@ export const DetailCard: React.FC<DetailCardProps> = ({
               </div>
               <div className="text-primary text-sm leading-5">{location}</div>
             </div>
-          )}
-
-          {lastSeen && (
-            <div className="flex justify-start items-center gap-2">
-              <div className="text-primary text-sm leading-5">
-                Last seen on: {lastSeen}
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 创建时间和最后提交时间 */}
         {(createdOn || lastCommitted) && (

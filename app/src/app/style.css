@@ -35,6 +35,10 @@
   --error-bg: #feeded;
   --error-border: #ebcfce;
 
+  --info-text: #2563EB;
+  --info-bg: #EFF6FF;
+  --info-border: #DBEAFE;
+
   /* Palette - Light Mode */
   --purple: #7459e6;
   --yellow: #fab83d;
@@ -90,6 +94,7 @@
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
+  --weight-bold: 700;
 
   /* Typography — Line heights */
   --line-100: 100%;
@@ -185,6 +190,9 @@
   .bg-success {
     background-color: var(--success-bg);
   }
+  .bg-success-dot {
+    background-color: var(--success-text);
+  }
   .border-success {
     border-color: var(--success-border);
   }
@@ -194,6 +202,9 @@
   }
   .bg-warning {
     background-color: var(--warning-bg);
+  }
+  .bg-warning-dot {
+    background-color: var(--warning-text);
   }
   .border-warning {
     border-color: var(--warning-border);
@@ -205,8 +216,21 @@
   .bg-error {
     background-color: var(--error-bg);
   }
+  .bg-error-dot {
+    background-color: var(--error-text);
+  }
   .border-error {
     border-color: var(--error-border);
+  }
+
+  .text-info {
+    color: var(--info-text);
+  }
+  .bg-info {
+    background-color: var(--info-bg);
+  }
+  .border-info {
+    border-color: var(--info-border);
   }
 
   .text-purple {
