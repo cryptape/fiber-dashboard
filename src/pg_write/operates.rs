@@ -1274,7 +1274,7 @@ pub async fn new_channels(
 
         let funding_tx = loop {
             let tx = rpc
-                .get_transaction(url.clone(), &raw_outpoint.as_reader().tx_hash().unpack())
+                .get_transaction(url.clone(), &raw_outpoint.as_reader().tx_hash().into())
                 .await;
             if let Ok(tx) = tx {
                 break tx.unwrap();
@@ -1284,7 +1284,7 @@ pub async fn new_channels(
         let (funding_args, capacity) = funding_tx
             .inner
             .outputs
-            .get(Unpack::<u32>::unpack(&raw_outpoint.as_reader().index()) as usize)
+            .get(Into::<u32>::into(raw_outpoint.as_reader().index()) as usize)
             .map(|output| (output.lock.args.clone(), output.capacity.value()))
             .unwrap();
         let txs = loop {
@@ -1337,6 +1337,7 @@ pub async fn new_channels(
                     group.last_commit_time = header.inner.timestamp.value();
                     group.last_block_number = tc.block_number;
                     group.txs[0].1 = tc.block_number;
+                    group.txs[0].2 = header.inner.timestamp.value();
                     continue;
                 }
                 let new_tx = loop {
