@@ -775,20 +775,21 @@ pub(crate) async fn group_channel_by_state(
         .get("total_count");
     let sql = format!(
         r#"
-        with channel_tx as (
-            select channel_outpoint, tx_hash from {}
-            ),
-            channel_tx_count as (
-                select channel_outpoint, count(*) as tx_count from channel_tx group by channel_outpoint
-            )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, c.tx_count
+        with channel_tx_count as (
+            select c.channel_outpoint, count(*) as tx_count 
+            from {} c
+            inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = $1
+            group by c.channel_outpoint
+        )
+        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count
         from {} n
-        left join channel_tx_count c on n.channel_outpoint = c.channel_outpoint
-        where state = $1 
+        left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
+        where n.state = $1 
         order by n.{} {}
         LIMIT {} OFFSET {}
-    "#,
+        "#,
         params.net.channel_txs(),
+        params.net.channel_states(),
         params.net.channel_states(),
         params.sort_by.as_str(),
         params.order.as_str(),
