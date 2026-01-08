@@ -10,7 +10,7 @@ http api default on 8080, method list:
 /node_udt_infos?node_id=0x...
 /analysis_hourly?end=2012-12-12 12:12:12+0000
 /channel_state?channel_outpoint=0x..
-/group_channel_by_state?state=open/commitment/settled&page=0&sort_by=create_time/last_commit_time&order=asc/desc
+/group_channel_by_state?state=open/closed_cooperative/closed_waiting_onchain_settlement/closed_uncooperative&page=0&sort_by=create_time/last_commit_time&order=asc/desc
 /channel_count_by_state
 /channel_info?channel_outpoint=0x..
 /node_info?node_id=0x..

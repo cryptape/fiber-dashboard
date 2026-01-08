@@ -25,6 +25,7 @@ arc-swap = "1"
 faster-hex = "0.10.0"
 ipinfo = "3"
 env_logger = "0.11"
+futures = "0.3"
 
 sqlx = { version = "0.8", features = [
     "runtime-tokio",
@@ -34,8 +35,8 @@ sqlx = { version = "0.8", features = [
     "derive",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
-salvo = { version = "0.85", features = ["cors"] }
+salvo = { version = "0.88", features = ["cors"] }
 
-ckb-jsonrpc-types = "0.200.0"
-ckb-types = "0.200.0"
+ckb-jsonrpc-types = "1"
+ckb-types = "1"
 multiaddr = { version = "0.3", package = "tentacle-multiaddr" }
