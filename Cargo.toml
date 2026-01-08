@@ -25,6 +25,7 @@ arc-swap = "1"
 faster-hex = "0.10.0"
 ipinfo = "3"
 env_logger = "0.11"
+futures = "0.3"
 
 sqlx = { version = "0.8", features = [
     "runtime-tokio",
