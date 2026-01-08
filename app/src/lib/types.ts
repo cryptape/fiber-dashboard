@@ -255,7 +255,7 @@ export interface HistoryAnalysisResponse {
 }
 
 // Channel state types
-export type ChannelState = "open" | "commitment" | "settled";
+export type ChannelState = "open" | "closed_waiting_onchain_settlement" | "closed_cooperative" | "closed_uncooperative";
 
 // Channel info response (single channel)
 export const ChannelInfoResponseSchema = RustChannelInfoSchema;
@@ -294,7 +294,7 @@ export type ChannelStateInfo = z.infer<typeof ChannelStateInfoSchema>;
 
 export const ChannelStateApiResponseSchema = z.object({
   funding_args: z.string(),
-  state: z.enum(["open", "commitment", "settled"]),
+  state: z.enum(["open", "closed_waiting_onchain_settlement", "closed_cooperative", "closed_uncooperative"]),
   txs: z.array(ChannelStateTxSchema),
 });
 

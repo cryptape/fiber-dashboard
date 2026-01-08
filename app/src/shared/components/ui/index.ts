@@ -15,7 +15,7 @@ export { default as GlassButton } from "./GlassButton";
 export { default as KpiCard } from "./KpiCard";
 export { GlassCardContainer } from "./GlassCardContainer";
 export { DetailCard } from "./DetailCard";
-export { StatusBadge } from "./StatusBadge";
+export { StatusBadge, getStatusDisplayText } from "./StatusBadge";
 export { StatusIndicator } from "./StatusIndicator";
 export { CopyButton } from "./CopyButton";
 export { Tooltip } from "./Tooltip";

@@ -120,8 +120,9 @@ export const Channels = () => {
   // 组装 PieChart 数据
   const pieChartData = [
     { name: "Open", value: getStateCount("open"), status: "Open" },
-    { name: "Committing", value: getStateCount("commitment"), status: "Committing" },
-    { name: "Settled", value: getStateCount("settled"), status: "Settled" },
+    { name: "Closed (Waiting Settlement)", value: getStateCount("closed_waiting_onchain_settlement"), status: "Closed (Waiting Settlement)" },
+    { name: "Closed (Cooperative)", value: getStateCount("closed_cooperative"), status: "Closed (Cooperative)" },
+    { name: "Closed (Uncooperative)", value: getStateCount("closed_uncooperative"), status: "Closed (Uncooperative)" },
   ];
 
   // 计算容量分布数据 - 使用后端返回的分桶结果
@@ -315,6 +316,7 @@ export const Channels = () => {
             data={pieChartData}
             title="Channel Status Distribution"
             height="400px"
+            colors={["#208C73", "#FAB83D", "#B34846", "#9B87C8"]}
           />
         </GlassCardContainer>
       </div>
@@ -324,7 +326,7 @@ export const Channels = () => {
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
       />
-      <div className="flex gap-2 md:gap-4">
+      <div className="flex gap-2 md:gap-4 flex-wrap">
         <StatusIndicator
           text={`Open (${getStateCount("open")})`}
           color="#208C73"
@@ -333,17 +335,24 @@ export const Channels = () => {
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
-          text={`Committing (${getStateCount("commitment")})`}
+          text={`Closed (Waiting Settlement) (${getStateCount("closed_waiting_onchain_settlement")})`}
           color="#FAB83D"
-          mode={selectedState === "commitment" ? "dark" : "light"}
-          onClick={() => handleStateChange("commitment")}
+          mode={selectedState === "closed_waiting_onchain_settlement" ? "dark" : "light"}
+          onClick={() => handleStateChange("closed_waiting_onchain_settlement")}
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
-          text={`Settled (${getStateCount("settled")})`}
+          text={`Closed (Uncooperative) (${getStateCount("closed_uncooperative")})`}
           color="#B34846"
-          mode={selectedState === "settled" ? "dark" : "light"}
-          onClick={() => handleStateChange("settled")}
+          mode={selectedState === "closed_uncooperative" ? "dark" : "light"}
+          onClick={() => handleStateChange("closed_uncooperative")}
+          className="flex-1 min-w-0 md:flex-initial"
+        />
+        <StatusIndicator
+          text={`Closed (Cooperative) (${getStateCount("closed_cooperative")})`}
+          color="#9B87C8"
+          mode={selectedState === "closed_cooperative" ? "dark" : "light"}
+          onClick={() => handleStateChange("closed_cooperative")}
           className="flex-1 min-w-0 md:flex-initial"
         />
       </div>

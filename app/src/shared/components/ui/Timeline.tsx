@@ -5,12 +5,12 @@ import { Separator } from "./separator";
 import { Table, ColumnDef } from "./Table";
 
 // Timeline 事件状态类型
-export type TimelineEventStatus = "success" | "warning" | "error" | "info";
+export type TimelineEventStatus = "success" | "warning" | "error" | "info" | "purple";
 
 // 标签配置
 export interface TimelineBadge {
   text: string;
-  color: "success" | "warning" | "error" | "info";
+  color: "success" | "warning" | "error" | "info" | "purple";
   showIcon?: boolean;
   icon?: ReactNode;
 }
@@ -70,6 +70,10 @@ const statusColorMap: Record<
   info: {
     dot: "bg-blue",
     badge: { bg: "bg-info", border: "border-info", text: "text-info" },
+  },
+  purple: {
+    dot: "bg-[#9B87C8]",
+    badge: { bg: "bg-[#9B87C81A]", border: "border-[#9B87C8]", text: "text-[#9B87C8]" },
   },
 };
 

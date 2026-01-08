@@ -129,16 +129,17 @@ export function ChannelLifecycle({
     );
   }
 
-  // Commitment / Settled state Timeline
+  // Closed waiting settlement / Closed state Timeline
+  const isClosedState = channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative";
   if (
-    (channelState.state === "commitment" || channelState.state === "settled") &&
+    (channelState.state === "closed_waiting_onchain_settlement" || isClosedState) &&
     channelState.txs.length > 0
   ) {
     // Calculate commitment transactions
     const commitmentTxs =
-      channelState.state === "settled" && channelState.txs.length > 2
+      isClosedState && channelState.txs.length > 2
         ? channelState.txs.slice(1, -1)
-        : channelState.state === "commitment" && channelState.txs.length > 1
+        : channelState.state === "closed_waiting_onchain_settlement" && channelState.txs.length > 1
         ? channelState.txs.slice(1)
         : [];
 
@@ -181,7 +182,7 @@ export function ChannelLifecycle({
           {commitmentTxs.length > 0 && (
             <TimelineEvent
               status="warning"
-              isLast={channelState.state === "commitment"}
+              isLast={channelState.state === "closed_waiting_onchain_settlement"}
               title={`Commitment updates (${commitmentTxs.length} update${
                 commitmentTxs.length > 1 ? "s" : ""
               })`}
@@ -316,13 +317,13 @@ export function ChannelLifecycle({
           )}
 
           {/* Channel Closed (Final Settlement) */}
-          {channelState.state === "settled" && ((() => {
-            // 判断是否为协作关闭：只有 2 个交易（funding + settlement）
-            const isCooperativeClose = channelState.txs.length === 2;
+          {isClosedState && ((() => {
+            // 判断关闭类型：cooperative 或 uncooperative
+            const isCooperativeClose = channelState.state === "closed_cooperative";
             
             return (
             <TimelineEvent
-              status="error"
+              status={isCooperativeClose ? "purple" : "error"}
               isLast={true}
               title="Channel Closed (Final Settlement)"
               timestamp={formatTimestamp(
@@ -330,8 +331,8 @@ export function ChannelLifecycle({
               )}
               badges={[
                 {
-                  text: isCooperativeClose ? "Cooperative close" : "Force close",
-                  color: "error",
+                  text: isCooperativeClose ? "Closed (Cooperative)" : "Closed (Uncooperative)",
+                  color: isCooperativeClose ? "purple" : "error",
                 },
               ]}
               footerLinks={[
@@ -438,7 +439,7 @@ export function ChannelLifecycle({
             }
 
             const isLastTx = selectedTxIndex === channelState.txs.length - 1;
-            const isSettledState = channelState.state === "settled";
+            const isClosedState = channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative";
 
             return (
               <Dialog
@@ -465,7 +466,7 @@ export function ChannelLifecycle({
                 <InfoBox
                   title="Summary"
                   content={
-                    isLastTx && isSettledState
+                    isLastTx && isClosedState
                       ? "Final settlement executed. Channel closed and final balances distributed on-chain."
                       : "Further commitment updates may occur before final settlement."
                   }
@@ -478,15 +479,15 @@ export function ChannelLifecycle({
                     {
                       label: "Transaction type",
                       value:
-                        isLastTx && isSettledState
+                        isLastTx && isClosedState
                           ? "Final settlement"
                           : "Committing update",
                       badge: {
                         text:
-                          isLastTx && isSettledState
+                          isLastTx && isClosedState
                             ? "Final settlement"
                             : "Committing update",
-                        status: isLastTx && isSettledState ? "settled" : "commitment",
+                        status: isLastTx && isClosedState ? "settled" : "commitment",
                       },
                     },
                     {
@@ -693,7 +694,7 @@ export function ChannelLifecycle({
                     />
                   )}
 
-                {isSettledState &&
+                {isClosedState &&
                   isLastTx &&
                   parsedWitness &&
                   Number(parsedWitness.unlock_count) > 0 &&
