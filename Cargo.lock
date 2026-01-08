@@ -1065,6 +1065,7 @@ dependencies = [
  "ckb-types",
  "env_logger",
  "faster-hex 0.10.0",
+ "futures",
  "ipinfo",
  "jsonrpc-core",
  "log",

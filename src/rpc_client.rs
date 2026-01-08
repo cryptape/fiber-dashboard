@@ -93,6 +93,7 @@ impl RpcClient {
         RpcClient {
             raw: Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
+                .pool_max_idle_per_host(2048)
                 .build()
                 .unwrap(),
             id: Arc::new(AtomicU64::new(0)),
