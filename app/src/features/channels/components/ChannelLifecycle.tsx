@@ -11,7 +11,7 @@ import {
   TransactionOverview,
   CollapsibleSection,
 } from "@/shared/components/ui";
-import { formatTimestamp, parseLockArgsV2, parseWitnessV2, type ParsedWitnessData } from "../utils";
+import { formatTimestamp, parseLockArgsV2, parseWitnessV2, formatBlockNumber, type ParsedWitnessData } from "../utils";
 import type { ChannelStateInfo } from "@/lib/types";
 
 interface ChannelLifecycleProps {
@@ -51,7 +51,7 @@ export function ChannelLifecycle({
               {
                 text: "View on Explore",
                 onClick: () => {
-                  const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${channelState.txs[0].tx_hash}`;
+                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 },
               },
@@ -59,7 +59,7 @@ export function ChannelLifecycle({
           >
             <TimelineContentRow
               label="Block #:"
-              value={channelState.txs[0].block_number.toString()}
+              value={formatBlockNumber(channelState.txs[0].block_number)}
               showCopy={true}
             />
             <TimelineContentRow
@@ -84,7 +84,7 @@ export function ChannelLifecycle({
           title="Transaction Details"
           secondaryButtonText="View on Explorer"
           onSecondaryClick={() => {
-            const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${channelState.txs[0].tx_hash}`;
+            const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
             window.open(explorerUrl, "_blank", "noopener,noreferrer");
           }}
           primaryButtonIcon={
@@ -115,7 +115,7 @@ export function ChannelLifecycle({
               },
               {
                 label: "Block height",
-                value: channelState.txs[0].block_number.toString(),
+                value: formatBlockNumber(channelState.txs[0].block_number),
                 copyable: true,
               },
               {
@@ -159,7 +159,7 @@ export function ChannelLifecycle({
               {
                 text: "View on Explore",
                 onClick: () => {
-                  const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${channelState.txs[0].tx_hash}`;
+                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 },
               },
@@ -167,7 +167,7 @@ export function ChannelLifecycle({
           >
             <TimelineContentRow
               label="Block #:"
-              value={channelState.txs[0].block_number.toString()}
+              value={formatBlockNumber(channelState.txs[0].block_number)}
               showCopy={true}
             />
             <TimelineContentRow
@@ -234,7 +234,7 @@ export function ChannelLifecycle({
                   label: "Block",
                   render: (value, row) => (
                     <div className="type-body text-primary">
-                      {(row as { block_number: string }).block_number}
+                      {formatBlockNumber((row as { block_number: string }).block_number)}
                     </div>
                   ),
                 },
@@ -316,7 +316,11 @@ export function ChannelLifecycle({
           )}
 
           {/* Channel Closed (Final Settlement) */}
-          {channelState.state === "settled" && (
+          {channelState.state === "settled" && ((() => {
+            // 判断是否为协作关闭：只有 2 个交易（funding + settlement）
+            const isCooperativeClose = channelState.txs.length === 2;
+            
+            return (
             <TimelineEvent
               status="error"
               isLast={true}
@@ -326,7 +330,7 @@ export function ChannelLifecycle({
               )}
               badges={[
                 {
-                  text: "Force close",
+                  text: isCooperativeClose ? "Cooperative close" : "Force close",
                   color: "error",
                 },
               ]}
@@ -342,7 +346,7 @@ export function ChannelLifecycle({
                   text: "View on Explore",
                   onClick: () => {
                     const lastTx = channelState.txs[channelState.txs.length - 1];
-                    const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${lastTx.tx_hash}`;
+                    const explorerUrl = `https://testnet.explorer.app5.org/transaction/${lastTx.tx_hash}`;
                     window.open(explorerUrl, "_blank", "noopener,noreferrer");
                   },
                 },
@@ -350,9 +354,9 @@ export function ChannelLifecycle({
             >
               <TimelineContentRow
                 label="Block #:"
-                value={channelState.txs[
+                value={formatBlockNumber(channelState.txs[
                   channelState.txs.length - 1
-                ].block_number.toString()}
+                ].block_number)}
                 showCopy={true}
               />
               <TimelineContentRow
@@ -361,7 +365,8 @@ export function ChannelLifecycle({
                 showCopy={true}
               />
             </TimelineEvent>
-          )}
+            );
+          })())}
         </Timeline>
 
         {/* Open Channel Funding Dialog */}
@@ -371,7 +376,7 @@ export function ChannelLifecycle({
           title="Transaction Details"
           secondaryButtonText="View on Explorer"
           onSecondaryClick={() => {
-            const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${channelState.txs[0].tx_hash}`;
+            const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
             window.open(explorerUrl, "_blank", "noopener,noreferrer");
           }}
           primaryButtonIcon={
@@ -402,7 +407,7 @@ export function ChannelLifecycle({
               },
               {
                 label: "Block height",
-                value: channelState.txs[0].block_number.toString(),
+                value: formatBlockNumber(channelState.txs[0].block_number),
                 copyable: true,
               },
               {
@@ -445,7 +450,7 @@ export function ChannelLifecycle({
                 title="Transaction Details"
                 secondaryButtonText="View on Explorer"
                 onSecondaryClick={() => {
-                  const explorerUrl = `https://testnet.explorer.nervos.org/transaction/${tx.tx_hash}`;
+                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${tx.tx_hash}`;
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 }}
                 primaryButtonIcon={
@@ -486,7 +491,7 @@ export function ChannelLifecycle({
                     },
                     {
                       label: "Block height",
-                      value: tx.block_number.toString(),
+                      value: formatBlockNumber(tx.block_number),
                       copyable: true,
                     },
                     {
