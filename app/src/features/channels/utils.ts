@@ -1,6 +1,18 @@
 import { hexToDecimal } from "@/lib/utils";
 
 /**
+ * 格式化区块高度为 10 进制字符串
+ */
+export const formatBlockNumber = (blockNumber: string): string => {
+  if (blockNumber.startsWith("0x")) {
+    // 16 进制转 10 进制
+    return String(hexToDecimal(blockNumber));
+  }
+  // 已经是 10 进制
+  return blockNumber;
+};
+
+/**
  * 格式化时间戳为可读日期字符串
  */
 export const formatTimestamp = (timestamp: string | number) => {

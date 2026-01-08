@@ -79,7 +79,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             <div className="text-primary text-lg font-semibold leading-5">
               {name}
             </div>
-            {showStatus && <StatusBadge text={status} status={status} />}
+            {showStatus && <StatusBadge status={status} />}
           </div>
           {topRightLabel && (
             <div className="type-body text-primary border border-[#D9D9D9] px-2 py-1">

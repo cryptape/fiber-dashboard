@@ -150,6 +150,6 @@ export function buildTransactionLinkUrl(
   const baseUrl =
     network === "mainnet"
       ? "https://explorer.nervos.org"
-      : "https://testnet.explorer.nervos.org";
+      : "https://testnet.explorer.app5.org";
   return `${baseUrl}/transaction/${txHash}`;
 }

@@ -89,7 +89,7 @@ export default function PieChart({
 
     // 根据屏幕宽度设置 tooltip 宽度
     const isMobile = window.innerWidth < 768;
-    const tooltipWidth = isMobile ? 154 : 164;
+    const tooltipWidth = isMobile ? 180 : 240; // 增加宽度以容纳较长的状态文字
 
     // 数字格式化函数
     const formatNumber = (value: number) => {
@@ -131,7 +131,7 @@ export default function PieChart({
         borderRadius: 8,
         padding: 12,
         confine: true,
-        extraCssText: `width: ${tooltipWidth}px; box-sizing: border-box; box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.08);`,
+        extraCssText: `min-width: ${tooltipWidth}px; max-width: 300px; box-sizing: border-box; box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.08); word-wrap: break-word;`,
         textStyle: {
           color: primaryColor,
         },
@@ -156,11 +156,12 @@ export default function PieChart({
             
             // Status 行（如果存在）- 带小圆点
             if (isStatus && dataItem.status) {
-              result += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">`;
-              result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${tertiaryColor};">Status</span>`;
-              result += `<span style="display:flex;align-items:center;font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${valueColor};margin-left:16px;">`;
-              result += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${param.color};margin-right:6px;"></span>`;
-              result += `${dataItem.status}</span>`;
+              result += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">`;
+              result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${tertiaryColor};white-space:nowrap;">Status</span>`;
+              result += `<span style="display:flex;align-items:center;font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${valueColor};flex:1;min-width:0;">`;
+              result += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${param.color};margin-right:6px;flex-shrink:0;"></span>`;
+              result += `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dataItem.status}</span>`;
+              result += `</span>`;
               result += `</div>`;
             }
             
@@ -199,8 +200,8 @@ export default function PieChart({
       series: [
         {
           type: 'pie',
-          radius: ['0%', '75%'],
-          center: ['50%', '50%'],
+          radius: ['0%', '65%'],
+          center: ['50%', '45%'],
           avoidLabelOverlap: false,
           label: {
             show: false,

@@ -121,7 +121,7 @@ export default function ChannelDetailPage() {
       />
 
       {/* KPI 卡片 */}
-      <div className={`grid grid-cols-1 gap-5 ${channelState.state === "commitment" || channelState.state === "settled" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+      <div className={`grid grid-cols-1 gap-5 ${channelState.state === "closed_waiting_onchain_settlement" || channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <KpiCard
           label="CAPACITY"
           value={(() => {
@@ -137,16 +137,16 @@ export default function ChannelDetailPage() {
           value={channelState.txs.length > 0 ? formatTxTimestamp(channelState.txs[0].timestamp).date : "-"}
           unit={channelState.txs.length > 0 ? formatTxTimestamp(channelState.txs[0].timestamp).time : ""}
         />
-        {/* 如果是 commitment 状态，显示最后提交时间 */}
-        {channelState.state === "commitment" && channelState.txs.length > 0 && (
+        {/* 如果是 closed_waiting_onchain_settlement 状态，显示最后提交时间 */}
+        {channelState.state === "closed_waiting_onchain_settlement" && channelState.txs.length > 0 && (
           <KpiCard
             label="LAST COMMITTED ON"
             value={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).date}
             unit={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).time}
           />
         )}
-        {/* 如果是 settled 状态，显示关闭时间 */}
-        {channelState.state === "settled" && channelState.txs.length > 0 && (
+        {/* 如果是 closed 状态，显示关闭时间 */}
+        {(channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative") && channelState.txs.length > 0 && (
           <KpiCard
             label="CLOSED ON"
             value={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).date}
