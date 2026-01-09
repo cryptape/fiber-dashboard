@@ -314,8 +314,8 @@ impl HourlyNodeInfoDBRead {
             region,
             loc,
             channel_count
-        FROM {}
-        WHERE n.bucket >= $1::timestamp AND ((POSITION($2 IN node_id) > 0) OR (POSITION($2 IN node_name) > 0))
+        FROM {} n
+        WHERE n.bucket >= $1::timestamp AND ((POSITION($2 IN n.node_id) > 0) OR (POSITION($2 IN n.node_name) > 0))
         ORDER BY {} {} "#,
             params.net.mv_online_nodes(),
             params.sort_by.as_str(),
@@ -640,6 +640,7 @@ impl HourlyChannelInfoDBRead {
 
         Ok(res)
     }
+
     pub async fn fetch_by_page_hourly(
         pool: &Pool<Postgres>,
         params: Page,
