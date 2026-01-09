@@ -428,6 +428,7 @@ pub(crate) struct ChannelByStateParams {
     #[serde(default)]
     pub(crate) order: Order,
     pub(crate) fuzz_name: Option<String>,
+    pub(crate) asset_name: Option<String>,
     pub(crate) page_size: Option<usize>,
 }
 

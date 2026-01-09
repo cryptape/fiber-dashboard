@@ -769,11 +769,17 @@ pub(crate) async fn group_channel_by_state(
         where state = Any($1) 
     "#,
         params.net.channel_states(),
-        params.net.channel_infos(),
+        params.net.mv_online_channels(),
         params.net.udt_infos()
     );
     if params.fuzz_name.is_some() {
-        sql_count.push_str(" AND ((POSITION($2 IN n.channel_outpoint) > 0) OR (POSITION(LOWER($2) IN LOWER(COALESCE(m.name, 'ckb'))) > 0))");
+        sql_count.push_str(" AND (POSITION($2 IN n.channel_outpoint) > 0)");
+    }
+    if params.asset_name.is_some() {
+        sql_count.push_str(&format!(
+            " AND LOWER(COALESCE(m.name, 'ckb')) = LOWER('{}')",
+            params.asset_name.as_ref().unwrap()
+        ));
     }
     let total_count: i64 = {
         let mut query = sqlx::query(&sql_count).bind(params.state.to_sql());
@@ -795,20 +801,25 @@ pub(crate) async fn group_channel_by_state(
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
         left join {} k on n.channel_outpoint = k.channel_outpoint
         left join {} m on k.udt_type_script = m.id
-        where n.state = Any($1) {}
+        where n.state = Any($1) {} {}
         order by n.{} {}
         LIMIT {} OFFSET {}
         "#,
         params.net.channel_txs(),
         params.net.channel_states(),
         params.net.channel_states(),
-        params.net.channel_infos(),
+        params.net.mv_online_channels(),
         params.net.udt_infos(),
         if params.fuzz_name.is_some() {
-            " AND ((POSITION($2 IN n.channel_outpoint) > 0) OR (POSITION(LOWER($2) IN LOWER(COALESCE(m.name, 'ckb'))) > 0))"
+            " AND (POSITION($2 IN n.channel_outpoint) > 0)"
         } else {
             ""
         },
+        params
+            .asset_name
+            .as_ref()
+            .map(|name| format!(" AND LOWER(COALESCE(m.name, 'ckb')) = LOWER('{}')", name))
+            .unwrap_or_default(),
         params.sort_by.as_str(),
         params.order.as_str(),
         page_size,
