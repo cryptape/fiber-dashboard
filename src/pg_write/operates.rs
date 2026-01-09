@@ -1141,6 +1141,20 @@ impl DBState {
     }
 }
 
+impl std::str::FromStr for DBState {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "open" => Ok(DBState::Open),
+            "closed_waiting_onchain_settlement" => Ok(DBState::ClosedWaitingOnchainSettlement),
+            "closed_cooperative" => Ok(DBState::ClosedCooperative),
+            "closed_uncooperative" => Ok(DBState::ClosedUncooperative),
+            _ => Err(format!("Invalid DBState string: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChannelStateUpdate {
     outpoint: JsonBytes,

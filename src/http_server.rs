@@ -8,8 +8,8 @@ use crate::{
     pg_read::{
         AnalysisParams, ChannelInfo, HourlyNodeInfo, group_channel_by_state,
         group_channel_count_by_state, query_analysis, query_analysis_hourly,
-        query_channel_capacity_distribution, query_channel_info, query_channel_state,
-        query_channels_by_node_id, query_node_info, query_nodes_by_region,
+        query_channel_capacity_distribution, query_channel_count_by_asset, query_channel_info,
+        query_channel_state, query_channels_by_node_id, query_node_info, query_nodes_by_region,
         query_nodes_fuzzy_by_name, read_channels_hourly, read_channels_monthly, read_nodes_hourly,
         read_nodes_monthly,
     },
@@ -400,10 +400,26 @@ pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<Stri
     Ok(serde_json::json!({ "channel_info": info }).to_string())
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum State {
+    Single(DBState),
+    Multiple(Vec<DBState>),
+}
+
+impl State {
+    pub fn to_sql(&self) -> Vec<&str> {
+        match self {
+            State::Single(state) => vec![state.to_sql()],
+            State::Multiple(states) => states.iter().map(|s| s.to_sql()).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
 pub(crate) struct ChannelByStateParams {
-    pub(crate) state: DBState,
+    pub(crate) state: State,
     pub(crate) page: usize,
     #[serde(default)]
     pub(crate) net: Network,
@@ -411,6 +427,7 @@ pub(crate) struct ChannelByStateParams {
     pub(crate) sort_by: ChannelStateSortBy,
     #[serde(default)]
     pub(crate) order: Order,
+    pub(crate) fuzz_name: Option<String>,
     pub(crate) page_size: Option<usize>,
 }
 
@@ -458,7 +475,21 @@ pub async fn channel_by_state(
     req: &mut Request,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
+    use std::str::FromStr;
     let params = req.extract::<ChannelByStateParams>().await?;
+    let q = req.queries();
+    let req_states = match q.get_vec("state") {
+        Some(s) => s
+            .iter()
+            .map(|s| DBState::from_str(s))
+            .collect::<Result<Vec<DBState>, _>>()
+            .map_err(|e| salvo::Error::Io(std::io::Error::other(e))),
+        None => return Err(salvo::Error::Io(std::io::Error::other("No states"))),
+    };
+    let params = ChannelByStateParams {
+        state: State::Multiple(req_states?),
+        ..params
+    };
     let pool = get_pg_pool();
     let states = group_channel_by_state(pool, params).await.map_err(|e| {
         log::error!("Failed to query channels by state: {}", e);
@@ -480,6 +511,24 @@ pub async fn channel_count_by_state(
             log::error!("Failed to count channels by state: {}", e);
             salvo::Error::Io(std::io::Error::other("Failed to count channels by state"))
         })?;
+    Ok(counts)
+}
+
+#[handler]
+pub async fn channel_count_by_asset(
+    req: &mut Request,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<NetworkInfo>().await?;
+    let pool = get_pg_pool();
+
+    let counts = query_channel_count_by_asset(pool, params.net)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to count channels by asset: {}", e);
+            salvo::Error::Io(std::io::Error::other("Failed to count channels by asset"))
+        })?;
+
     Ok(counts)
 }
 

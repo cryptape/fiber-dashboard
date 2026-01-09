@@ -760,44 +760,65 @@ pub(crate) async fn group_channel_by_state(
 ) -> Result<String, sqlx::Error> {
     let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
     let offset = params.page.saturating_mul(page_size);
-    let sql_count = format!(
+    let mut sql_count = format!(
         r#"
         select COUNT(*) as total_count
-        from {} 
-        where state = $1
+        from {} n
+        left join {} k on n.channel_outpoint = k.channel_outpoint
+        left join {} m on k.udt_type_script = m.id
+        where state = Any($1) 
     "#,
-        params.net.channel_states()
+        params.net.channel_states(),
+        params.net.channel_infos(),
+        params.net.udt_infos()
     );
-    let total_count: i64 = sqlx::query(&sql_count)
-        .bind(params.state.to_sql())
-        .fetch_one(pool)
-        .await?
-        .get("total_count");
+    if params.fuzz_name.is_some() {
+        sql_count.push_str(" AND ((POSITION($2 IN n.channel_outpoint) > 0) OR (POSITION(LOWER($2) IN LOWER(COALESCE(m.name, 'ckb'))) > 0))");
+    }
+    let total_count: i64 = {
+        let mut query = sqlx::query(&sql_count).bind(params.state.to_sql());
+        if let Some(fuzz_name) = &params.fuzz_name {
+            query = query.bind(fuzz_name);
+        }
+        query.fetch_one(pool).await?.get("total_count")
+    };
     let sql = format!(
         r#"
         with channel_tx_count as (
             select c.channel_outpoint, count(*) as tx_count 
             from {} c
-            inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = $1
+            inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = Any($1)
             group by c.channel_outpoint
         )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count
+        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
         from {} n
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
-        where n.state = $1 
+        left join {} k on n.channel_outpoint = k.channel_outpoint
+        left join {} m on k.udt_type_script = m.id
+        where n.state = Any($1) {}
         order by n.{} {}
         LIMIT {} OFFSET {}
         "#,
         params.net.channel_txs(),
         params.net.channel_states(),
         params.net.channel_states(),
+        params.net.channel_infos(),
+        params.net.udt_infos(),
+        if params.fuzz_name.is_some() {
+            " AND ((POSITION($2 IN n.channel_outpoint) > 0) OR (POSITION(LOWER($2) IN LOWER(COALESCE(m.name, 'ckb'))) > 0))"
+        } else {
+            ""
+        },
         params.sort_by.as_str(),
         params.order.as_str(),
         page_size,
         offset
     );
-    let rows = sqlx::query(&sql)
-        .bind(params.state.to_sql())
+    let mut query = sqlx::query(&sql).bind(params.state.to_sql());
+    if let Some(fuzz_name) = &params.fuzz_name {
+        query = query.bind(fuzz_name);
+    }
+    let rows = query
         .fetch_all(pool)
         .await?
         .into_iter()
@@ -811,6 +832,7 @@ pub(crate) async fn group_channel_by_state(
             let last_commit_time: DateTime<Utc> = row.get("last_commit_time");
             let tx_count: i64 = row.get("tx_count");
             let capacity: String = row.get("capacity");
+            let name: String = row.get("name");
             (
                 format!("0x{}", channel_outpoint),
                 format!("0x{}", funding_args),
@@ -821,6 +843,7 @@ pub(crate) async fn group_channel_by_state(
                 format!("0x{}", capacity),
                 tx_count as usize,
                 last_commitment_args.map(|arg| format!("0x{}", arg)),
+                name,
             )
         })
         .collect::<Vec<_>>();
@@ -836,6 +859,7 @@ pub(crate) async fn group_channel_by_state(
         last_commit_time: String,
         capacity: String,
         tx_count: usize,
+        name: String,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -858,6 +882,7 @@ pub(crate) async fn group_channel_by_state(
                     capacity,
                     tx_count,
                     last_commitment_args,
+                    name,
                 )| State {
                     channel_outpoint,
                     funding_args,
@@ -868,6 +893,7 @@ pub(crate) async fn group_channel_by_state(
                     capacity,
                     last_commit_time,
                     last_commitment_args,
+                    name,
                 },
             )
             .collect(),
@@ -979,4 +1005,33 @@ pub async fn query_nodes_all_regions(
         .collect::<Vec<String>>();
 
     Ok(serde_json::to_string(&rows).unwrap())
+}
+
+pub async fn query_channel_count_by_asset(
+    pool: &Pool<Postgres>,
+    net: Network,
+) -> Result<String, sqlx::Error> {
+    let sql = format!(
+        r#"
+        select COALESCE(c.name, 'ckb') as name, COUNT(*) as count
+        from {} u
+        left join {} c on u.udt_type_script = c.id
+        group by c.name
+    "#,
+        net.mv_online_channels(),
+        net.udt_infos()
+    );
+
+    let res = sqlx::query(&sql)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|row| {
+            let name: String = row.get("name");
+            let count: i64 = row.get("count");
+            (name, count)
+        })
+        .collect::<HashMap<_, _>>();
+
+    Ok(serde_json::to_string(&res).unwrap())
 }
