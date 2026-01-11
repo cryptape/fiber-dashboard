@@ -772,19 +772,25 @@ pub(crate) async fn group_channel_by_state(
         params.net.mv_online_channels(),
         params.net.udt_infos()
     );
-    if params.fuzz_name.is_some() {
+    let index = if params.fuzz_name.is_some() {
         sql_count.push_str(" AND (POSITION($2 IN n.channel_outpoint) > 0)");
-    }
+        3
+    } else {
+        2
+    };
     if params.asset_name.is_some() {
         sql_count.push_str(&format!(
-            " AND LOWER(COALESCE(m.name, 'ckb')) = LOWER('{}')",
-            params.asset_name.as_ref().unwrap()
+            " AND LOWER(COALESCE(m.name, 'ckb')) = LOWER(${})",
+            index
         ));
     }
     let total_count: i64 = {
         let mut query = sqlx::query(&sql_count).bind(params.state.to_sql());
         if let Some(fuzz_name) = &params.fuzz_name {
             query = query.bind(fuzz_name);
+        }
+        if let Some(asset_name) = &params.asset_name {
+            query = query.bind(asset_name);
         }
         query.fetch_one(pool).await?.get("total_count")
     };
@@ -815,11 +821,11 @@ pub(crate) async fn group_channel_by_state(
         } else {
             ""
         },
-        params
-            .asset_name
-            .as_ref()
-            .map(|name| format!(" AND LOWER(COALESCE(m.name, 'ckb')) = LOWER('{}')", name))
-            .unwrap_or_default(),
+        if params.asset_name.is_some() {
+            format!(" AND LOWER(COALESCE(m.name, 'ckb')) = LOWER(${})", index)
+        } else {
+            String::new()
+        },
         params.sort_by.as_str(),
         params.order.as_str(),
         page_size,
@@ -828,6 +834,9 @@ pub(crate) async fn group_channel_by_state(
     let mut query = sqlx::query(&sql).bind(params.state.to_sql());
     if let Some(fuzz_name) = &params.fuzz_name {
         query = query.bind(fuzz_name);
+    }
+    if let Some(asset_name) = &params.asset_name {
+        query = query.bind(asset_name);
     }
     let rows = query
         .fetch_all(pool)
