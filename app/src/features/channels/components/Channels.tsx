@@ -10,6 +10,9 @@ import {
   SortState,
   GlassCardContainer,
   StatusIndicator,
+  SearchInput,
+  AssetSelect,
+  AssetSelectOption,
 } from "@/shared/components/ui";
 import BarChart from "@/shared/components/chart/BarChart";
 import PieChart from "@/shared/components/chart/PieChart";
@@ -18,10 +21,13 @@ import { ChannelState, BasicChannelInfo } from "@/lib/types";
 import { hexToDecimal } from "@/lib/utils";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createAssetColorMap } from "../utils/assetColors";
 
 // 通道数据类型
 interface ChannelData extends Record<string, unknown> {
   channelId: string;
+  asset: string; // 资产名称（大写）
+  assetColor: string; // 资产对应的颜色
   transactions: number;
   capacity: string;
   createdOn: string;
@@ -53,13 +59,24 @@ const formatCapacityRange = (min: number, max: number) => {
 };
 
 
+// 所有可用的通道状态
+const ALL_CHANNEL_STATES: ChannelState[] = [
+  "open",
+  "closed_waiting_onchain_settlement",
+  "closed_uncooperative",
+  "closed_cooperative",
+];
+
 export const Channels = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1); // 1-based for display
-  const [selectedState, setSelectedState] = useState<ChannelState>("open");
+  const [selectedStates, setSelectedStates] = useState<ChannelState[]>(["open"]); // 默认选中 open
+  const [selectedAsset, setSelectedAsset] = useState<string>(''); // ''表示 All assets
   const [sortKey, setSortKey] = useState<string>("");
   const [sortState, setSortState] = useState<SortState>("none");
+  const [searchValue, setSearchValue] = useState(''); // 搜索框输入值
+  const [debouncedSearchValue, setDebouncedSearchValue] = useState(''); // 防抖后的搜索值
   const PAGE_SIZE = 10; // 每页显示10条
   const { apiClient, currentNetwork } = useNetwork();
   
@@ -99,13 +116,46 @@ export const Channels = () => {
     refetchInterval: 300000, // 5分钟刷新
   });
 
+  // 使用后端接口获取资产分布数据
+  const { data: channelCountByAsset, dataUpdatedAt: channelAssetUpdatedAt } = useQuery({
+    queryKey: ["channel-count-by-asset", currentNetwork],
+    queryFn: () => apiClient.getChannelCountByAsset(),
+    refetchInterval: 300000, // 5分钟刷新
+  });
+
   // 使用服务端分页接口获取指定状态的通道数据
+  // 如果没有选中任何状态，则请求所有状态
+  const statesToFetch = selectedStates.length === 0 ? ALL_CHANNEL_STATES : selectedStates;
   const { data: channelsData, isLoading, refetch, dataUpdatedAt: channelsDataUpdatedAt } = useChannelsByState(
-    selectedState,
+    statesToFetch,
     backendPage,
     backendSortBy,
-    backendOrder
+    backendOrder,
+    debouncedSearchValue, // 传入防抖后的搜索值
+    selectedAsset // 传入选中的资产名称
   );
+  
+  // 搜索防抖：用户输入完 500ms 后才触发搜索
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchValue(searchValue);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  // 当搜索值变化时，清空所有选中的状态和资产
+  useEffect(() => {
+    if (debouncedSearchValue.trim()) {
+      setSelectedStates([]);
+      setSelectedAsset(''); // 清空选中的资产
+    }
+  }, [debouncedSearchValue]);
+  
+  // 当选中的资产变化时，重置到第一页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedAsset]);
   
   // 从返回数据中提取 total_count
   const totalCount = channelsData?.total_count ?? 0;
@@ -117,13 +167,59 @@ export const Channels = () => {
     return channelCountByState[state] || 0;
   };
 
-  // 组装 PieChart 数据
+  // 组装 PieChart 数据 - Channel Status Distribution
   const pieChartData = [
     { name: "Open", value: getStateCount("open"), status: "Open" },
     { name: "Closed (Waiting Settlement)", value: getStateCount("closed_waiting_onchain_settlement"), status: "Closed (Waiting Settlement)" },
     { name: "Closed (Cooperative)", value: getStateCount("closed_cooperative"), status: "Closed (Cooperative)" },
     { name: "Closed (Uncooperative)", value: getStateCount("closed_uncooperative"), status: "Closed (Uncooperative)" },
   ];
+
+  // 组装 PieChart 数据 - Asset Distribution
+  const assetDistributionData = useMemo(() => {
+    if (!channelCountByAsset) return [];
+    
+    // 将后端返回的 {"CKB": 100, "RUSD": 50, ...} 转换为饼图数据格式
+    return Object.entries(channelCountByAsset).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }, [channelCountByAsset]);
+
+  // 为每个资产分配颜色，使用工具函数统一管理
+  const assetColorMap = useMemo(() => {
+    const assetNames = assetDistributionData.map(asset => asset.name);
+    return createAssetColorMap(assetNames);
+  }, [assetDistributionData]);
+
+  // 根据资产名称获取颜色
+  const getAssetColor = (assetName: string) => {
+    return assetColorMap.get(assetName.toLowerCase()) || "#5470c6";
+  };
+
+  // 生成资产选择器的选项
+  const assetOptions: AssetSelectOption[] = useMemo(() => {
+    // 具体的资产选项
+    const assetOpts = assetDistributionData.map(asset => ({
+      label: asset.name.toUpperCase(),
+      value: asset.name.toLowerCase(),
+      color: getAssetColor(asset.name),
+    }));
+    
+    // All assets 选项放在最后
+    const allOption: AssetSelectOption = {
+      label: 'All assets',
+      value: '',
+    };
+    
+    return [...assetOpts, allOption];
+  }, [assetDistributionData, assetColorMap]);
+
+  // 处理资产选择变化
+  const handleAssetChange = (asset: string) => {
+    setSelectedAsset(asset);
+    // TODO: 根据选中的资产过滤通道数据
+  };
 
   // 计算容量分布数据 - 使用后端返回的分桶结果
   const capacityDistributionData = useMemo(() => {
@@ -152,7 +248,12 @@ export const Channels = () => {
     return result;
   }, [capacityDistribution]);
 
-  // 计算总通道数用于百分比
+  // 计算资产分布的总数，用于百分比计算
+  const totalChannelsForAsset = useMemo(() => {
+    return assetDistributionData.reduce((sum, item) => sum + item.value, 0);
+  }, [assetDistributionData]);
+
+  // 计算容量分布的总数，用于百分比计算
   const totalChannelsForCapacity = useMemo(() => {
     return capacityDistributionData.reduce((sum, item) => sum + item.value, 0);
   }, [capacityDistributionData]);
@@ -176,8 +277,14 @@ export const Channels = () => {
       });
     };
     
+    // 获取资产名称和颜色
+    const assetName = channel.name || 'ckb'; // 默认为 ckb
+    const assetColor = getAssetColor(assetName);
+    
     return {
       channelId: channel.channel_outpoint,
+      asset: assetName.toUpperCase(), // 转换为大写
+      assetColor,
       transactions: channel.tx_count,
       capacity: capacityInCKB.toLocaleString('en-US', { maximumFractionDigits: 2 }),
       createdOn: formatDate(channel.create_time),
@@ -188,7 +295,7 @@ export const Channels = () => {
   // Reset to first page when state changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedState]);
+  }, [selectedStates]);
 
   // Reset to first page when sorting changes
   useEffect(() => {
@@ -201,6 +308,7 @@ export const Channels = () => {
     const latestUpdateTime = Math.max(
       capacityDistributionUpdatedAt || 0, 
       channelCountUpdatedAt || 0,
+      channelAssetUpdatedAt || 0,
       channelsDataUpdatedAt || 0
     );
     if (latestUpdateTime === 0) return "";
@@ -214,7 +322,7 @@ export const Channels = () => {
       hour12: false,
     });
     return `Last updated: ${formattedTime}`;
-  }, [capacityDistributionUpdatedAt, channelCountUpdatedAt, channelsDataUpdatedAt]);
+  }, [capacityDistributionUpdatedAt, channelCountUpdatedAt, channelAssetUpdatedAt, channelsDataUpdatedAt]);
 
   const columns: ColumnDef<ChannelData>[] = [
     {
@@ -224,6 +332,21 @@ export const Channels = () => {
       render: (value) => (
         <div className="truncate min-w-0 text-primary text-sm" title={String(value)}>
           {value as string}
+        </div>
+      ),
+    },
+    {
+      key: "asset",
+      label: "Asset",
+      width: "w-32",
+      sortable: false,
+      render: (value, row) => (
+        <div className="flex items-center gap-2">
+          <div 
+            className="w-3 h-3 flex-shrink-0" 
+            style={{ backgroundColor: row.assetColor as string }}
+          />
+          <span className="text-primary text-sm font-medium">{value as string}</span>
         </div>
       ),
     },
@@ -262,6 +385,7 @@ export const Channels = () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["channel-capacity-distribution", currentNetwork] }),
       queryClient.invalidateQueries({ queryKey: ["channel-count-by-state", currentNetwork] }),
+      queryClient.invalidateQueries({ queryKey: ["channel-count-by-asset", currentNetwork] }),
       refetch(),
     ]);
   };
@@ -276,7 +400,25 @@ export const Channels = () => {
   };
 
   const handleStateChange = (state: ChannelState) => {
-    setSelectedState(state);
+    // 当选择状态时，清空搜索框
+    if (searchValue.trim()) {
+      setSearchValue('');
+      setDebouncedSearchValue('');
+    }
+    
+    setSelectedStates(prev => {
+      // 如果已经选中，则取消选中
+      if (prev.includes(state)) {
+        return prev.filter(s => s !== state);
+      }
+      // 否则添加到选中列表
+      return [...prev, state];
+    });
+  };
+
+  // 检查某个状态是否被选中
+  const isStateSelected = (state: ChannelState) => {
+    return selectedStates.includes(state);
   };
 
   return (
@@ -287,7 +429,53 @@ export const Channels = () => {
         onRefresh={handleRefresh}
       />
 
+      {/* 第一行：两个饼图 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GlassCardContainer>
+          <PieChart
+            data={pieChartData}
+            title="Channel Status Distribution"
+            height="400px"
+            colors={["#208C73", "#FAB83D", "#B34846", "#9B87C8"]}
+            tooltipFormatter={(params) => {
+              const dataItem = pieChartData[params.dataIndex];
+              const totalChannels = pieChartData.reduce((sum, item) => sum + item.value, 0);
+              const percentage = totalChannels > 0
+                ? ((params.value / totalChannels) * 100).toFixed(1)
+                : "0.0";
+              
+              return [
+                { label: "Status", value: dataItem.status || params.name, showColorDot: true },
+                { label: "# of Channels", value: params.value.toString() },
+                { label: "% of Total", value: `${percentage}%` },
+              ];
+            }}
+          />
+        </GlassCardContainer>
+
+        <GlassCardContainer>
+          <PieChart
+            data={assetDistributionData}
+            title="Asset Distribution"
+            height="400px"
+            colors={assetDistributionData.map(asset => getAssetColor(asset.name))}
+            tooltipFormatter={(params) => {
+              const percentage = totalChannelsForAsset > 0
+                ? ((params.value / totalChannelsForAsset) * 100).toFixed(1)
+                : "0.0";
+              
+              return [
+                { label: "Asset", value: params.name, showColorDot: true },
+                { label: "# of Channels", value: params.value.toString() },
+                { label: "% of Total", value: `${percentage}%` },
+              ];
+            }}
+          />
+        </GlassCardContainer>
+      </div>
+
+      {/* 第二行：Capacity Distribution 柱状图 */}
+      <div className="mt-6">
         <GlassCardContainer>
           <BarChart
             data={capacityDistributionData}
@@ -310,48 +498,53 @@ export const Channels = () => {
             }}
           />
         </GlassCardContainer>
-
-        <GlassCardContainer>
-          <PieChart
-            data={pieChartData}
-            title="Channel Status Distribution"
-            height="400px"
-            colors={["#208C73", "#FAB83D", "#B34846", "#9B87C8"]}
-          />
-        </GlassCardContainer>
       </div>
 
-      <SectionHeader
-        title="Channels by Status"
-        lastUpdated={lastUpdated}
-        onRefresh={handleRefresh}
-      />
+      <div className="flex items-center justify-between">
+        <h2 className="type-h2 font-semibold text-primary">
+          Channels by Status
+        </h2>
+        <SearchInput
+          value={searchValue}
+          placeholder="by channel outpoint"
+          onChange={setSearchValue}
+          className="w-80"
+        />
+      </div>
       <div className="flex gap-2 md:gap-4 flex-wrap">
+        {/* Asset Select */}
+        <AssetSelect
+          options={assetOptions}
+          value={selectedAsset}
+          onChange={handleAssetChange}
+          placeholder="All assets"
+          className="w-[180px]"
+        />
         <StatusIndicator
           text={`Open (${getStateCount("open")})`}
           color="#208C73"
-          mode={selectedState === "open" ? "dark" : "light"}
+          mode={isStateSelected("open") ? "dark" : "light"}
           onClick={() => handleStateChange("open")}
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
           text={`Closed (Waiting Settlement) (${getStateCount("closed_waiting_onchain_settlement")})`}
           color="#FAB83D"
-          mode={selectedState === "closed_waiting_onchain_settlement" ? "dark" : "light"}
+          mode={isStateSelected("closed_waiting_onchain_settlement") ? "dark" : "light"}
           onClick={() => handleStateChange("closed_waiting_onchain_settlement")}
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
           text={`Closed (Uncooperative) (${getStateCount("closed_uncooperative")})`}
           color="#B34846"
-          mode={selectedState === "closed_uncooperative" ? "dark" : "light"}
+          mode={isStateSelected("closed_uncooperative") ? "dark" : "light"}
           onClick={() => handleStateChange("closed_uncooperative")}
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
           text={`Closed (Cooperative) (${getStateCount("closed_cooperative")})`}
           color="#9B87C8"
-          mode={selectedState === "closed_cooperative" ? "dark" : "light"}
+          mode={isStateSelected("closed_cooperative") ? "dark" : "light"}
           onClick={() => handleStateChange("closed_cooperative")}
           className="flex-1 min-w-0 md:flex-initial"
         />
@@ -382,7 +575,10 @@ export const Channels = () => {
         {!isLoading && tableData.length === 0 && (
           <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
             <div className="text-muted-foreground">
-              No {selectedState} channels found
+              {selectedStates.length === 0 
+                ? "Please select at least one status to view channels"
+                : `No channels found for selected ${selectedStates.length === 1 ? 'status' : 'statuses'}`
+              }
             </div>
           </div>
         )}

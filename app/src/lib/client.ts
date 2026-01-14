@@ -257,14 +257,29 @@ export class APIClient {
   }
 
   async getGroupChannelsByState(
-    state: ChannelState,
+    states: ChannelState | ChannelState[],
     page: number = 0,
     pageSize: number = 10,
     sortBy: string = 'last_commit_time',
-    order: 'asc' | 'desc' = 'desc'
+    order: 'asc' | 'desc' = 'desc',
+    fuzzName?: string, // 模糊搜索 channel outpoint
+    assetName?: string // 资产名称过滤
   ): Promise<GroupChannelsByStateResponse> {
+    // 如果是数组，则拼接多个 state 参数
+    const stateArray = Array.isArray(states) ? states : [states];
+    const stateParams = stateArray.map(s => `state=${s}`).join('&');
+    
+    // 构建 URL，如果有 fuzzName 则添加
+    let url = `/group_channel_by_state?${stateParams}&page=${page}&page_size=${pageSize}&sort_by=${sortBy}&order=${order}`;
+    if (fuzzName && fuzzName.trim()) {
+      url += `&fuzz_name=${encodeURIComponent(fuzzName.trim())}`;
+    }
+    if (assetName && assetName.trim()) {
+      url += `&asset_name=${encodeURIComponent(assetName.trim())}`;
+    }
+    
     return this.apiRequest<GroupChannelsByStateResponse>(
-      `/group_channel_by_state?state=${state}&page=${page}&page_size=${pageSize}&sort_by=${sortBy}&order=${order}`,
+      url,
       undefined,
       GroupChannelsByStateResponseSchema
     );
@@ -305,6 +320,12 @@ export class APIClient {
   async getChannelCountByState(): Promise<Record<string, number>> {
     return this.apiRequest<Record<string, number>>(
       `/channel_count_by_state`
+    );
+  }
+
+  async getChannelCountByAsset(): Promise<Record<string, number>> {
+    return this.apiRequest<Record<string, number>>(
+      `/channel_count_by_asset`
     );
   }
 

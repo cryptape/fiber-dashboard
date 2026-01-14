@@ -16,6 +16,12 @@ interface PieChartProps {
   className?: string;
   colors?: string[]; // 自定义颜色
   showLegend?: boolean;
+  tooltipFormatter?: (params: {
+    dataIndex: number;
+    value: number;
+    name: string;
+    color: string;
+  }) => Array<{ label: string; value: string; showColorDot?: boolean }>; // 自定义 tooltip 格式化函数，showColorDot 控制是否显示色块
 }
 
 export default function PieChart({
@@ -25,6 +31,7 @@ export default function PieChart({
   className = "",
   colors = ["#BDEB88", "#FBE38E", "#E659AB"], // 默认使用指定的三种颜色
   showLegend = true,
+  tooltipFormatter,
 }: PieChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
@@ -145,6 +152,37 @@ export default function PieChart({
           };
           
           if (param) {
+            // 如果传入了自定义格式化函数，使用自定义逻辑
+            if (tooltipFormatter) {
+              const items = tooltipFormatter({
+                dataIndex: param.dataIndex,
+                value: param.value,
+                name: param.name,
+                color: param.color,
+              });
+              
+              let result = '';
+              items.forEach((item, index) => {
+                const marginBottom = index < items.length - 1 ? 'margin-bottom:8px;' : '';
+                result += `<div style="display:flex;justify-content:space-between;align-items:center;${marginBottom}">`;
+                result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${tertiaryColor};">${item.label}</span>`;
+                
+                // 如果需要显示色块，则在值前面添加圆点
+                if (item.showColorDot) {
+                  result += `<span style="display:flex;align-items:center;font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${secondaryColor};margin-left:16px;">`;
+                  result += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${param.color};margin-right:6px;flex-shrink:0;"></span>`;
+                  result += `${item.value}`;
+                  result += `</span>`;
+                } else {
+                  result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${purpleColor};margin-left:16px;">${item.value}</span>`;
+                }
+                
+                result += `</div>`;
+              });
+              return result;
+            }
+            
+            // 默认逻辑
             const dataItem = data[param.dataIndex];
             const percentage = calculatePercentage(param.value);
             
@@ -228,7 +266,7 @@ export default function PieChart({
     };
 
     chartInstance.current.setOption(option);
-  }, [data, title, colors, showLegend]);
+  }, [data, title, colors, showLegend, tooltipFormatter]);
 
   return <div ref={chartRef} style={{ height }} className={className} />;
 }

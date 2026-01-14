@@ -4,6 +4,7 @@ export * from "./card";
 export * from "./separator";
 export * from "./skeleton";
 export * from "./CustomSelect";
+export * from "./AssetSelect";
 export * from "./CustomMenu";
 export * from "./SectionHeader";
 export * from "./EasyTable";

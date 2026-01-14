@@ -13,6 +13,7 @@ import { formatTimestamp } from "../utils";
 import { useChannelData } from "../hooks/useChannelData";
 import { ChannelParticipants } from "./ChannelParticipants";
 import { ChannelLifecycle } from "./ChannelLifecycle";
+import { getAssetColor } from "../utils/assetColors";
 
 export default function ChannelDetailPage() {
   const params = useParams();
@@ -118,6 +119,8 @@ export default function ChannelDetailPage() {
         showHashLabel={false}
         createdOn={formatTimestamp(channelInfo.created_timestamp)}
         lastCommitted={formatTimestamp(channelInfo.commit_timestamp)}
+        asset={channelInfo.udt_name ? channelInfo.udt_name.toUpperCase() : 'CKB'}
+        assetColor={getAssetColor(channelInfo.udt_name || 'ckb')}
       />
 
       {/* KPI 卡片 */}

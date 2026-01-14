@@ -36,6 +36,10 @@ export interface DetailCardProps {
   topExtra?: React.ReactNode;
   /** 自定义类名 */
   className?: string;
+  /** 资产名称（如 "CKB", "BTC" 等） */
+  asset?: string;
+  /** 资产颜色 */
+  assetColor?: string;
   /** 额外的键值对字段（在 commitmentArgs 下方显示） */
   extraFields?: Array<{
     key: string;
@@ -63,6 +67,8 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   topRightLabel,
   topExtra,
   className = "",
+  asset,
+  assetColor,
   extraFields,
 }) => {
 
@@ -81,11 +87,26 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             </div>
             {showStatus && <StatusBadge status={status} />}
           </div>
-          {topRightLabel && (
-            <div className="type-body text-primary border border-[#D9D9D9] px-2 py-1">
-              {topRightLabel}
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {/* Asset 显示（右上角，top: 16px, right: 16px） */}
+            {asset && assetColor && (
+              <div className="flex items-center gap-2 text-sm text-secondary">
+                <span>Asset:</span>
+                <div className="flex items-center gap-1.5">
+                  <div 
+                    className="w-3 h-3 flex-shrink-0" 
+                    style={{ backgroundColor: assetColor }}
+                  />
+                  <span className="text-primary font-medium">{asset}</span>
+                </div>
+              </div>
+            )}
+            {topRightLabel && (
+              <div className="type-body text-primary border border-[#D9D9D9] px-2 py-1">
+                {topRightLabel}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 最后出现时间 - 放在 name 下面 */}
