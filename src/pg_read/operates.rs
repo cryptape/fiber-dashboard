@@ -787,7 +787,12 @@ pub(crate) async fn group_channel_by_state(
     let total_count: i64 = {
         let mut query = sqlx::query(&sql_count).bind(params.state.to_sql());
         if let Some(fuzz_name) = &params.fuzz_name {
-            query = query.bind(fuzz_name);
+            let name = if fuzz_name.starts_with("0x") || fuzz_name.starts_with("0X") {
+                &fuzz_name[2..]
+            } else {
+                fuzz_name
+            };
+            query = query.bind(name);
         }
         if let Some(asset_name) = &params.asset_name {
             query = query.bind(asset_name);
@@ -833,7 +838,12 @@ pub(crate) async fn group_channel_by_state(
     );
     let mut query = sqlx::query(&sql).bind(params.state.to_sql());
     if let Some(fuzz_name) = &params.fuzz_name {
-        query = query.bind(fuzz_name);
+        let name = if fuzz_name.starts_with("0x") || fuzz_name.starts_with("0X") {
+            &fuzz_name[2..]
+        } else {
+            fuzz_name
+        };
+        query = query.bind(name);
     }
     if let Some(asset_name) = &params.asset_name {
         query = query.bind(asset_name);
