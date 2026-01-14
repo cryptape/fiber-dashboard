@@ -47,7 +47,7 @@ impl ClockTimer {
                     .with_nanosecond(0)
                     .unwrap();
                 if next <= now {
-                    next = next + chrono::Duration::days(1);
+                    next += chrono::Duration::days(1);
                 }
                 next
             }
@@ -60,7 +60,7 @@ impl ClockTimer {
                     .with_nanosecond(0)
                     .unwrap();
                 if next <= now {
-                    next = next + chrono::Duration::hours(1);
+                    next += chrono::Duration::hours(1);
                 }
                 next
             }
