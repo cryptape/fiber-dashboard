@@ -441,7 +441,7 @@ pub async fn query_analysis_hourly(
         "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp",
         params.net.online_nodes_hourly()
     );
-    let end = params.end.unwrap_or_else(|| chrono::Utc::now());
+    let end = params.end.unwrap_or_else(chrono::Utc::now);
     let start_time = end - chrono::Duration::hours(3);
     let mut channel_capacitys = sqlx::query(&channel_sql)
         .bind(start_time)
@@ -666,7 +666,7 @@ pub async fn query_channel_state(
     let txs = net.channel_txs();
     let sql = format!(
         r#"
-        select {states}.funding_args, {states}.capacity, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.timestamp,{txs}.witness_args, {txs}.commitment_args
+        select {states}.funding_args, {states}.capacity, {states}.state, {txs}.tx_hash, {txs}.block_number, {txs}.timestamp,{txs}.witness_args, {txs}.commitment_args, {states}.udt_value
         from {states} 
         join {txs} on {txs}.channel_outpoint = {states}.channel_outpoint 
         where {states}.channel_outpoint = $1
@@ -676,6 +676,7 @@ pub async fn query_channel_state(
     let mut funding_args: JsonBytes = JsonBytes::default();
     let mut state: String = String::new();
     let mut capacity: String = String::new();
+    let mut udt_value: Option<String> = None;
     let rows = sqlx::query(&sql)
         .bind(faster_hex::hex_string(outpoint.as_bytes()))
         .fetch_all(pool)
@@ -694,6 +695,8 @@ pub async fn query_channel_state(
             if capacity.is_empty() {
                 let raw: String = row.get("capacity");
                 capacity = format!("0x{}", raw);
+                let raw_udt_value: Option<String> = row.try_get("udt_value").ok();
+                udt_value = raw_udt_value.map(|v| format!("0x{}", v));
             }
 
             let raw_tx_hash: String = row.get("tx_hash");
@@ -730,6 +733,7 @@ pub async fn query_channel_state(
         funding_args: JsonBytes,
         state: String,
         capacity: String,
+        udt_value: Option<String>,
         txs: Vec<Txs>,
     }
 
@@ -737,6 +741,7 @@ pub async fn query_channel_state(
         funding_args,
         state,
         capacity,
+        udt_value,
         txs: rows
             .into_iter()
             .map(
@@ -807,7 +812,7 @@ pub(crate) async fn group_channel_by_state(
             inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = Any($1)
             group by c.channel_outpoint
         )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
+        select n.channel_outpoint, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
         from {} n
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
         left join {} k on n.channel_outpoint = k.channel_outpoint
@@ -862,12 +867,14 @@ pub(crate) async fn group_channel_by_state(
             let last_commit_time: DateTime<Utc> = row.get("last_commit_time");
             let tx_count: i64 = row.get("tx_count");
             let capacity: String = row.get("capacity");
+            let udt_value: Option<String> = row.try_get("udt_value").ok();
             let name: String = row.get("name");
             (
                 format!("0x{}", channel_outpoint),
                 format!("0x{}", funding_args),
                 format!("0x{}", last_block_number),
                 format!("0x{}", last_tx_hash),
+                udt_value.map(|val| format!("0x{}", val)),
                 create_time.to_rfc3339(),
                 last_commit_time.to_rfc3339(),
                 format!("0x{}", capacity),
@@ -888,6 +895,7 @@ pub(crate) async fn group_channel_by_state(
         create_time: String,
         last_commit_time: String,
         capacity: String,
+        udt_value: Option<String>,
         tx_count: usize,
         name: String,
     }
@@ -907,6 +915,7 @@ pub(crate) async fn group_channel_by_state(
                     funding_args,
                     last_block_number,
                     last_tx_hash,
+                    udt_value,
                     create_time,
                     last_commit_time,
                     capacity,
@@ -918,6 +927,7 @@ pub(crate) async fn group_channel_by_state(
                     funding_args,
                     last_block_number,
                     last_tx_hash,
+                    udt_value,
                     tx_count,
                     create_time,
                     capacity,

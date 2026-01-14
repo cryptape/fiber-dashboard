@@ -791,33 +791,33 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                     }
 
                     let current_state = if let UpdateType::Update((_, _, ref s)) = csus {
-                        s.state.clone()
+                        s.state
                     } else {
                         DBState::Open
                     };
                     // Continue to retrieve commitment transactions
-                    if current_state == DBState::ClosedWaitingOnchainSettlement {
-                        if let UpdateType::Update((_, _, csu)) = csus.clone() {
-                            let commitment_args = csu.last_commitment_args.unwrap();
-                            let block_number = csu.last_block_number;
-                            let tx_hash = csu.txs.last().unwrap().0.clone();
-                            commitment_branch(
-                                &rpc,
-                                state.net,
-                                &outpoint,
-                                url,
-                                commitment_args,
-                                block_number,
-                                match state.net {
-                                    Network::Mainnet => mainnet_tip.block_number,
-                                    Network::Testnet => testnet_tip.block_number,
-                                },
-                                tx_hash,
-                                code_hash,
-                                &mut csus,
-                            )
-                            .await;
-                        }
+                    if current_state == DBState::ClosedWaitingOnchainSettlement
+                        && let UpdateType::Update((_, _, csu)) = csus.clone()
+                    {
+                        let commitment_args = csu.last_commitment_args.unwrap();
+                        let block_number = csu.last_block_number;
+                        let tx_hash = csu.txs.last().unwrap().0.clone();
+                        commitment_branch(
+                            &rpc,
+                            state.net,
+                            &outpoint,
+                            url,
+                            commitment_args,
+                            block_number,
+                            match state.net {
+                                Network::Mainnet => mainnet_tip.block_number,
+                                Network::Testnet => testnet_tip.block_number,
+                            },
+                            tx_hash,
+                            code_hash,
+                            &mut csus,
+                        )
+                        .await;
                     }
                 }
                 State::ClosedWaitingOnchainSettlement {
@@ -885,7 +885,7 @@ async fn channel_tx_update(channel_states: &mut ChannelStates, rpc: &mut RpcClie
                 DBState::ClosedUncooperative => State::ClosedUncooperative,
                 DBState::ClosedWaitingOnchainSettlement => State::ClosedWaitingOnchainSettlement {
                     tx_hash: csu.txs.last().unwrap().0.clone(),
-                    block_number: csu.last_block_number.into(),
+                    block_number: csu.last_block_number,
                     commitment_args: csu.last_commitment_args.clone().unwrap(),
                 },
                 DBState::Open => panic!("Invalid state transition to Open"),
@@ -1263,6 +1263,7 @@ pub struct ChannelGroup {
     capacity: u64,
     create_time: u64,
     last_commit_time: u64,
+    udt_value: Option<u128>,
     last_block_number: BlockNumber,
     last_commitment_args: Option<JsonBytes>,
     state: DBState,
@@ -1300,7 +1301,7 @@ impl ChannelGroup {
         conn: &mut sqlx::PgConnection,
     ) -> Result<(), sqlx::Error> {
         let sql = format!(
-            "insert into {} (channel_outpoint, funding_args, capacity, last_tx_hash, last_block_number, create_time, last_commit_time, last_commitment_args, state) ",
+            "insert into {} (channel_outpoint, funding_args, capacity, last_tx_hash, last_block_number, udt_value, create_time, last_commit_time, last_commitment_args, state) ",
             groups[0].net.channel_states()
         );
 
@@ -1314,6 +1315,12 @@ impl ChannelGroup {
                 .push_bind(hex_string(
                     cg.last_block_number.value().to_be_bytes().as_ref(),
                 ))
+                .push_bind(
+                    cg.udt_value
+                        .map(|v| v.to_be_bytes())
+                        .as_ref()
+                        .map(|b| hex_string(b.as_ref())),
+                )
                 .push_bind(chrono::DateTime::from_timestamp_millis(
                     cg.create_time as i64,
                 ))
@@ -1410,6 +1417,19 @@ pub async fn new_channels(
                 .get(Into::<u32>::into(raw_outpoint.as_reader().index()) as usize)
                 .map(|output| (output.lock.args.clone(), output.capacity.value()))
                 .unwrap();
+            let udt_value = funding_tx
+                .inner
+                .outputs_data
+                .get(Into::<u32>::into(raw_outpoint.as_reader().index()) as usize)
+                .and_then(|data| {
+                    if data.len() >= 16 {
+                        let mut buf = [0u8; 16];
+                        buf.copy_from_slice(&data.as_bytes()[0..16]);
+                        Some(u128::from_le_bytes(buf))
+                    } else {
+                        None
+                    }
+                });
             let txs = loop {
                 let txs = rpc
                     .get_transactions(
@@ -1439,10 +1459,11 @@ pub async fn new_channels(
                 outpoint,
                 funding_args: funding_args.clone(),
                 last_block_number: 0.into(),
-                capacity,
+                capacity: capacity - 19800000000, // channel reserve 198 ckb
                 create_time: 0,
                 last_commit_time: 0,
                 last_commitment_args: None,
+                udt_value,
                 state: DBState::Open,
                 txs: vec![(funding_tx.hash.clone(), 0.into(), 0, None, None)],
             };
