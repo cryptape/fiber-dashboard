@@ -1,0 +1,14 @@
+/* Asset Select Dropdown - 使用 surface/popover 背景色和自定义阴影 */
+.asset-select-dropdown {
+  box-shadow: 0 4px 6px 0 rgba(0, 0, 0, 0.08);
+}
+
+/* Asset Select Option Hover */
+.asset-select-option:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode hover */
+.dark .asset-select-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}

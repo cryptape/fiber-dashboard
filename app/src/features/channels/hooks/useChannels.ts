@@ -5,8 +5,10 @@ import { ChannelState } from "@/lib/types";
 // Query keys for channels
 export const channelQueryKeys = {
   all: ["channels"] as const,
-  byState: (state: ChannelState, page: number = 0) =>
-    [...channelQueryKeys.all, "by-state", state, page] as const,
+  byState: (states: ChannelState | ChannelState[], page: number = 0, fuzzName?: string, assetName?: string) => {
+    const stateKey = Array.isArray(states) ? states.sort().join(',') : states;
+    return [...channelQueryKeys.all, "by-state", stateKey, page, fuzzName || '', assetName || ''] as const;
+  },
   detail: (channelId: string) =>
     [...channelQueryKeys.all, "detail", channelId] as const,
   state: (channelId: string) =>
@@ -15,16 +17,18 @@ export const channelQueryKeys = {
 
 // Custom hooks for channel data
 export function useChannelsByState(
-  state: ChannelState, 
+  states: ChannelState | ChannelState[], 
   page: number = 0,
   sortBy: string = 'last_commit_time',
-  order: 'asc' | 'desc' = 'desc'
+  order: 'asc' | 'desc' = 'desc',
+  fuzzName?: string,
+  assetName?: string
 ) {
   const { apiClient, currentNetwork } = useNetwork();
 
   return useQuery({
-    queryKey: [...channelQueryKeys.byState(state, page), currentNetwork, sortBy, order],
-    queryFn: () => apiClient.getGroupChannelsByState(state, page, 10, sortBy, order),
+    queryKey: [...channelQueryKeys.byState(states, page, fuzzName, assetName), currentNetwork, sortBy, order],
+    queryFn: () => apiClient.getGroupChannelsByState(states, page, 10, sortBy, order, fuzzName, assetName),
     refetchInterval: 300000, // 5 minutes
     staleTime: 0, // 确保每次排序都重新请求
   });

@@ -169,6 +169,7 @@ export const RustChannelInfoSchema = z.object({
   capacity: z.string(),
   chain_hash: z.string(),
   udt_type_script: z.unknown().optional(),
+  udt_name: z.string().optional(), // 资产名称，如 "ckb", "btc" 等
   update_info_of_node1: z.unknown().optional(),
   update_info_of_node2: z.unknown().optional(),
 });
@@ -320,6 +321,7 @@ export const BasicChannelInfoSchema = z.object({
   last_commit_time: z.string(),
   capacity: z.string(),
   tx_count: z.number(),
+  name: z.string(), // 资产名称（如 "ckb", "rusd" 等）
 });
 
 export const GroupChannelsByStateResponseSchema = z.object({
