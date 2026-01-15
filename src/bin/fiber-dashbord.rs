@@ -296,7 +296,7 @@ async fn timed_commit_states() {
 }
 
 async fn daily_commit() {
-    let mut clock_timer = ClockTimer::new_daily(0, 11, false);
+    let mut clock_timer = ClockTimer::new_daily(0, 11, true);
     loop {
         let trigger_time = clock_timer.tick().await;
         let pool = get_pg_pool();

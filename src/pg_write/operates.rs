@@ -239,13 +239,15 @@ pub async fn daily_statistics(
             "
     SELECT DISTINCT ON (time_bucket('1 day', bucket), channel_outpoint)
         time_bucket('1 day', bucket) AS day_bucket,
-        channel_outpoint,
-        capacity
-    FROM {}
+        n.capacity,
+        COALESCE(c.name, 'ckb') as name
+    FROM {} n
+    left join {} c on n.udt_type_script = c.id
     WHERE bucket < $1::timestamp and bucket >= $2::timestamp
     ORDER BY time_bucket('1 day', bucket), channel_outpoint, bucket DESC
     ",
-            net.online_channels_hourly()
+            net.online_channels_hourly(),
+            net.udt_infos()
         );
         let nodes_count: Vec<(DateTime<Utc>, i64)> = sqlx::query(&nodes_count_sql)
             .bind(end_time)
@@ -259,7 +261,7 @@ pub async fn daily_statistics(
                 (day_bucket, nodes_count)
             })
             .collect();
-        let channels_data: Vec<(DateTime<Utc>, u128)> = sqlx::query(&channels_data_sql)
+        let channels_data = sqlx::query(&channels_data_sql)
             .bind(end_time)
             .bind(start_time)
             .fetch_all(pool)
@@ -273,29 +275,37 @@ pub async fn daily_statistics(
                     faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
                     u128::from_be_bytes(buf)
                 };
-                (day_bucket, capacity)
+                let name = row.get::<String, _>("name");
+                (day_bucket, (name, capacity))
             })
-            .collect();
+            .fold(
+                HashMap::new(),
+                |mut acc: HashMap<DateTime<Utc>, HashMap<String, Vec<u128>>>,
+                 (dt, (name, capacity))| {
+                    acc.entry(dt)
+                        .or_insert_with(HashMap::new)
+                        .entry(name)
+                        .or_insert_with(Vec::new)
+                        .push(capacity);
+                    acc
+                },
+            );
 
         let summarized_data = summarize_data(channels_data, nodes_count);
         if summarized_data.is_empty() {
             continue;
         }
         let insert_sql = format!(
-            "Insert into {} (day, channels_count, sum_capacity, avg_capacity, min_capacity, max_capacity, median_capacity, nodes_count) ",
+            "Insert into {} (day, channels_count, channel_analysis, nodes_count) ",
             net.daily_summarized_data()
         );
         let mut query_builder: sqlx::QueryBuilder<'_, sqlx::Postgres> =
             sqlx::QueryBuilder::new(&insert_sql);
 
-        query_builder.push_values(summarized_data.iter().take(65535 / 6), |mut b, sd| {
+        query_builder.push_values(summarized_data.iter().take(65535 / 4), |mut b, sd| {
             b.push_bind(sd.date)
                 .push_bind(sd.channels_count)
-                .push_bind(&sd.capacity_sum)
-                .push_bind(&sd.capacity_average)
-                .push_bind(&sd.capacity_min)
-                .push_bind(&sd.capacity_max)
-                .push_bind(&sd.capacity_median)
+                .push_bind(sqlx::types::Json(&sd.channel_analysis))
                 .push_bind(sd.nodes_count);
         });
 
@@ -310,82 +320,81 @@ pub async fn daily_statistics(
 pub struct DailySummary {
     pub date: DateTime<Utc>,
     pub channels_count: i64,
+    pub nodes_count: i64,
+    pub channel_analysis: Vec<DailySummaryInner>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DailySummaryInner {
+    pub name: String,
     pub capacity_average: String,
     pub capacity_min: String,
     pub capacity_max: String,
     pub capacity_median: String,
     pub capacity_sum: String, // hex encoded
-    pub nodes_count: i64,
 }
 
 fn summarize_data(
-    channels_data: Vec<(DateTime<Utc>, u128)>,
+    mut channels_data: HashMap<DateTime<Utc>, HashMap<String, Vec<u128>>>,
     nodes_data: Vec<(DateTime<Utc>, i64)>,
 ) -> Vec<DailySummary> {
     use std::collections::HashMap;
 
-    let mut channel_map: HashMap<DateTime<Utc>, Vec<u128>> = HashMap::new();
     let nodes_by_date: HashMap<DateTime<Utc>, i64> = nodes_data.into_iter().collect();
 
-    for (dt, value) in channels_data {
-        channel_map.entry(dt).or_default().push(value);
-    }
-
-    let mut all_dates: HashSet<DateTime<Utc>> = channel_map.keys().copied().collect();
+    let mut all_dates: HashSet<DateTime<Utc>> = channels_data.keys().copied().collect();
     all_dates.extend(nodes_by_date.keys());
     all_dates
         .into_iter()
         .map(|dt| {
             let nodes_count = nodes_by_date.get(&dt).copied().unwrap_or(0);
-            if let Some(values) = channel_map.get_mut(&dt) {
+            if let Some(values) = channels_data.get_mut(&dt) {
                 if values.is_empty() {
                     return DailySummary {
                         date: dt,
                         channels_count: 0,
-                        capacity_average: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                        capacity_min: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                        capacity_max: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                        capacity_median: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                        capacity_sum: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                        channel_analysis: Vec::default(),
                         nodes_count,
                     };
                 }
+                let mut count = 0;
+                let mut inner = Vec::with_capacity(values.len());
+                for (name, caps) in values.iter_mut() {
+                    caps.sort_unstable();
+                    count += caps.len();
+                    let min = caps[0];
+                    let max = caps[caps.len() - 1];
+                    let sum: u128 = caps.iter().sum();
+                    let average = sum / caps.len() as u128;
 
-                values.sort_unstable();
-
-                let count = values.len();
-                let min = values[0];
-                let max = values[values.len() - 1];
-                let sum: u128 = values.iter().sum();
-                let average = sum / values.len() as u128;
-
-                let median = if values.len() % 2 == 0 {
-                    let mid1 = values[values.len() / 2 - 1];
-                    let mid2 = values[values.len() / 2];
-                    (mid1 + mid2) / 2
-                } else {
-                    values[values.len() / 2]
-                };
+                    let median = if caps.len() % 2 == 0 {
+                        let mid1 = caps[caps.len() / 2 - 1];
+                        let mid2 = caps[caps.len() / 2];
+                        (mid1 + mid2) / 2
+                    } else {
+                        caps[caps.len() / 2]
+                    };
+                    inner.push(DailySummaryInner {
+                        name: name.clone(),
+                        capacity_average: faster_hex::hex_string(average.to_be_bytes().as_ref()),
+                        capacity_min: faster_hex::hex_string(min.to_be_bytes().as_ref()),
+                        capacity_max: faster_hex::hex_string(max.to_be_bytes().as_ref()),
+                        capacity_median: faster_hex::hex_string(median.to_be_bytes().as_ref()),
+                        capacity_sum: faster_hex::hex_string(sum.to_be_bytes().as_ref()),
+                    });
+                }
 
                 DailySummary {
                     date: dt,
                     channels_count: count as i64,
-                    capacity_average: faster_hex::hex_string(average.to_be_bytes().as_ref()),
-                    capacity_min: faster_hex::hex_string(min.to_be_bytes().as_ref()),
-                    capacity_max: faster_hex::hex_string(max.to_be_bytes().as_ref()),
-                    capacity_median: faster_hex::hex_string(median.to_be_bytes().as_ref()),
-                    capacity_sum: faster_hex::hex_string(sum.to_be_bytes().as_ref()),
+                    channel_analysis: inner,
                     nodes_count,
                 }
             } else {
                 DailySummary {
                     date: dt,
                     channels_count: 0,
-                    capacity_average: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                    capacity_min: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                    capacity_max: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                    capacity_median: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
-                    capacity_sum: faster_hex::hex_string(0u128.to_be_bytes().as_ref()),
+                    channel_analysis: Vec::default(),
                     nodes_count,
                 }
             }
