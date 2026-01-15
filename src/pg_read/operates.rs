@@ -16,7 +16,7 @@ use crate::{
     pg_read::{
         ChannelInfo, HourlyChannelInfoDBRead, HourlyNodeInfo, HourlyNodeInfoDBRead, PAGE_SIZE,
     },
-    pg_write::{global_cache, global_cache_testnet},
+    pg_write::{DailySummaryInner, global_cache, global_cache_testnet},
     types::{U64Hex, U128Hex, UdtArgInfo, UdtCellDep, UdtCfgInfos, UdtDep},
 };
 
@@ -413,6 +413,17 @@ pub async fn query_nodes_by_udt(
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AnalysisHourly {
+    #[serde_as(as = "U64Hex")]
+    channel_len: u64,
+    #[serde_as(as = "U64Hex")]
+    total_nodes: u64,
+    channel_analysis: Vec<AnalysisHourlyInner>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AnalysisHourlyInner {
+    name: String,
     #[serde_as(as = "U128Hex")]
     max_capacity: u128,
     #[serde_as(as = "U128Hex")]
@@ -423,10 +434,6 @@ pub struct AnalysisHourly {
     total_capacity: u128,
     #[serde_as(as = "U128Hex")]
     median_capacity: u128,
-    #[serde_as(as = "U64Hex")]
-    channel_len: u64,
-    #[serde_as(as = "U64Hex")]
-    total_nodes: u64,
 }
 
 pub async fn query_analysis_hourly(
@@ -434,8 +441,13 @@ pub async fn query_analysis_hourly(
     params: AnalysisHourlyParams,
 ) -> Result<AnalysisHourly, sqlx::Error> {
     let channel_sql = format!(
-        "SELECT DISTINCT ON (channel_outpoint) channel_outpoint, capacity from {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp ORDER BY channel_outpoint, bucket DESC",
-        params.net.online_channels_hourly()
+        "SELECT DISTINCT ON (channel_outpoint) n.capacity, COALESCE(c.name, 'ckb') as name
+        from {} n
+        left join {} c on n.udt_type_script = c.id
+        WHERE bucket >= $1::timestamp and bucket <= $2::timestamp
+        ORDER BY channel_outpoint, bucket DESC",
+        params.net.online_channels_hourly(),
+        params.net.udt_infos()
     );
     let node_sql = format!(
         "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp",
@@ -451,15 +463,22 @@ pub async fn query_analysis_hourly(
         .map(|rows| {
             rows.into_iter()
                 .map(|row| {
+                    let name = row.get::<String, _>("name");
                     let capacity: u128 = {
                         let raw: String = row.get("capacity");
                         let mut buf = [0u8; 16];
                         faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
                         u128::from_be_bytes(buf)
                     };
-                    capacity
+                    (name, capacity)
                 })
-                .collect::<Vec<_>>()
+                .fold(
+                    HashMap::new(),
+                    |mut acc: HashMap<String, Vec<u128>>, (name, capacity)| {
+                        acc.entry(name).or_default().push(capacity);
+                        acc
+                    },
+                )
         })?;
     let total_nodes: u64 = sqlx::query(&node_sql)
         .bind(start_time)
@@ -470,31 +489,39 @@ pub async fn query_analysis_hourly(
             let count: i64 = row.get(0);
             count as u64
         })?;
-    channel_capacitys.sort_unstable();
-    let total_capacity = channel_capacitys.iter().sum();
-    let max_capacity = *channel_capacitys.last().unwrap_or(&0);
-    let min_capacity = *channel_capacitys.first().unwrap_or(&0);
-    let avg_capacity = if channel_capacitys.is_empty() {
-        0
-    } else {
-        total_capacity / channel_capacitys.len() as u128
-    };
-    let median_capacity = if channel_capacitys.is_empty() {
-        0
-    } else if channel_capacitys.len() % 2 == 0 {
-        (channel_capacitys[channel_capacitys.len() / 2 - 1]
-            + channel_capacitys[channel_capacitys.len() / 2])
-            / 2
-    } else {
-        channel_capacitys[channel_capacitys.len() / 2]
-    };
+    let mut channel_len = 0;
+    let mut inner = Vec::with_capacity(channel_capacitys.len());
+    for (name, mut caps) in channel_capacitys.drain() {
+        channel_len += caps.len();
+        caps.sort_unstable();
+        let total_capacity: u128 = caps.iter().sum();
+        let max_capacity = *caps.last().unwrap_or(&0);
+        let min_capacity = *caps.first().unwrap_or(&0);
+        let avg_capacity = if caps.is_empty() {
+            0
+        } else {
+            total_capacity / caps.len() as u128
+        };
+        let median_capacity = if caps.is_empty() {
+            0
+        } else if caps.len() % 2 == 0 {
+            (caps[caps.len() / 2 - 1] + caps[caps.len() / 2]) / 2
+        } else {
+            caps[caps.len() / 2]
+        };
+        inner.push(AnalysisHourlyInner {
+            name,
+            total_capacity,
+            max_capacity,
+            min_capacity,
+            avg_capacity,
+            median_capacity,
+        });
+    }
+
     Ok(AnalysisHourly {
-        max_capacity,
-        min_capacity,
-        avg_capacity,
-        total_capacity,
-        median_capacity,
-        channel_len: channel_capacitys.len() as u64,
+        channel_analysis: inner,
+        channel_len: channel_len as u64,
         total_nodes,
     })
 }
@@ -514,10 +541,7 @@ impl AnalysisField {
         match self {
             AnalysisField::Channels => "channels_count".to_string(),
             AnalysisField::Nodes => "nodes_count".to_string(),
-            AnalysisField::Capacity => {
-                "sum_capacity, avg_capacity, min_capacity, max_capacity, median_capacity"
-                    .to_string()
-            }
+            AnalysisField::Capacity => "channel_analysis".to_string(),
         }
     }
 }
@@ -635,11 +659,23 @@ pub async fn query_analysis(
                         .push((timestamp, serde_json::Value::Number(value.into())));
                 }
                 AnalysisField::Capacity => {
-                    let mut values = Vec::new();
-                    for name in table.name.to_sql().split(", ") {
-                        let value: String = row.get(name);
-                        values.push(serde_json::Value::String(format!("0x{}", value)));
-                    }
+                    let raw: sqlx::types::Json<Vec<DailySummaryInner>> =
+                        row.get(table.name.to_sql().as_str());
+                    let values = raw
+                        .0
+                        .into_iter()
+                        .map(|inner| {
+                            serde_json::json!({
+                                    "name": inner.name,
+                                    "max_capacity": format!("0x{}", inner.capacity_max),
+                                    "min_capacity": format!("0x{}", inner.capacity_min),
+                                    "avg_capacity": format!("0x{}", inner.capacity_average),
+                                    "total_capacity": format!("0x{}", inner.capacity_sum),
+                                    "median_capacity": format!("0x{}", inner.capacity_median),
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
                     table
                         .points
                         .push((timestamp, serde_json::Value::Array(values)));

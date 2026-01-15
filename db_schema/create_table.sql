@@ -26,11 +26,7 @@ create table daily_summarized_data (
     day date NOT NULL PRIMARY KEY,
     channels_count INTEGER NOT NULL,
     nodes_count INTEGER NOT NULL,
-    sum_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    avg_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    min_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    max_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    median_capacity TEXT NOT NULL -- u128 with hexadecimal format
+    channel_analysis JSONB NOT NULL
 );
 
 create table channel_states (
@@ -313,11 +309,7 @@ create table daily_summarized_data_testnet (
     day date NOT NULL PRIMARY KEY,
     channels_count INTEGER NOT NULL,
     nodes_count INTEGER NOT NULL,
-    sum_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    avg_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    min_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    max_capacity TEXT NOT NULL, -- u128 with hexadecimal format
-    median_capacity TEXT NOT NULL -- u128 with hexadecimal format
+    channel_analysis JSONB NOT NULL
 );
 
 create table channel_states_testnet (
