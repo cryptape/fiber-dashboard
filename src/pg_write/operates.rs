@@ -332,6 +332,7 @@ pub struct DailySummaryInner {
     pub capacity_max: String,
     pub capacity_median: String,
     pub capacity_sum: String, // hex encoded
+    pub channels_count: i64,
 }
 
 fn summarize_data(
@@ -375,6 +376,7 @@ fn summarize_data(
                         caps[caps.len() / 2]
                     };
                     inner.push(DailySummaryInner {
+                        channels_count: caps.len() as i64,
                         name: name.clone(),
                         capacity_average: faster_hex::hex_string(average.to_be_bytes().as_ref()),
                         capacity_min: faster_hex::hex_string(min.to_be_bytes().as_ref()),

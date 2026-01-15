@@ -434,6 +434,8 @@ pub struct AnalysisHourlyInner {
     total_capacity: u128,
     #[serde_as(as = "U128Hex")]
     median_capacity: u128,
+    #[serde_as(as = "U64Hex")]
+    channel_len: u64,
 }
 
 pub async fn query_analysis_hourly(
@@ -516,6 +518,7 @@ pub async fn query_analysis_hourly(
             min_capacity,
             avg_capacity,
             median_capacity,
+            channel_len: caps.len() as u64,
         });
     }
 
@@ -666,6 +669,7 @@ pub async fn query_analysis(
                         .into_iter()
                         .map(|inner| {
                             serde_json::json!({
+                                    "channel_count": inner.channels_count,
                                     "name": inner.name,
                                     "max_capacity": format!("0x{}", inner.capacity_max),
                                     "min_capacity": format!("0x{}", inner.capacity_min),
