@@ -987,22 +987,33 @@ pub async fn group_channel_count_by_state(
     pool: &Pool<Postgres>,
     net: Network,
 ) -> Result<String, sqlx::Error> {
+    let hour_bucket = chrono::Utc::now() - chrono::Duration::hours(3);
     let sql = format!(
         r#"
-        select state, count(*) from {} group by state
+        select state, count(*), COALESCE(u.name, 'ckb') as name from {} n
+        left join {} v on n.channel_outpoint = v.channel_outpoint
+        left join {} u on u.id = v.udt_type_script
+        WHERE v.bucket >= $1::timestamp
+        group by state, name
     "#,
-        net.channel_states()
+        net.channel_states(),
+        net.mv_online_channels(),
+        net.udt_infos()
     );
     let res = sqlx::query(&sql)
+        .bind(hour_bucket)
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|row| {
+        .fold(HashMap::new(), |mut acc, row| {
             let state: String = row.get("state");
             let count: i64 = row.get("count");
-            (state, count)
-        })
-        .collect::<HashMap<_, _>>();
+            let name: String = row.get("name");
+            acc.entry(name)
+                .or_insert_with(HashMap::new)
+                .insert(state, count as usize);
+            acc
+        });
 
     Ok(serde_json::to_string(&res).unwrap())
 }
@@ -1014,11 +1025,13 @@ pub async fn query_channel_capacity_distribution(
     let hour_bucket = chrono::Utc::now() - chrono::Duration::hours(3);
     let sql = format!(
         r#"
-        SELECT channel_outpoint, capacity, bucket AS last_seen_hour from {}
+        SELECT capacity, COALESCE(u.name, 'ckb') as name from {} n
+        left join {} u on n.udt_type_script = u.id
         WHERE bucket >= $1::timestamp
         ORDER BY channel_outpoint, bucket DESC
     "#,
-        net.mv_online_channels()
+        net.mv_online_channels(),
+        net.udt_infos()
     );
 
     let rows = sqlx::query(&sql)
@@ -1026,38 +1039,44 @@ pub async fn query_channel_capacity_distribution(
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|row| {
+        .fold(HashMap::new(), |mut acc, row| {
             let capacity: u128 = {
                 let raw: String = row.get("capacity");
                 let mut buf = [0u8; 16];
                 faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
                 u128::from_be_bytes(buf)
             };
-            capacity / 1000
-        })
-        .collect::<Vec<u128>>();
+            let name = row.get::<String, _>("name");
+            acc.entry(name).or_insert_with(Vec::new).push(capacity);
+            acc
+        });
 
-    let mut buckets = vec![0usize; 8];
-    for &cap in &rows {
-        let idx = if cap == 0 {
-            0usize
-        } else {
-            let mut v = cap;
-            let mut exp = 0usize;
-            while v >= 10 && exp < 7 {
-                v /= 10;
-                exp += 1;
-            }
-            exp
-        };
-        buckets[idx] += 1;
+    let mut res = HashMap::with_capacity(rows.len());
+    for (name, caps) in rows.iter() {
+        let mut buckets = vec![0usize; 8];
+        for &cap in caps {
+            let idx = if cap == 0 {
+                0usize
+            } else {
+                let mut v = cap;
+                let mut exp = 0usize;
+                while v >= 10 && exp < 7 {
+                    v /= 10;
+                    exp += 1;
+                }
+                exp
+            };
+            buckets[idx] += 1;
+        }
+        res.insert(
+            name.clone(),
+            buckets
+                .into_iter()
+                .enumerate()
+                .map(|(i, count)| (format!("Capacity 10^{}k", i), count))
+                .collect::<HashMap<_, _>>(),
+        );
     }
-
-    let res = buckets
-        .into_iter()
-        .enumerate()
-        .map(|(i, count)| (format!("Capacity 10^{}k", i), count))
-        .collect::<HashMap<_, _>>();
 
     Ok(serde_json::to_string(&res).unwrap())
 }
