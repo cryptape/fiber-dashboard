@@ -24,9 +24,10 @@ create table node_udt_relations (
 
 create table daily_summarized_data (
     day date NOT NULL PRIMARY KEY,
-    channels_count INTEGER NOT NULL,
+    channels_count JSONB NOT NULL,
     nodes_count INTEGER NOT NULL,
-    channel_analysis JSONB NOT NULL
+    capacity_analysis JSONB NOT NULL,
+    asset_analysis JSONB NOT NULL
 );
 
 create table channel_states (
@@ -307,9 +308,10 @@ create table node_udt_relations_testnet (
 
 create table daily_summarized_data_testnet (
     day date NOT NULL PRIMARY KEY,
-    channels_count INTEGER NOT NULL,
+    channels_count JSONB NOT NULL,
     nodes_count INTEGER NOT NULL,
-    channel_analysis JSONB NOT NULL
+    capacity_analysis JSONB NOT NULL,
+    asset_analysis JSONB NOT NULL
 );
 
 create table channel_states_testnet (
