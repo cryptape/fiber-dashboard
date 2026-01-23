@@ -31,11 +31,12 @@ FROM {nodes} n
 ORDER BY {sort_by} {order}";
 
 const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT
-  channel_outpoint,
+  {1}.channel_outpoint,
   bucket AS last_seen_hour,
   node1,
   node2,
-  capacity,
+  {1}.capacity as asset,
+  {3}.capacity as capacity,
   chain_hash,
   created_timestamp,
   update_of_node1_timestamp,
@@ -57,8 +58,9 @@ const SELECT_HOURLY_CHANNELS_SQL: &str = "SELECT
   {2}.auto_accept_amount AS udt_auto_accept_amount
 FROM {1}
 left join {2} on {1}.udt_type_script = {2}.id
+left join {3} on {1}.channel_outpoint = {3}.channel_outpoint
 WHERE bucket >= $1::timestamp
-ORDER BY channel_outpoint, bucket DESC";
+ORDER BY {1}.channel_outpoint, bucket DESC";
 
 const SELECT_MONTHLY_NODES_SQL: &str = "
 WITH latest_channels AS (
@@ -95,12 +97,13 @@ LEFT JOIN channel_counts c ON n.node_id = c.node
 WHERE n.bucket >= $1::timestamp and n.bucket < $2::timestamp
 ORDER BY n.node_id, n.bucket DESC";
 
-const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
-  channel_outpoint,
+const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON ({1}.channel_outpoint)
+  {1}.channel_outpoint,
   bucket AS last_seen_hour,
   node1,
   node2,
-  capacity,
+  {1}.capacity as asset,
+  {3}.capacity as capacity,
   chain_hash,
   created_timestamp,
   update_of_node1_timestamp,
@@ -122,8 +125,9 @@ const SELECT_MONTHLY_CHANNELS_SQL: &str = "SELECT DISTINCT ON (channel_outpoint)
   {2}.auto_accept_amount AS udt_auto_accept_amount
 FROM {1}
 left join {2} on {1}.udt_type_script = {2}.id
+left join {3} on {1}.channel_outpoint = {3}.channel_outpoint
 WHERE bucket >= $1::timestamp and bucket < $2::timestamp
-ORDER BY channel_outpoint, bucket DESC";
+ORDER BY {1}.channel_outpoint, bucket DESC";
 
 pub const PAGE_SIZE: usize = 500;
 
@@ -408,8 +412,10 @@ pub struct ChannelInfo {
     pub update_info_of_node2: Option<ChannelUpdateInfo>,
 
     /// The capacity of the channel.
+    #[serde_as(as = "U64Hex")]
+    pub capacity: u64,
     #[serde_as(as = "U128Hex")]
-    pub capacity: u128,
+    pub asset: u128,
     /// The chain hash of the channel.
     pub chain_hash: H256,
     /// The UDT type script of the channel.
@@ -424,10 +430,15 @@ impl From<HourlyChannelInfoDBRead> for ChannelInfo {
             channel_outpoint: format!("0x{}", info.channel_outpoint),
             node1: format!("0x{}", info.node1),
             node2: format!("0x{}", info.node2),
+            asset: {
+                let mut asset_bytes = [0u8; 16];
+                faster_hex::hex_decode(info.asset.as_bytes(), &mut asset_bytes).unwrap();
+                u128::from_be_bytes(asset_bytes)
+            },
             capacity: {
-                let mut capacity_bytes = [0u8; 16];
+                let mut capacity_bytes = [0u8; 8];
                 faster_hex::hex_decode(info.capacity.as_bytes(), &mut capacity_bytes).unwrap();
-                u128::from_be_bytes(capacity_bytes)
+                u64::from_be_bytes(capacity_bytes)
             },
             chain_hash: {
                 let mut hash_bytes = [0u8; 32];
@@ -566,6 +577,7 @@ pub struct HourlyChannelInfoDBRead {
     pub node1: String,
     pub node2: String,
     pub capacity: String,
+    pub asset: String,
     pub chain_hash: String,
     pub created_timestamp: DateTime<Utc>,
 
@@ -601,12 +613,14 @@ impl HourlyChannelInfoDBRead {
     ) -> Result<Option<Self>, sqlx::Error> {
         let channel_info = net.channel_infos();
         let udt_info = net.udt_infos();
+        let channel_state = net.channel_states();
         let sql = format!(
-            "SELECT channel_outpoint,
+            "SELECT {channel_info}.channel_outpoint,
                 time as last_seen_hour,
                 node1,
                 node2,
-                capacity,
+                {channel_state}.capacity as capacity,
+                {channel_info}.capacity as asset,
                 chain_hash,
                 created_timestamp,
                 update_of_node1_timestamp,
@@ -628,7 +642,8 @@ impl HourlyChannelInfoDBRead {
                 {udt_info}.auto_accept_amount AS udt_auto_accept_amount
             FROM {channel_info}
             left join {udt_info} on {channel_info}.udt_type_script = {udt_info}.id
-            WHERE channel_outpoint = $1
+            left join {channel_state} on {channel_info}.channel_outpoint = {channel_state}.channel_outpoint
+            WHERE {channel_info}.channel_outpoint = $1
             ORDER BY last_seen_hour DESC
             LIMIT 1",
         );
@@ -659,7 +674,8 @@ impl HourlyChannelInfoDBRead {
             .get(0);
         let sql = SELECT_HOURLY_CHANNELS_SQL
             .replace("{1}", params.net.mv_online_channels())
-            .replace("{2}", params.net.udt_infos());
+            .replace("{2}", params.net.udt_infos())
+            .replace("{3}", params.net.channel_states());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(hour_bucket)
             .fetch_all(pool)
@@ -691,7 +707,8 @@ impl HourlyChannelInfoDBRead {
             .get(0);
         let sql = SELECT_MONTHLY_CHANNELS_SQL
             .replace("{1}", params.net.online_channels_hourly())
-            .replace("{2}", params.net.udt_infos());
+            .replace("{2}", params.net.udt_infos())
+            .replace("{3}", params.net.channel_states());
         sqlx::query_as::<_, Self>(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
             .bind(start)
             .bind(end)

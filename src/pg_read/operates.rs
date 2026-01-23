@@ -156,7 +156,8 @@ pub(crate) async fn query_channels_by_node_id(
             select
             n.channel_outpoint, 
             n.bucket as last_seen_hour, 
-            n.capacity,
+            n.capacity as asset,
+            c.capacity as capacity,
             n.created_timestamp,
             c.state,
             c.last_commit_time
@@ -176,6 +177,7 @@ pub(crate) async fn query_channels_by_node_id(
         channel_outpoint: String,
         last_seen_hour: DateTime<Utc>,
         capacity: String,
+        asset: String,
         created_timestamp: DateTime<Utc>,
         state: String,
         last_commit_time: DateTime<Utc>,
@@ -199,6 +201,10 @@ pub(crate) async fn query_channels_by_node_id(
             last_seen_hour: row.get("last_seen_hour"),
             capacity: {
                 let be_hex: String = row.get("capacity");
+                format!("0x{}", &be_hex)
+            },
+            asset: {
+                let be_hex: String = row.get("asset");
                 format!("0x{}", &be_hex)
             },
             created_timestamp: row.get("created_timestamp"),
@@ -417,7 +423,8 @@ pub struct AnalysisHourly {
     channel_len: u64,
     #[serde_as(as = "U64Hex")]
     total_nodes: u64,
-    channel_analysis: Vec<AnalysisHourlyInner>,
+    asset_analysis: Vec<AnalysisHourlyInner>,
+    capacity_analysis: Vec<AnalysisHourlyInner>,
 }
 
 #[serde_as]
@@ -425,15 +432,15 @@ pub struct AnalysisHourly {
 pub struct AnalysisHourlyInner {
     name: String,
     #[serde_as(as = "U128Hex")]
-    max_capacity: u128,
+    max: u128,
     #[serde_as(as = "U128Hex")]
-    min_capacity: u128,
+    min: u128,
     #[serde_as(as = "U128Hex")]
-    avg_capacity: u128,
+    avg: u128,
     #[serde_as(as = "U128Hex")]
-    total_capacity: u128,
+    total: u128,
     #[serde_as(as = "U128Hex")]
-    median_capacity: u128,
+    median: u128,
     #[serde_as(as = "U64Hex")]
     channel_len: u64,
 }
@@ -443,13 +450,15 @@ pub async fn query_analysis_hourly(
     params: AnalysisHourlyParams,
 ) -> Result<AnalysisHourly, sqlx::Error> {
     let channel_sql = format!(
-        "SELECT DISTINCT ON (channel_outpoint) n.capacity, COALESCE(c.name, 'ckb') as name
+        "SELECT DISTINCT ON (n.channel_outpoint) n.capacity as asset, COALESCE(c.name, 'ckb') as name, u.capacity as capacity
         from {} n
         left join {} c on n.udt_type_script = c.id
+        left join {} u on n.channel_outpoint = u.channel_outpoint
         WHERE bucket >= $1::timestamp and bucket <= $2::timestamp
-        ORDER BY channel_outpoint, bucket DESC",
+        ORDER BY n.channel_outpoint, bucket DESC",
         params.net.online_channels_hourly(),
-        params.net.udt_infos()
+        params.net.udt_infos(),
+        params.net.channel_states()
     );
     let node_sql = format!(
         "SELECT COUNT(DISTINCT node_id) FROM {} WHERE bucket >= $1::timestamp and bucket <= $2::timestamp",
@@ -466,18 +475,24 @@ pub async fn query_analysis_hourly(
             rows.into_iter()
                 .map(|row| {
                     let name = row.get::<String, _>("name");
-                    let capacity: u128 = {
-                        let raw: String = row.get("capacity");
+                    let asset: u128 = {
+                        let raw: String = row.get("asset");
                         let mut buf = [0u8; 16];
                         faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
                         u128::from_be_bytes(buf)
                     };
-                    (name, capacity)
+                    let capacity: u64 = {
+                        let raw: String = row.get("capacity");
+                        let mut buf = [0u8; 8];
+                        faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                        u64::from_be_bytes(buf)
+                    };
+                    (name, asset, capacity)
                 })
                 .fold(
                     HashMap::new(),
-                    |mut acc: HashMap<String, Vec<u128>>, (name, capacity)| {
-                        acc.entry(name).or_default().push(capacity);
+                    |mut acc: HashMap<String, Vec<(u128, u64)>>, (name, asset, capacity)| {
+                        acc.entry(name).or_default().push((asset, capacity));
                         acc
                     },
                 )
@@ -492,38 +507,62 @@ pub async fn query_analysis_hourly(
             count as u64
         })?;
     let mut channel_len = 0;
-    let mut inner = Vec::with_capacity(channel_capacitys.len());
-    for (name, mut caps) in channel_capacitys.drain() {
+    let mut asset_analysis = Vec::with_capacity(channel_capacitys.len());
+    let mut capacity_analysis = Vec::with_capacity(channel_capacitys.len());
+    for (name, caps) in channel_capacitys.drain() {
         channel_len += caps.len();
-        caps.sort_unstable();
-        let total_capacity: u128 = caps.iter().sum();
-        let max_capacity = *caps.last().unwrap_or(&0);
-        let min_capacity = *caps.first().unwrap_or(&0);
-        let avg_capacity = if caps.is_empty() {
-            0
+        let mut assets: Vec<u128> = caps.iter().map(|(asset, _)| *asset).collect();
+        assets.sort_unstable();
+        let asset_min = assets[0];
+        let asset_max = assets[assets.len() - 1];
+        let asset_sum: u128 = assets.iter().sum();
+        let asset_average = asset_sum / assets.len() as u128;
+        let asset_median = if assets.len().is_multiple_of(2) {
+            let mid1 = assets[assets.len() / 2 - 1];
+            let mid2 = assets[assets.len() / 2];
+            (mid1 + mid2) / 2
         } else {
-            total_capacity / caps.len() as u128
+            assets[assets.len() / 2]
         };
-        let median_capacity = if caps.is_empty() {
-            0
-        } else if caps.len() % 2 == 0 {
-            (caps[caps.len() / 2 - 1] + caps[caps.len() / 2]) / 2
+
+        asset_analysis.push(AnalysisHourlyInner {
+            name: name.clone(),
+            avg: asset_average,
+            min: asset_min,
+            max: asset_max,
+            median: asset_median,
+            total: asset_sum,
+            channel_len: caps.len() as u64,
+        });
+
+        let mut capacities: Vec<u64> = caps.iter().map(|(_, capacity)| *capacity).collect();
+        capacities.sort_unstable();
+        let capacity_min = capacities[0];
+        let capacity_max = capacities[capacities.len() - 1];
+        let capacity_sum: u64 = capacities.iter().sum();
+        let capacity_average = capacity_sum / capacities.len() as u64;
+        let capacity_median = if capacities.len().is_multiple_of(2) {
+            let mid1 = capacities[capacities.len() / 2 - 1];
+            let mid2 = capacities[capacities.len() / 2];
+            (mid1 + mid2) / 2
         } else {
-            caps[caps.len() / 2]
+            capacities[capacities.len() / 2]
         };
-        inner.push(AnalysisHourlyInner {
-            name,
-            total_capacity,
-            max_capacity,
-            min_capacity,
-            avg_capacity,
-            median_capacity,
+
+        capacity_analysis.push(AnalysisHourlyInner {
+            name: name.clone(),
+            avg: capacity_average as u128,
+            min: capacity_min as u128,
+            max: capacity_max as u128,
+            median: capacity_median as u128,
+            total: capacity_sum as u128,
             channel_len: caps.len() as u64,
         });
     }
 
     Ok(AnalysisHourly {
-        channel_analysis: inner,
+        asset_analysis,
+        capacity_analysis,
         channel_len: channel_len as u64,
         total_nodes,
     })
@@ -537,6 +576,8 @@ enum AnalysisField {
     Nodes,
     #[serde(alias = "capacity")]
     Capacity,
+    #[serde(alias = "asset")]
+    Asset,
 }
 
 impl AnalysisField {
@@ -544,7 +585,8 @@ impl AnalysisField {
         match self {
             AnalysisField::Channels => "channels_count".to_string(),
             AnalysisField::Nodes => "nodes_count".to_string(),
-            AnalysisField::Capacity => "channel_analysis".to_string(),
+            AnalysisField::Capacity => "capacity_analysis".to_string(),
+            AnalysisField::Asset => "asset_analysis".to_string(),
         }
     }
 }
@@ -588,6 +630,7 @@ impl AnalysisParams {
                 AnalysisField::Channels,
                 AnalysisField::Nodes,
                 AnalysisField::Capacity,
+                AnalysisField::Asset,
             ];
             "*".to_string()
         } else {
@@ -656,10 +699,16 @@ pub async fn query_analysis(
         for table in tables.iter_mut() {
             match table.name {
                 AnalysisField::Channels => {
-                    let value: i32 = row.get(table.name.to_sql().as_str());
-                    table
-                        .points
-                        .push((timestamp, serde_json::Value::Number(value.into())));
+                    let value: sqlx::types::Json<HashMap<String, i64>> =
+                        row.get(table.name.to_sql().as_str());
+                    table.points.push((
+                        timestamp,
+                        serde_json::Value::Object(serde_json::Map::from_iter(
+                            value.0.into_iter().map(|(k, v)| {
+                                (k, serde_json::Value::Number(serde_json::Number::from(v)))
+                            }),
+                        )),
+                    ));
                 }
                 AnalysisField::Capacity => {
                     let raw: sqlx::types::Json<Vec<DailySummaryInner>> =
@@ -669,13 +718,34 @@ pub async fn query_analysis(
                         .into_iter()
                         .map(|inner| {
                             serde_json::json!({
-                                    "channel_count": inner.channels_count,
                                     "name": inner.name,
-                                    "max_capacity": format!("0x{}", inner.capacity_max),
-                                    "min_capacity": format!("0x{}", inner.capacity_min),
-                                    "avg_capacity": format!("0x{}", inner.capacity_average),
-                                    "total_capacity": format!("0x{}", inner.capacity_sum),
-                                    "median_capacity": format!("0x{}", inner.capacity_median),
+                                    "max": format!("0x{}", inner.max),
+                                    "min": format!("0x{}", inner.min),
+                                    "avg": format!("0x{}", inner.average),
+                                    "total": format!("0x{}", inner.sum),
+                                    "median": format!("0x{}", inner.median),
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
+                    table
+                        .points
+                        .push((timestamp, serde_json::Value::Array(values)));
+                }
+                AnalysisField::Asset => {
+                    let raw: sqlx::types::Json<Vec<DailySummaryInner>> =
+                        row.get(table.name.to_sql().as_str());
+                    let values = raw
+                        .0
+                        .into_iter()
+                        .map(|inner| {
+                            serde_json::json!({
+                                    "name": inner.name,
+                                    "max": format!("0x{}", inner.max),
+                                    "min": format!("0x{}", inner.min),
+                                    "avg": format!("0x{}", inner.average),
+                                    "total": format!("0x{}", inner.sum),
+                                    "median": format!("0x{}", inner.median),
                             })
                         })
                         .collect::<Vec<_>>();
@@ -1025,13 +1095,15 @@ pub async fn query_channel_capacity_distribution(
     let hour_bucket = chrono::Utc::now() - chrono::Duration::hours(3);
     let sql = format!(
         r#"
-        SELECT capacity, COALESCE(u.name, 'ckb') as name from {} n
+        SELECT n.capacity as asset, COALESCE(u.name, 'ckb') as name, v.capacity as capacity from {} n
         left join {} u on n.udt_type_script = u.id
+        left join {} v on n.channel_outpoint = v.channel_outpoint
         WHERE bucket >= $1::timestamp
-        ORDER BY channel_outpoint, bucket DESC
+        ORDER BY n.channel_outpoint, bucket DESC
     "#,
         net.mv_online_channels(),
-        net.udt_infos()
+        net.udt_infos(),
+        net.channel_states()
     );
 
     let rows = sqlx::query(&sql)
@@ -1040,21 +1112,37 @@ pub async fn query_channel_capacity_distribution(
         .await?
         .into_iter()
         .fold(HashMap::new(), |mut acc, row| {
-            let capacity: u128 = {
-                let raw: String = row.get("capacity");
+            let asset: u128 = {
+                let raw: String = row.get("asset");
                 let mut buf = [0u8; 16];
                 faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
                 u128::from_be_bytes(buf)
             };
+            let capacity: u64 = {
+                let raw: String = row.get("capacity");
+                let mut buf = [0u8; 8];
+                faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
+                u64::from_be_bytes(buf)
+            };
             let name = row.get::<String, _>("name");
-            acc.entry(name).or_insert_with(Vec::new).push(capacity);
+            acc.entry(name)
+                .or_insert_with(Vec::new)
+                .push((asset, capacity));
             acc
         });
 
-    let mut res = HashMap::with_capacity(rows.len());
+    #[derive(Serialize, Deserialize, Debug)]
+    struct Distribution {
+        asset: HashMap<String, HashMap<String, usize>>,
+        capacity: HashMap<String, HashMap<String, usize>>,
+    }
+    let mut asset_distribution = HashMap::with_capacity(rows.len());
+    let mut capacity_distribution = HashMap::with_capacity(rows.len());
+
     for (name, caps) in rows.iter() {
+        let assets = caps.iter().map(|(asset, _)| *asset).collect::<Vec<_>>();
         let mut buckets = vec![0usize; 8];
-        for &cap in caps {
+        for &cap in assets.iter() {
             let idx = if cap == 0 {
                 0usize
             } else {
@@ -1068,7 +1156,35 @@ pub async fn query_channel_capacity_distribution(
             };
             buckets[idx] += 1;
         }
-        res.insert(
+        asset_distribution.insert(
+            name.clone(),
+            buckets
+                .into_iter()
+                .enumerate()
+                .map(|(i, count)| (format!("Asset 10^{}k", i), count))
+                .collect::<HashMap<_, _>>(),
+        );
+
+        let capacities = caps
+            .iter()
+            .map(|(_, capacity)| *capacity)
+            .collect::<Vec<_>>();
+        let mut buckets = vec![0usize; 8];
+        for &cap in capacities.iter() {
+            let idx = if cap == 0 {
+                0usize
+            } else {
+                let mut v = cap;
+                let mut exp = 0usize;
+                while v >= 10 && exp < 7 {
+                    v /= 10;
+                    exp += 1;
+                }
+                exp
+            };
+            buckets[idx] += 1;
+        }
+        capacity_distribution.insert(
             name.clone(),
             buckets
                 .into_iter()
@@ -1078,7 +1194,11 @@ pub async fn query_channel_capacity_distribution(
         );
     }
 
-    Ok(serde_json::to_string(&res).unwrap())
+    Ok(serde_json::to_string(&Distribution {
+        asset: asset_distribution,
+        capacity: capacity_distribution,
+    })
+    .unwrap())
 }
 
 pub async fn query_nodes_all_regions(
