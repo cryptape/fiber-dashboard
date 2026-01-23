@@ -12,10 +12,14 @@ import {
   ChannelResponse,
   UdtCfgInfos,
   ActiveAnalysis,
+  ActiveAnalysisHourlyResponse,
+  AssetAnalysis,
+  AssetCapacityData,
   NodesByUdtResponse,
   UdtScript,
   UdtCfgInfosSchema,
   ActiveAnalysisSchema,
+  ActiveAnalysisHourlyResponseSchema,
   NodesByUdtResponseSchema,
   NodeResponseSchema,
   ChannelResponseSchema,
@@ -40,6 +44,7 @@ import {
   ChannelsByNodeIdResponseSchema,
 } from "./types";
 import { hexToDecimal } from "./utils";
+import { isSupportedAsset, SUPPORTED_ASSETS } from "./config/assets";
 
 export class APIClient {
   constructor(
@@ -222,6 +227,118 @@ export class APIClient {
       undefined,
       ActiveAnalysisSchema
     );
+  }
+
+  /**
+   * 获取按资产分组的通道分析数据（新版 API）
+   */
+  async getActiveAnalysisHourly(end?: string): Promise<ActiveAnalysisHourlyResponse> {
+    let endpoint = `/analysis_hourly`;
+    if (end) {
+      endpoint += `?end=${encodeURIComponent(end)}`;
+    }
+    return this.apiRequest<ActiveAnalysisHourlyResponse>(
+      endpoint,
+      undefined,
+      ActiveAnalysisHourlyResponseSchema
+    );
+  }
+
+  /**
+   * 聚合多个资产的分析数据
+   * @param assets - 资产分析数据数组
+   * @param filterAsset - 要过滤的资产名称（小写），为空则聚合所有支持的资产
+   */
+  private aggregateAssetAnalysis(
+    assets: AssetAnalysis[],
+    filterAsset?: string
+  ): Omit<AssetAnalysis, "name"> {
+    // 过滤出支持的资产（ckb 和 usdi）
+    let filteredAssets = assets.filter(asset => 
+      isSupportedAsset(asset.name.toLowerCase())
+    );
+
+    // 如果指定了特定资产，只保留该资产
+    if (filterAsset) {
+      const normalizedFilter = filterAsset.toLowerCase();
+      filteredAssets = filteredAssets.filter(
+        asset => asset.name.toLowerCase() === normalizedFilter
+      );
+    }
+
+    // 如果没有匹配的资产，返回空数据
+    if (filteredAssets.length === 0) {
+      return {
+        max_capacity: "0",
+        min_capacity: "0",
+        avg_capacity: "0",
+        median_capacity: "0",
+        total_capacity: "0",
+        channel_len: "0",
+      };
+    }
+
+    // 如果只有一个资产，直接返回
+    if (filteredAssets.length === 1) {
+      const asset = filteredAssets[0];
+      return {
+        max_capacity: asset.max_capacity,
+        min_capacity: asset.min_capacity,
+        avg_capacity: asset.avg_capacity,
+        median_capacity: asset.median_capacity,
+        total_capacity: asset.total_capacity,
+        channel_len: asset.channel_len,
+      };
+    }
+
+    // 聚合多个资产的数据
+    const totalCapacity = filteredAssets.reduce(
+      (sum, asset) => sum + BigInt(asset.total_capacity),
+      BigInt(0)
+    );
+    const totalChannels = filteredAssets.reduce(
+      (sum, asset) => sum + BigInt(asset.channel_len),
+      BigInt(0)
+    );
+    const maxCapacity = filteredAssets.reduce(
+      (max, asset) => {
+        const assetMax = BigInt(asset.max_capacity);
+        return assetMax > max ? assetMax : max;
+      },
+      BigInt(0)
+    );
+    const minCapacity = filteredAssets.reduce(
+      (min, asset) => {
+        const assetMin = BigInt(asset.min_capacity);
+        return min === BigInt(0) || assetMin < min ? assetMin : min;
+      },
+      BigInt(0)
+    );
+
+    // 计算加权平均值
+    const weightedAvgSum = filteredAssets.reduce(
+      (sum, asset) => sum + BigInt(asset.avg_capacity) * BigInt(asset.channel_len),
+      BigInt(0)
+    );
+    const avgCapacity = totalChannels > BigInt(0) 
+      ? weightedAvgSum / totalChannels 
+      : BigInt(0);
+
+    // 中位数简单取平均（更精确的计算需要所有通道数据）
+    const medianSum = filteredAssets.reduce(
+      (sum, asset) => sum + BigInt(asset.median_capacity),
+      BigInt(0)
+    );
+    const medianCapacity = medianSum / BigInt(filteredAssets.length);
+
+    return {
+      max_capacity: maxCapacity.toString(),
+      min_capacity: minCapacity.toString(),
+      avg_capacity: avgCapacity.toString(),
+      median_capacity: medianCapacity.toString(),
+      total_capacity: totalCapacity.toString(),
+      channel_len: totalChannels.toString(),
+    };
   }
 
   async getHistoryAnalysis(
@@ -490,54 +607,83 @@ export class APIClient {
   }
 
   async fetchKpiDataByTimeRange(
-    timeRange: "hourly" | "monthly" | "yearly"
+    timeRange: "hourly" | "monthly" | "yearly",
+    filterAsset?: string // 要过滤的资产名称（小写），为空则聚合所有支持的资产
   ): Promise<KpiData> {
     if (timeRange === "hourly") {
-      // Use active analysis for hourly data and compare with last week
+      // Use new analysis_hourly API with asset grouping
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       // Fetch current data and last week data in parallel
-      const [currentData, lastWeekData] = await Promise.all([
-        this.getActiveAnalysis(),
-        this.getActiveAnalysis(oneWeekAgo.toISOString()),
+      const [currentResponse, lastWeekResponse] = await Promise.all([
+        this.getActiveAnalysisHourly(),
+        this.getActiveAnalysisHourly(oneWeekAgo.toISOString()),
       ]);
 
-      const totalNodes = +currentData.total_nodes;
+      // Aggregate asset data based on filter
+      const currentData = this.aggregateAssetAnalysis(
+        currentResponse.channel_analysis,
+        filterAsset
+      );
+      const lastWeekData = this.aggregateAssetAnalysis(
+        lastWeekResponse.channel_analysis,
+        filterAsset
+      );
+
+      // 确定资产名称和单位
+      const assetName = filterAsset || ""; // 空字符串表示聚合所有资产
+      const capacityUnit = filterAsset 
+        ? (isSupportedAsset(filterAsset) 
+            ? SUPPORTED_ASSETS.find((a) => a.value === filterAsset.toLowerCase())?.unit 
+            : "CKB")
+        : "CKB"; // 默认使用 CKB
+
+      const totalNodes = +currentResponse.total_nodes;
       const totalChannels = +currentData.channel_len;
-      const totalCapacity = APIUtils.parseChannelCapacityToCKB(
-        currentData.total_capacity
+      const totalCapacity = APIUtils.parseChannelCapacity(
+        currentData.total_capacity,
+        assetName
       );
-      const averageChannelCapacity = APIUtils.parseChannelCapacityToCKB(
-        currentData.avg_capacity
+      const averageChannelCapacity = APIUtils.parseChannelCapacity(
+        currentData.avg_capacity,
+        assetName
       );
-      const maxChannelCapacity = APIUtils.parseChannelCapacityToCKB(
-        currentData.max_capacity
+      const maxChannelCapacity = APIUtils.parseChannelCapacity(
+        currentData.max_capacity,
+        assetName
       );
-      const minChannelCapacity = APIUtils.parseChannelCapacityToCKB(
-        currentData.min_capacity
+      const minChannelCapacity = APIUtils.parseChannelCapacity(
+        currentData.min_capacity,
+        assetName
       );
-      const medianChannelCapacity = APIUtils.parseChannelCapacityToCKB(
-        currentData.median_capacity
+      const medianChannelCapacity = APIUtils.parseChannelCapacity(
+        currentData.median_capacity,
+        assetName
       );
 
       // Calculate changes from last week
-      const lastWeekTotalCapacity = APIUtils.parseChannelCapacityToCKB(
-        lastWeekData.total_capacity
+      const lastWeekTotalCapacity = APIUtils.parseChannelCapacity(
+        lastWeekData.total_capacity,
+        assetName
       );
-      const lastWeekTotalNodes = +lastWeekData.total_nodes;
+      const lastWeekTotalNodes = +lastWeekResponse.total_nodes;
       const lastWeekTotalChannels = +lastWeekData.channel_len;
-      const lastWeekAvgCapacity = APIUtils.parseChannelCapacityToCKB(
-        lastWeekData.avg_capacity
+      const lastWeekAvgCapacity = APIUtils.parseChannelCapacity(
+        lastWeekData.avg_capacity,
+        assetName
       );
-      const lastWeekMaxCapacity = APIUtils.parseChannelCapacityToCKB(
-        lastWeekData.max_capacity
+      const lastWeekMaxCapacity = APIUtils.parseChannelCapacity(
+        lastWeekData.max_capacity,
+        assetName
       );
-      const lastWeekMinCapacity = APIUtils.parseChannelCapacityToCKB(
-        lastWeekData.min_capacity
+      const lastWeekMinCapacity = APIUtils.parseChannelCapacity(
+        lastWeekData.min_capacity,
+        assetName
       );
-      const lastWeekMedianCapacity = APIUtils.parseChannelCapacityToCKB(
-        lastWeekData.median_capacity
+      const lastWeekMedianCapacity = APIUtils.parseChannelCapacity(
+        lastWeekData.median_capacity,
+        assetName
       );
 
       return {
@@ -548,6 +694,8 @@ export class APIClient {
         maxChannelCapacity,
         minChannelCapacity,
         medianChannelCapacity,
+        assetName,
+        capacityUnit,
         // Calculate percentage changes (rounded to 2 decimal places)
         totalCapacityChange:
           lastWeekTotalCapacity > 0
@@ -738,7 +886,8 @@ export class APIClient {
   }
 
   async fetchTimeSeriesDataByTimeRange(
-    timeRange: "hourly" | "monthly" | "yearly"
+    timeRange: "hourly" | "monthly" | "yearly",
+    filterAsset?: string // 要过滤的资产名称（小写）
   ) {
     // Map timeRange to API range parameter
     // hourly: 最近1个月的数据（API支持的最短时间范围）
@@ -765,12 +914,55 @@ export class APIClient {
     );
     const nodesSeries = historyAnalysis.series.find(s => s.name === "Nodes");
 
-    // Convert capacity series (using sum aggregation)
-    const capacityTimeSeries: TimeSeriesData[] =
-      capacitySeries?.points.map(point => ({
-        timestamp: point[0],
-        value: APIUtils.parseChannelCapacityToCKB(point[1][0]), // sum
-      })) || [];
+    // 确定资产名称和单位
+    const assetName = filterAsset || "ckb"; // 默认使用 CKB
+    const assetConfig = filterAsset 
+      ? SUPPORTED_ASSETS.find((a) => a.value === filterAsset.toLowerCase())
+      : SUPPORTED_ASSETS[0]; // 默认 CKB
+    const assetLabel = assetConfig?.label || "CKB";
+
+    // Convert capacity series
+    const capacityTimeSeries: TimeSeriesData[] = [];
+    
+    if (capacitySeries && capacitySeries.points) {
+      // 检查是否是新的按资产分组的格式
+      const firstPoint = capacitySeries.points[0];
+      if (firstPoint && Array.isArray(firstPoint[1]) && firstPoint[1].length > 0) {
+        const firstValue = firstPoint[1][0];
+        
+        // 判断是新格式（对象数组）还是旧格式（字符串数组）
+        if (typeof firstValue === 'object' && 'name' in firstValue) {
+          // 新格式：按资产分组
+          capacitySeries.points.forEach((point) => {
+            const timestamp = point[0] as string;
+            const assets = point[1] as AssetCapacityData[];
+            
+            // 查找匹配的资产
+            const assetData = assets.find(
+              (a) => a.name && a.name.toLowerCase() === assetName.toLowerCase()
+            );
+            
+            if (assetData && assetData.total_capacity) {
+              capacityTimeSeries.push({
+                timestamp,
+                value: APIUtils.parseChannelCapacity(
+                  assetData.total_capacity,
+                  assetName
+                ),
+              });
+            }
+          });
+        } else if (typeof firstValue === 'string') {
+          // 旧格式：[sum, avg, min, max, median]
+          capacitySeries.points.forEach((point) => {
+            capacityTimeSeries.push({
+              timestamp: point[0] as string,
+              value: APIUtils.parseChannelCapacity((point[1] as string[])[0], assetName), // sum
+            });
+          });
+        }
+      }
+    }
 
     // Convert channels series
     const channelsTimeSeries: TimeSeriesData[] =
@@ -788,7 +980,7 @@ export class APIClient {
 
     return {
       capacity: {
-        label: "Total capacity",
+        label: `${assetLabel} capacity`,
         data: capacityTimeSeries,
       },
       channels: {
@@ -1418,6 +1610,31 @@ export class APIUtils {
         ? hexToDecimal(capacity) // 服务端返回的是正常十六进制
         : BigInt(capacity);
     return Number(capacityInShannons) / SHANNONS_PER_CKB;
+  }
+
+  /**
+   * 根据资产类型解析通道容量
+   * @param capacity - 容量值（十六进制字符串或数字）
+   * @param assetName - 资产名称（如 "ckb", "usdi"），不区分大小写
+   * @returns 转换后的数值
+   * 
+   * - CKB: 从 shannons 转换（除以 100,000,000）
+   * - 其他资产: 直接转换为十进制，不做单位换算
+   */
+  static parseChannelCapacity(capacity: string | number, assetName?: string): number {
+    const capacityInBase =
+      typeof capacity === "string"
+        ? hexToDecimal(capacity)
+        : BigInt(capacity);
+    
+    // 如果是 CKB 或未指定资产，按 shannons 转换
+    const normalizedAsset = assetName?.toLowerCase() || "ckb";
+    if (normalizedAsset === "ckb") {
+      return Number(capacityInBase) / SHANNONS_PER_CKB;
+    }
+    
+    // 其他资产直接返回十进制数值
+    return Number(capacityInBase);
   }
 
   /**

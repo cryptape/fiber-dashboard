@@ -170,7 +170,7 @@ export const Channels = () => {
   // 组装 PieChart 数据 - Channel Status Distribution
   const pieChartData = [
     { name: "Open", value: getStateCount("open"), status: "Open" },
-    { name: "Closed (Waiting Settlement)", value: getStateCount("closed_waiting_onchain_settlement"), status: "Closed (Waiting Settlement)" },
+    { name: "Closing", value: getStateCount("closed_waiting_onchain_settlement"), status: "Closing" },
     { name: "Closed (Cooperative)", value: getStateCount("closed_cooperative"), status: "Closed (Cooperative)" },
     { name: "Closed (Uncooperative)", value: getStateCount("closed_uncooperative"), status: "Closed (Uncooperative)" },
   ];
@@ -528,7 +528,7 @@ export const Channels = () => {
           className="flex-1 min-w-0 md:flex-initial"
         />
         <StatusIndicator
-          text={`Closed (Waiting Settlement) (${getStateCount("closed_waiting_onchain_settlement")})`}
+          text={`Closing (${getStateCount("closed_waiting_onchain_settlement")})`}
           color="#FAB83D"
           mode={isStateSelected("closed_waiting_onchain_settlement") ? "dark" : "light"}
           onClick={() => handleStateChange("closed_waiting_onchain_settlement")}

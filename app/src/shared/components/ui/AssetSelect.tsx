@@ -92,7 +92,7 @@ export function AssetSelect({
         onClick={handleToggle}
         className={`w-full h-10 px-3 py-2.5 rounded-[40px] inline-flex justify-center items-center gap-3 cursor-pointer transition-colors ${
           hasAssetSelected 
-            ? 'bg-[#0F0F10]' 
+            ? 'bg-[#674BDC]' 
             : 'glass-card hover:bg-layer-hover/30'
         }`}
       >

@@ -9,6 +9,9 @@ export const KpiDataSchema = z.object({
   maxChannelCapacity: z.number(),
   minChannelCapacity: z.number(),
   medianChannelCapacity: z.number(),
+  // 资产信息（可选）
+  assetName: z.string().optional(), // 资产名称（小写），如 "ckb", "usdi", 或 "" 表示聚合
+  capacityUnit: z.string().optional(), // 容量单位，如 "CKB", "USDI"
   // 与上周的变化数据（可选）
   totalCapacityChange: z.number().optional(),
   totalNodesChange: z.number().optional(),
@@ -132,7 +135,25 @@ export const UdtArgInfoSchema = z.object({
 
 export const UdtCfgInfosSchema = z.array(UdtArgInfoSchema);
 
-// 通道容量分析类型
+// 单个资产的通道分析数据
+export const AssetAnalysisSchema = z.object({
+  name: z.string(), // 资产名称，如 "USDI", "ckb"
+  max_capacity: z.string(),
+  min_capacity: z.string(),
+  avg_capacity: z.string(),
+  median_capacity: z.string(),
+  total_capacity: z.string(),
+  channel_len: z.string(),
+});
+
+// 按资产分组的通道分析响应
+export const ActiveAnalysisHourlyResponseSchema = z.object({
+  channel_analysis: z.array(AssetAnalysisSchema),
+  channel_len: z.string(), // 所有资产的通道总数
+  total_nodes: z.string(), // 总节点数
+});
+
+// 旧版本的单一资产分析类型（保留向后兼容）
 export const ActiveAnalysisSchema = z.object({
   max_capacity: z.string(),
   min_capacity: z.string(),
@@ -174,10 +195,11 @@ export const RustChannelInfoSchema = z.object({
   update_info_of_node2: z.unknown().optional(),
 });
 
-// Infer types from schemas
 export type RustNodeInfo = z.infer<typeof RustNodeInfoSchema>;
 export type RustChannelInfo = z.infer<typeof RustChannelInfoSchema>;
 export type UdtCfgInfos = z.infer<typeof UdtCfgInfosSchema>;
+export type AssetAnalysis = z.infer<typeof AssetAnalysisSchema>;
+export type ActiveAnalysisHourlyResponse = z.infer<typeof ActiveAnalysisHourlyResponseSchema>;
 export type ActiveAnalysis = z.infer<typeof ActiveAnalysisSchema>;
 export type UdtScript = z.infer<typeof UdtScriptSchema>;
 
@@ -226,6 +248,24 @@ export interface ChannelsSeries {
   points: [timestamp: string, value: number][];
 }
 
+// 单个资产的容量数据
+export interface AssetCapacityData {
+  avg_capacity: string;
+  channel_count: number;
+  max_capacity: string;
+  median_capacity: string;
+  min_capacity: string;
+  name: string; // 资产名称，如 "ckb", "usdi"
+  total_capacity: string;
+}
+
+// 新版：Capacity 按资产分组
+export interface CapacitySeriesNew {
+  name: "Capacity";
+  points: [timestamp: string, assets: AssetCapacityData[]][];
+}
+
+// 旧版：保留向后兼容
 export interface CapacitySeries {
   name: "Capacity";
   points: [
@@ -248,6 +288,7 @@ export interface NodesSeries {
 export type HistoryAnalysisSeries =
   | ChannelsSeries
   | CapacitySeries
+  | CapacitySeriesNew
   | NodesSeries;
 
 export interface HistoryAnalysisResponse {

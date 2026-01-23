@@ -6,7 +6,7 @@ export type StatusType = "Active" | "Inactive" | string;
 export const getStatusDisplayText = (status: string): string => {
   const statusMap: Record<string, string> = {
     'open': 'Open',
-    'closed_waiting_onchain_settlement': 'Closed (Waiting Settlement)',
+    'closed_waiting_onchain_settlement': 'Closing',
     'closed_cooperative': 'Closed (Cooperative)',
     'closed_uncooperative': 'Closed (Uncooperative)',
     'Active': 'Active',

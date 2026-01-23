@@ -5,10 +5,12 @@ import {
   GlassCardContainer,
   EasyTable,
 } from "@/shared/components/ui";
-import { useState, useEffect } from "react";
+import { AssetSelect } from "@/shared/components/ui/AssetSelect";
+import { SUPPORTED_ASSETS } from "@/lib/config/assets";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
-import { queryKeys, queryClient } from "@/features/dashboard/hooks/useDashboard";
+import { queryKeys } from "@/features/dashboard/hooks/useDashboard";
 import { useRouter } from "next/navigation";
 
 // 固定使用 hourly 时间范围
@@ -59,19 +61,19 @@ const MOCK_TIME_SERIES_DATA2 = [
 
 export const DashboardNew = () => {
   const timeRange = TIME_RANGE; // 固定使用 hourly
-  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [selectedAsset, setSelectedAsset] = useState<string>("ckb"); // 默认选择 CKB
   const { apiClient, currentNetwork } = useNetwork();
   const router = useRouter();
 
-  const { data: kpi, dataUpdatedAt } = useQuery({
-    queryKey: [...queryKeys.kpis, currentNetwork, timeRange],
-    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange),
+  const { data: kpi } = useQuery({
+    queryKey: [...queryKeys.kpis, currentNetwork, timeRange, selectedAsset],
+    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange, selectedAsset),
     refetchInterval: 30000,
   });
 
-  const { data: timeSeriesData, dataUpdatedAt: timeSeriesUpdatedAt } = useQuery({
-    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange],
-    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange),
+  const { data: timeSeriesData } = useQuery({
+    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange, selectedAsset],
+    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange, selectedAsset),
     refetchInterval: 30000,
   });
 
@@ -93,54 +95,39 @@ export const DashboardNew = () => {
     refetchInterval: 30000,
   });
 
-  // 更新 lastUpdated 时间（取所有查询中最新的更新时间）
-  useEffect(() => {
-    const latestUpdate = Math.max(dataUpdatedAt || 0, timeSeriesUpdatedAt || 0);
-    if (latestUpdate) {
-      const date = new Date(latestUpdate);
-      const formattedTime = date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      setLastUpdated(`Last updated: ${formattedTime}`);
-    }
-  }, [dataUpdatedAt, timeSeriesUpdatedAt]);
-
-  const handleRefresh = async () => {
-    // 刷新所有当前页面的查询
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.kpis, currentNetwork, timeRange],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange],
-      }),
-    ]);
-  };
-
   // 移除时间范围选择功能，固定使用 hourly
 
   return (
     <div className="flex flex-col gap-5">
-      <SectionHeader
-        title="Overview"
-        lastUpdated={lastUpdated}
-        onRefresh={handleRefresh}
-      />
-
       {/* 桌面端左右两大块布局 - 7:3 比例 */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* 左侧块 - 70% */}
         <div className="flex flex-col gap-4 lg:w-[70%]">
+          {/* Channel Overview 标题 */}
+          <div className="flex items-center gap-4">
+            <SectionHeader
+              title="Channel Overview"
+            />
+            <AssetSelect
+              options={[
+                ...SUPPORTED_ASSETS.map(asset => ({
+                  value: asset.value,
+                  label: asset.label,
+                  color: asset.color,
+                })),
+              ]}
+              value={selectedAsset}
+              onChange={setSelectedAsset}
+              placeholder="Select asset"
+              className="w-[207px]"
+            />
+          </div>
           {/* 顶部两个 KPI 横向排列 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <KpiCard
               label="TOTAL CAPACITY"
               value={String(kpi?.totalCapacity ?? 0)}
-              unit="CKB"
+              unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.totalCapacityChange ?? 0}
               trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
@@ -170,7 +157,7 @@ export const DashboardNew = () => {
             <KpiCard
               label="MIN CAPACITY"
               value={String(kpi?.minChannelCapacity ?? 0)}
-              unit="CKB"
+              unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.minChannelCapacityChange ?? 0}
               trending={(kpi?.minChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
@@ -178,7 +165,7 @@ export const DashboardNew = () => {
             <KpiCard
               label="MAX CAPACITY"
               value={String(kpi?.maxChannelCapacity ?? 0)}
-              unit="CKB"
+              unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.maxChannelCapacityChange ?? 0}
               trending={(kpi?.maxChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
@@ -186,7 +173,7 @@ export const DashboardNew = () => {
             <KpiCard
               label="AVG CAPACITY"
               value={String(kpi?.averageChannelCapacity ?? 0)}
-              unit="CKB"
+              unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.averageChannelCapacityChange ?? 0}
               trending={(kpi?.averageChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
@@ -194,7 +181,7 @@ export const DashboardNew = () => {
             <KpiCard
               label="MEDIAN CAPACITY"
               value={String(kpi?.medianChannelCapacity ?? 0)}
-              unit="CKB"
+              unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.medianChannelCapacityChange ?? 0}
               trending={(kpi?.medianChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
@@ -204,6 +191,10 @@ export const DashboardNew = () => {
 
         {/* 右侧块 - 30% */}
         <div className="flex flex-col gap-4 lg:w-[30%]">
+          {/* Nodes Overview 标题 */}
+          <SectionHeader
+            title="Nodes Overview"
+          />
           <KpiCard
             label="TOTAL ACTIVE NODES"
             value={String(kpi?.totalNodes ?? 0)}
