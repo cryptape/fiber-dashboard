@@ -615,7 +615,7 @@ impl HourlyChannelInfoDBRead {
         let udt_info = net.udt_infos();
         let channel_state = net.channel_states();
         let sql = format!(
-            "SELECT channel_outpoint,
+            "SELECT {channel_info}.channel_outpoint,
                 time as last_seen_hour,
                 node1,
                 node2,
@@ -643,7 +643,7 @@ impl HourlyChannelInfoDBRead {
             FROM {channel_info}
             left join {udt_info} on {channel_info}.udt_type_script = {udt_info}.id
             left join {channel_state} on {channel_info}.channel_outpoint = {channel_state}.channel_outpoint
-            WHERE channel_outpoint = $1
+            WHERE {channel_info}.channel_outpoint = $1
             ORDER BY last_seen_hour DESC
             LIMIT 1",
         );

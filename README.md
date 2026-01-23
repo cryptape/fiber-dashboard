@@ -33,7 +33,7 @@ All apis that include paging functions have a page_size parameter. The default i
 | end       | string(%Y-%m-%d)              | End date (optional)                                            |
 | range     | enum                          | Time span, frontend passes `1M/3M/6M/1Y/2Y` (optional, auto-calculates start/end if provided) |
 | interval  | enum                          | Aggregation granularity: `day` (default)                      |
-| fields    | string\[]                     | Required metrics, e.g., `["channels","capacity","nodes"]` (defaults to all if not provided), capacity point is [sum, avg, min, max, median] |
+| fields    | string\[]                     | Required metrics, e.g., `["channels","capacity","nodes", "asset"]` (defaults to all if not provided), capacity point is [sum, avg, min, max, median] |
 
 
 All APIs have a parameter called `net`, which can be testnet or mainnet. The default is mainnet.
