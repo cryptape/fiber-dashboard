@@ -135,20 +135,21 @@ export const UdtArgInfoSchema = z.object({
 
 export const UdtCfgInfosSchema = z.array(UdtArgInfoSchema);
 
-// 单个资产的通道分析数据
+// 单个资产的通道分析数据(服务端返回格式)
 export const AssetAnalysisSchema = z.object({
   name: z.string(), // 资产名称，如 "USDI", "ckb"
-  max_capacity: z.string(),
-  min_capacity: z.string(),
-  avg_capacity: z.string(),
-  median_capacity: z.string(),
-  total_capacity: z.string(),
+  max: z.string(),
+  min: z.string(),
+  avg: z.string(),
+  median: z.string(),
+  total: z.string(),
   channel_len: z.string(),
 });
 
 // 按资产分组的通道分析响应
 export const ActiveAnalysisHourlyResponseSchema = z.object({
-  channel_analysis: z.array(AssetAnalysisSchema),
+  asset_analysis: z.array(AssetAnalysisSchema), // 资产真实金额分析（如USDI的实际金额）
+  capacity_analysis: z.array(AssetAnalysisSchema), // 通道占用空间分析（锁定的CKB数量）
   channel_len: z.string(), // 所有资产的通道总数
   total_nodes: z.string(), // 总节点数
 });
@@ -191,6 +192,8 @@ export const RustChannelInfoSchema = z.object({
   chain_hash: z.string(),
   udt_type_script: z.unknown().optional(),
   udt_name: z.string().optional(), // 资产名称，如 "ckb", "btc" 等
+  asset: z.string().optional(), // 资产数量（十六进制），如 "0x5f5e100"
+  udt_value: z.string().nullable().optional(), // UDT 资产的数量（十六进制），CKB 资产为 null
   update_info_of_node1: z.unknown().optional(),
   update_info_of_node2: z.unknown().optional(),
 });
@@ -230,7 +233,8 @@ export interface AnalysisRequestParams {
   end?: string; // %Y-%m-%d format
   range?: "1M" | "3M" | "6M" | "1Y" | "2Y";
   interval?: "day";
-  fields?: string[]; // e.g., ["channels","capacity","nodes"]
+  fields?: string[]; // e.g., ["channels","capacity","nodes","asset"]
+  net?: "mainnet" | "testnet"; // Network parameter in body
 }
 
 // History analysis response types
@@ -245,18 +249,18 @@ export interface HistoryAnalysisMeta {
 // Define specific series types for better type inference
 export interface ChannelsSeries {
   name: "Channels";
-  points: [timestamp: string, value: number][];
+  points: [timestamp: string, channels: Record<string, number>][]; // 对象格式：资产名 -> 通道数量
 }
 
 // 单个资产的容量数据
 export interface AssetCapacityData {
-  avg_capacity: string;
+  avg: string;       // 修正：服务端返回的字段名是 avg，不是 avg_capacity
   channel_count: number;
-  max_capacity: string;
-  median_capacity: string;
-  min_capacity: string;
-  name: string; // 资产名称，如 "ckb", "usdi"
-  total_capacity: string;
+  max: string;       // 修正：服务端返回的字段名是 max，不是 max_capacity
+  median: string;    // 修正：服务端返回的字段名是 median，不是 median_capacity
+  min: string;       // 修正：服务端返回的字段名是 min，不是 min_capacity
+  name: string;      // 资产名称，如 "ckb", "usdi"
+  total: string;     // 修正：服务端返回的字段名是 total，不是 total_capacity
 }
 
 // 新版：Capacity 按资产分组
@@ -285,11 +289,18 @@ export interface NodesSeries {
   points: [timestamp: string, value: number][];
 }
 
+// Asset 系列（资产真实金额分析）
+export interface AssetSeries {
+  name: "Asset";
+  points: [timestamp: string, assets: AssetCapacityData[]][];
+}
+
 export type HistoryAnalysisSeries =
   | ChannelsSeries
   | CapacitySeries
   | CapacitySeriesNew
-  | NodesSeries;
+  | NodesSeries
+  | AssetSeries;
 
 export interface HistoryAnalysisResponse {
   series: HistoryAnalysisSeries[];
@@ -313,7 +324,7 @@ export const ChannelInfoApiResponseSchema = z.object({
 });
 
 export const NodeInfoApiResponseSchema = z.object({
-  node_info: NodeInfoResponseSchema,
+  node_info: NodeInfoResponseSchema.nullable(),
 });
 
 // Channel state transaction info
@@ -363,6 +374,8 @@ export const BasicChannelInfoSchema = z.object({
   capacity: z.string(),
   tx_count: z.number(),
   name: z.string(), // 资产名称（如 "ckb", "rusd" 等）
+  udt_value: z.string().nullable().optional(), // UDT 资产的数量（十六进制），可能为 null 或不存在
+  state: z.string().optional(), // 通道状态，可能不存在于此接口
 });
 
 export const GroupChannelsByStateResponseSchema = z.object({

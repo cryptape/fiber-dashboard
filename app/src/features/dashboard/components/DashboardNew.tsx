@@ -4,14 +4,15 @@ import {
   SectionHeader,
   GlassCardContainer,
   EasyTable,
+  RadioGroup,
 } from "@/shared/components/ui";
 import { AssetSelect } from "@/shared/components/ui/AssetSelect";
 import { SUPPORTED_ASSETS } from "@/lib/config/assets";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { queryKeys } from "@/features/dashboard/hooks/useDashboard";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // 固定使用 hourly 时间范围
 const TIME_RANGE = "hourly" as const;
@@ -61,19 +62,66 @@ const MOCK_TIME_SERIES_DATA2 = [
 
 export const DashboardNew = () => {
   const timeRange = TIME_RANGE; // 固定使用 hourly
-  const [selectedAsset, setSelectedAsset] = useState<string>("ckb"); // 默认选择 CKB
-  const { apiClient, currentNetwork } = useNetwork();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { apiClient, currentNetwork } = useNetwork();
+  
+  // 从 URL 读取资产值
+  const urlAsset = searchParams.get('asset') || '';
+  const [selectedAsset, setSelectedAsset] = useState<string>(urlAsset);
+  const [metricType, setMetricType] = useState<"capacity" | "liquidity">("capacity");
+  
+  // 同步 URL 参数到 selectedAsset（仅在 URL 变化时）
+  useEffect(() => {
+    setSelectedAsset(urlAsset);
+  }, [urlAsset]);
+  
+  // 当 selectedAsset 变化时，更新 URL（避免循环）
+  useEffect(() => {
+    if (selectedAsset !== urlAsset) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (selectedAsset) {
+        params.set('asset', selectedAsset);
+      } else {
+        params.delete('asset');
+      }
+      const newUrl = params.toString() ? `/?${params.toString()}` : '/';
+      router.replace(newUrl, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAsset]); // 只依赖 selectedAsset，避免循环
+
+  // 判断是否显示 "CHANNEL" 前缀：All assets 或 CKB 或非 CKB 的 capacity 模式
+  const isChannelMode = !selectedAsset || selectedAsset === "ckb" || metricType === "capacity";
+  // 获取资产标签用于 CHANNELS KPI
+  const assetLabel = selectedAsset 
+    ? SUPPORTED_ASSETS.find(a => a.value === selectedAsset)?.label.toUpperCase() || "CKB"
+    : "TOTAL";
+
+  // 根据资产和模式生成 tooltip 文案
+  const getCapacityTooltip = () => {
+    if (isChannelMode) {
+      // Channel capacity 模式
+      if (!selectedAsset) {
+        // All assets 模式
+        return `The total amount of CKB locked on-chain by all Fiber channels to reserve storage, across all supported assets.`;
+      }
+      return `The total amount of CKB locked on-chain to reserve storage for Fiber channels that support ${selectedAsset === "ckb" ? "native CKB" : assetLabel} transfers.`;
+    } else {
+      // Asset liquidity 模式
+      return `The total amount of ${assetLabel} currently available across all Fiber channels.`;
+    }
+  };
 
   const { data: kpi } = useQuery({
-    queryKey: [...queryKeys.kpis, currentNetwork, timeRange, selectedAsset],
-    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange, selectedAsset),
+    queryKey: [...queryKeys.kpis, currentNetwork, timeRange, selectedAsset, metricType],
+    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange, selectedAsset, metricType),
     refetchInterval: 30000,
   });
 
   const { data: timeSeriesData } = useQuery({
-    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange, selectedAsset],
-    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange, selectedAsset),
+    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange, selectedAsset, metricType],
+    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange, selectedAsset, metricType),
     refetchInterval: 30000,
   });
 
@@ -115,30 +163,49 @@ export const DashboardNew = () => {
                   label: asset.label,
                   color: asset.color,
                 })),
+                { value: "", label: "All assets" },
               ]}
               value={selectedAsset}
               onChange={setSelectedAsset}
               placeholder="Select asset"
               className="w-[207px]"
             />
+            {/* 当选择非 CKB 资产时显示指标选择器；All assets 模式不显示 */}
+            {selectedAsset && selectedAsset !== "ckb" && (
+              <RadioGroup
+                label="Metrics:"
+                options={[
+                  { value: "capacity", label: "Channel capacity" },
+                  { value: "liquidity", label: "Asset liquidity" },
+                ]}
+                value={metricType}
+                onChange={(value) => setMetricType(value as "capacity" | "liquidity")}
+              />
+            )}
           </div>
           {/* 顶部两个 KPI 横向排列 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <KpiCard
-              label="TOTAL CAPACITY"
+              label={isChannelMode ? "CHANNEL CAPACITY" : `${assetLabel} LIQUIDITY`}
               value={String(kpi?.totalCapacity ?? 0)}
               unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.totalCapacityChange ?? 0}
               trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
+              tooltip={getCapacityTooltip()}
             />
             <KpiCard
-              label="TOTAL CHANNELS"
+              label={`${assetLabel} CHANNELS`}
               value={String(kpi?.totalChannels ?? 0)}
               changePercent={kpi?.totalChannelsChange ?? 0}
               trending={(kpi?.totalChannelsChange ?? 0) >= 0 ? "up" : "down"}
               changeLabel="from last week"
-              onViewDetails={() => router.push('/channels')}
+              onViewDetails={() => {
+                const url = selectedAsset 
+                  ? `/channels?asset=${selectedAsset}` 
+                  : '/channels';
+                router.push(url);
+              }}
             />
           </div>
 
@@ -155,7 +222,7 @@ export const DashboardNew = () => {
           {/* 左侧下方的 4 个 KPI 卡片 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <KpiCard
-              label="MIN CAPACITY"
+              label={isChannelMode ? "MIN CHANNEL CAPACITY" : `MIN ${assetLabel} LIQUIDITY`}
               value={String(kpi?.minChannelCapacity ?? 0)}
               unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.minChannelCapacityChange ?? 0}
@@ -163,7 +230,7 @@ export const DashboardNew = () => {
               changeLabel="from last week"
             />
             <KpiCard
-              label="MAX CAPACITY"
+              label={isChannelMode ? "MAX CHANNEL CAPACITY" : `MAX ${assetLabel} LIQUIDITY`}
               value={String(kpi?.maxChannelCapacity ?? 0)}
               unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.maxChannelCapacityChange ?? 0}
@@ -171,7 +238,7 @@ export const DashboardNew = () => {
               changeLabel="from last week"
             />
             <KpiCard
-              label="AVG CAPACITY"
+              label={isChannelMode ? "AVG CHANNEL CAPACITY" : `AVG ${assetLabel} LIQUIDITY`}
               value={String(kpi?.averageChannelCapacity ?? 0)}
               unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.averageChannelCapacityChange ?? 0}
@@ -179,7 +246,7 @@ export const DashboardNew = () => {
               changeLabel="from last week"
             />
             <KpiCard
-              label="MEDIAN CAPACITY"
+              label={isChannelMode ? "MEDIAN CHANNEL CAPACITY" : `MEDIAN ${assetLabel} LIQUIDITY`}
               value={String(kpi?.medianChannelCapacity ?? 0)}
               unit={kpi?.capacityUnit || "CKB"}
               changePercent={kpi?.medianChannelCapacityChange ?? 0}

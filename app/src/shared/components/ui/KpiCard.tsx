@@ -1,5 +1,7 @@
 import Image from "next/image";
+import { useState } from "react";
 import { GlassCardContainer } from "./GlassCardContainer";
+import { Tooltip } from "./Tooltip";
 
 /**
  * 格式化数字显示
@@ -72,6 +74,8 @@ export interface KpiCardProps {
   onViewDetails?: () => void;
   /** 额外的 className */
   className?: string;
+  /** Tooltip 提示内容 */
+  tooltip?: string;
 }
 
 export default function KpiCard({
@@ -82,18 +86,45 @@ export default function KpiCard({
   changeLabel = 'from last week',
   trending = 'up',
   onViewDetails,
-  className = ''
+  className = '',
+  tooltip
 }: KpiCardProps) {
   const showTrend = changePercent !== undefined;
   const isPositive = trending === 'up';
   const { number, suffix } = formatNumber(value);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   return (
     <GlassCardContainer className={`w-full inline-flex flex-col justify-center items-start gap-2 ${className}`.trim()}>
       {/* 标题和查看详情 */}
       <div className="w-full flex justify-between items-center">
-        <div className="type-label text-secondary">
-          {label}
+        <div className="flex items-center gap-2.5">
+          <div className="type-label text-secondary">
+            {label}
+          </div>
+          {tooltip && (
+            <Tooltip 
+              content={tooltip} 
+              show={showTooltip}
+              tooltipClassName="!whitespace-normal min-w-[360px] max-w-[420px] text-left"
+              showArrow={false}
+              placement="bottom"
+            >
+              <div 
+                className="w-4 h-4 relative cursor-pointer flex-shrink-0"
+                onMouseEnter={() => setShowTooltip(true)}
+                onMouseLeave={() => setShowTooltip(false)}
+              >
+                <Image
+                  src="/info.svg"
+                  alt="info"
+                  width={16}
+                  height={16}
+                  className="w-full h-full"
+                />
+              </div>
+            </Tooltip>
+          )}
         </div>
         {onViewDetails && (
           <button 

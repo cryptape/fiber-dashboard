@@ -331,7 +331,7 @@ export function ChannelLifecycle({
               )}
               badges={[
                 {
-                  text: isCooperativeClose ? "Closed (Cooperative)" : "Closed (Uncooperative)",
+                  text: isCooperativeClose ? "Cooperative closed" : "Uncooperative closed",
                   color: isCooperativeClose ? "purple" : "error",
                 },
               ]}

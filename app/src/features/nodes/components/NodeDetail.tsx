@@ -32,7 +32,7 @@ export const NodeDetail = () => {
   }, [sortKey, sortState]);
 
   // 拉取节点信息
-  const { data: nodeInfo } = useQuery<RustNodeInfo>({
+  const { data: nodeInfo } = useQuery<RustNodeInfo | null>({
     queryKey: ["node-info", nodeId, currentNetwork],
     queryFn: () => apiClient.getNodeInfo(nodeId),
     enabled: !!nodeId,
