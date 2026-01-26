@@ -922,7 +922,7 @@ pub(crate) async fn group_channel_by_state(
             inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = Any($1)
             group by c.channel_outpoint
         )
-        select n.channel_outpoint, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
+        select n.channel_outpoint, n.state, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
         from {} n
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
         left join {} k on n.channel_outpoint = k.channel_outpoint
@@ -969,6 +969,7 @@ pub(crate) async fn group_channel_by_state(
         .into_iter()
         .map(|row| {
             let channel_outpoint: String = row.get("channel_outpoint");
+            let state: String = row.get("state");
             let funding_args: String = row.get("funding_args");
             let last_block_number: String = row.get("last_block_number");
             let last_tx_hash: String = row.get("last_tx_hash");
@@ -989,6 +990,7 @@ pub(crate) async fn group_channel_by_state(
                 last_commit_time.to_rfc3339(),
                 format!("0x{}", capacity),
                 tx_count as usize,
+                state,
                 last_commitment_args.map(|arg| format!("0x{}", arg)),
                 name,
             )
@@ -1007,6 +1009,7 @@ pub(crate) async fn group_channel_by_state(
         capacity: String,
         udt_value: Option<String>,
         tx_count: usize,
+        state: String,
         name: String,
     }
 
@@ -1030,6 +1033,7 @@ pub(crate) async fn group_channel_by_state(
                     last_commit_time,
                     capacity,
                     tx_count,
+                    state,
                     last_commitment_args,
                     name,
                 )| State {
@@ -1039,6 +1043,7 @@ pub(crate) async fn group_channel_by_state(
                     last_tx_hash,
                     udt_value,
                     tx_count,
+                    state,
                     create_time,
                     capacity,
                     last_commit_time,
@@ -1112,19 +1117,25 @@ pub async fn query_channel_capacity_distribution(
         .await?
         .into_iter()
         .fold(HashMap::new(), |mut acc, row| {
+            let name = row.get::<String, _>("name");
             let asset: u128 = {
                 let raw: String = row.get("asset");
                 let mut buf = [0u8; 16];
                 faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                u128::from_be_bytes(buf)
+                if name == "ckb" {
+                    // capacity in ckb
+                    u128::from_be_bytes(buf) / 100_000_000 // shannons to ckb
+                } else {
+                    u128::from_be_bytes(buf)
+                }
             };
             let capacity: u64 = {
                 let raw: String = row.get("capacity");
                 let mut buf = [0u8; 8];
                 faster_hex::hex_decode(raw.as_bytes(), &mut buf).unwrap();
-                u64::from_be_bytes(buf)
+                u64::from_be_bytes(buf) / 100_000_000 // channons to ckb
             };
-            let name = row.get::<String, _>("name");
+
             acc.entry(name)
                 .or_insert_with(Vec::new)
                 .push((asset, capacity));
@@ -1143,10 +1154,11 @@ pub async fn query_channel_capacity_distribution(
         let assets = caps.iter().map(|(asset, _)| *asset).collect::<Vec<_>>();
         let mut buckets = vec![0usize; 8];
         for &cap in assets.iter() {
-            let idx = if cap == 0 {
+            let cap_k = cap / 1000;
+            let idx = if cap_k == 0 {
                 0usize
             } else {
-                let mut v = cap;
+                let mut v = cap_k;
                 let mut exp = 0usize;
                 while v >= 10 && exp < 7 {
                     v /= 10;
@@ -1171,10 +1183,11 @@ pub async fn query_channel_capacity_distribution(
             .collect::<Vec<_>>();
         let mut buckets = vec![0usize; 8];
         for &cap in capacities.iter() {
-            let idx = if cap == 0 {
+            let cap_k = cap / 1000;
+            let idx = if cap_k == 0 {
                 0usize
             } else {
-                let mut v = cap;
+                let mut v = cap_k;
                 let mut exp = 0usize;
                 while v >= 10 && exp < 7 {
                     v /= 10;
