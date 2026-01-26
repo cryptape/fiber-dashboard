@@ -7,8 +7,8 @@ import { formatTimestamp } from "../utils";
 import type { NodeInfoResponse } from "@/lib/types";
 
 interface ChannelParticipantsProps {
-  node1Info?: NodeInfoResponse;
-  node2Info?: NodeInfoResponse;
+  node1Info?: NodeInfoResponse | null;
+  node2Info?: NodeInfoResponse | null;
 }
 
 export function ChannelParticipants({

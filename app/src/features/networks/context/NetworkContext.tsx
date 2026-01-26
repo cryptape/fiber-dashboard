@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { MainnetAPIClient, TestnetAPIClient } from "@/lib/client";
 
 export type NetworkType = "mainnet" | "testnet";
@@ -18,7 +18,30 @@ interface NetworkProviderProps {
 }
 
 export function NetworkProvider({ children }: NetworkProviderProps) {
-  const [currentNetwork, setCurrentNetwork] = useState<NetworkType>("mainnet");
+  // Initialize with null to indicate not yet loaded
+  const [currentNetwork, setCurrentNetwork] = useState<NetworkType | null>(null);
+
+  // Load saved network from localStorage on client-side mount
+  useEffect(() => {
+    const savedNetwork = localStorage.getItem("fiber-dashboard-network");
+    if (savedNetwork && (savedNetwork === "mainnet" || savedNetwork === "testnet")) {
+      setCurrentNetwork(savedNetwork as NetworkType);
+    } else {
+      setCurrentNetwork("mainnet");
+    }
+  }, []);
+
+  // Save network selection to localStorage whenever it changes
+  useEffect(() => {
+    if (currentNetwork !== null) {
+      localStorage.setItem("fiber-dashboard-network", currentNetwork);
+    }
+  }, [currentNetwork]);
+
+  // Don't render until network is loaded from localStorage
+  if (currentNetwork === null) {
+    return null;
+  }
 
   // Initialize API clients
   const mainnetClient = new MainnetAPIClient();

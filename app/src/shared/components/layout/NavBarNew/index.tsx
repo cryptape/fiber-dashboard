@@ -13,7 +13,7 @@ import {
 } from "@/shared/components/ui/CustomMenu";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 
 // 基础导航项数据
@@ -71,6 +71,7 @@ const MENU_OPTIONS: MenuOption[] = NETWORK_DATA.map(network => ({
 export default function NavBarNew() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // 根据当前路径找到对应的 tab ID
   const getTabIdFromPath = (path: string) => {
@@ -115,7 +116,10 @@ export default function NavBarNew() {
     setSelectedTab(tabId);
     const selectedItem = NAV_ITEMS_DATA.find(item => item.id === tabId);
     if (selectedItem) {
-      router.push(selectedItem.path);
+      // 保留当前 URL 参数
+      const params = searchParams.toString();
+      const url = params ? `${selectedItem.path}?${params}` : selectedItem.path;
+      router.push(url);
     }
   };
 

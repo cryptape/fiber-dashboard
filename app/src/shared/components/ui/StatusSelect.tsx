@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import './AssetSelect.css';
+import './AssetSelect.css'; // 使用与 AssetSelect 相同的样式
 
 // Check Icon Component
 const CheckIcon = () => (
@@ -18,14 +18,14 @@ const ArrowIcon = () => (
   </svg>
 );
 
-export interface AssetSelectOption {
+export interface StatusSelectOption {
   value: string;
   label: string;
-  color?: string; // Asset 颜色
+  color?: string; // 状态颜色
 }
 
-export interface AssetSelectProps {
-  options: AssetSelectOption[];
+export interface StatusSelectProps {
+  options: StatusSelectOption[];
   value?: string;
   onChange?: (value: string) => void;
   defaultValue?: string;
@@ -33,14 +33,14 @@ export interface AssetSelectProps {
   className?: string;
 }
 
-export function AssetSelect({
+export function StatusSelect({
   options,
   value: controlledValue,
   onChange,
   defaultValue,
-  placeholder = 'All assets',
+  placeholder = 'All statuses',
   className = '',
-}: AssetSelectProps) {
+}: StatusSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedValue, setSelectedValue] = useState(
     controlledValue || defaultValue || ''
@@ -50,8 +50,17 @@ export function AssetSelect({
   const value = controlledValue !== undefined ? controlledValue : selectedValue;
   const selectedOption = options.find((opt) => opt.value === value);
   
-  // 判断是否选中了具体的资产（不是 "All assets"）
-  const hasAssetSelected = value !== '';
+  // 判断是否选中了具体的状态（不是 "All statuses"）
+  const hasStatusSelected = value !== '';
+  
+  // 获取显示文本（移除括号内的数字）
+  const getDisplayLabel = (label: string) => {
+    // 如果选中了具体状态，只显示状态名称，不显示数字
+    if (hasStatusSelected) {
+      return label.replace(/\s*\(\d+\)$/, '');
+    }
+    return label;
+  };
 
   // 点击外部关闭下拉框
   useEffect(() => {
@@ -91,7 +100,7 @@ export function AssetSelect({
       <div
         onClick={handleToggle}
         className={`w-full h-10 px-3 py-2.5 rounded-[40px] inline-flex justify-center items-center gap-3 cursor-pointer transition-colors ${
-          hasAssetSelected 
+          hasStatusSelected 
             ? 'bg-[#674BDC]' 
             : 'glass-card hover:bg-layer-hover/30'
         }`}
@@ -100,7 +109,7 @@ export function AssetSelect({
           {/* Filter Icon - 根据选中状态切换图标 */}
           <div className="w-4 h-4 relative overflow-hidden">
             <Image 
-              src={hasAssetSelected ? "/filter-1.svg" : "/filter.svg"}
+              src={hasStatusSelected ? "/filter-1.svg" : "/filter.svg"}
               alt="Filter" 
               width={16} 
               height={16} 
@@ -108,15 +117,15 @@ export function AssetSelect({
             />
           </div>
           <div className={`justify-start font-medium font-['Inter'] leading-5 text-base ${
-            hasAssetSelected ? 'text-on-color' : 'text-primary'
+            hasStatusSelected ? 'text-on-color' : 'text-primary'
           }`}>
-            {hasAssetSelected && 'Asset: '}{selectedOption?.label || placeholder}
+            {getDisplayLabel(selectedOption?.label || placeholder)}
           </div>
         </div>
         <div className={`w-4 h-4 transition-transform ${
           isOpen ? 'rotate-180' : ''
         } ${
-          hasAssetSelected ? 'text-on-color' : 'text-primary'
+          hasStatusSelected ? 'text-on-color' : 'text-primary'
         }`}>
           <ArrowIcon />
         </div>
@@ -125,7 +134,7 @@ export function AssetSelect({
       {/* 下拉菜单 - 使用 surface/popover 背景色和自定义阴影 */}
       {isOpen && (
         <div className="asset-select-dropdown absolute top-full mt-2 left-0 w-full z-50 rounded-xl flex flex-col bg-popover">
-          {/* 具体的资产选项 */}
+          {/* 具体的状态选项 */}
           {options.filter(opt => opt.value !== '').map((option, index) => {
             const isSelected = option.value === value;
             const isFirst = index === 0;
@@ -141,7 +150,7 @@ export function AssetSelect({
                 `}
               >
                 <div className="flex justify-start items-center gap-2">
-                  {/* Asset 色块 */}
+                  {/* 状态色块 - 12x12，距离左边 8px */}
                   {option.color && (
                     <div 
                       className="w-3 h-3 flex-shrink-0" 
@@ -164,7 +173,7 @@ export function AssetSelect({
           {/* 分割线 */}
           <div className="h-px bg-[#D9D9D9]" />
           
-          {/* All assets 选项 */}
+          {/* All statuses 选项 */}
           {options.filter(opt => opt.value === '').map((option) => {
             const isSelected = option.value === value;
 

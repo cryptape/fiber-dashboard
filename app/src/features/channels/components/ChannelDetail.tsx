@@ -124,7 +124,21 @@ export default function ChannelDetailPage() {
       />
 
       {/* KPI 卡片 */}
-      <div className={`grid grid-cols-1 gap-5 ${channelState.state === "closed_waiting_onchain_settlement" || channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+      <div className={`grid grid-cols-1 gap-5 ${
+        // 判断需要显示几列
+        (() => {
+          const hasAssetLiquidity = channelInfo.udt_name && channelInfo.udt_name.toLowerCase() !== 'ckb' && channelInfo.asset;
+          const hasClosedCard = channelState.state === "closed_waiting_onchain_settlement" || channelState.state === "closed_cooperative" || channelState.state === "closed_uncooperative";
+          
+          if (hasAssetLiquidity && hasClosedCard) {
+            return "md:grid-cols-4"; // Capacity + Asset Liquidity + Opened On + (Last Committed On / Closed On)
+          } else if (hasAssetLiquidity || hasClosedCard) {
+            return "md:grid-cols-3"; // Capacity + (Asset Liquidity 或 Opened On) + (Opened On 或 Last Committed On / Closed On)
+          } else {
+            return "md:grid-cols-2"; // Capacity + Opened On
+          }
+        })()
+      }`}>
         <KpiCard
           label="CAPACITY"
           value={(() => {
@@ -135,17 +149,28 @@ export default function ChannelDetailPage() {
           })()}
           unit="CKB"
         />
+        {/* 如果是非 CKB 资产，显示资产流动性 */}
+        {channelInfo.udt_name && channelInfo.udt_name.toLowerCase() !== 'ckb' && channelInfo.asset && (
+          <KpiCard
+            label={`${channelInfo.udt_name.toUpperCase()} LIQUIDITY`}
+            value={(() => {
+              const assetValue = hexToDecimal(channelInfo.asset);
+              return formatCompactNumber(Number(assetValue));
+            })()}
+            unit={channelInfo.udt_name.toUpperCase()}
+          />
+        )}
         <KpiCard
           label="OPENED ON"
           value={channelState.txs.length > 0 ? formatTxTimestamp(channelState.txs[0].timestamp).date : "-"}
-          unit={channelState.txs.length > 0 ? formatTxTimestamp(channelState.txs[0].timestamp).time : ""}
+          unit=""
         />
         {/* 如果是 closed_waiting_onchain_settlement 状态，显示最后提交时间 */}
         {channelState.state === "closed_waiting_onchain_settlement" && channelState.txs.length > 0 && (
           <KpiCard
             label="LAST COMMITTED ON"
             value={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).date}
-            unit={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).time}
+            unit=""
           />
         )}
         {/* 如果是 closed 状态，显示关闭时间 */}
@@ -153,7 +178,7 @@ export default function ChannelDetailPage() {
           <KpiCard
             label="CLOSED ON"
             value={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).date}
-            unit={formatTxTimestamp(channelState.txs[channelState.txs.length - 1].timestamp).time}
+            unit=""
           />
         )}
       </div>
