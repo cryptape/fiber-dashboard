@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use ckb_jsonrpc_types::{JsonBytes, Script};
-use salvo::{Request, Response, handler, macros::Extractible};
+use salvo::{Depot, Request, Response, handler, macros::Extractible};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -132,11 +132,10 @@ impl ListNodesHourlySortBy {
 #[handler]
 pub async fn list_nodes_hourly(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<ListNodesHourlyParams>(&mut Default::default())
-        .await?;
+    let params = req.extract::<ListNodesHourlyParams>(depot).await?;
     let pool = get_pg_pool();
     let nodes = read_nodes_hourly(pool, params).await.map_err(|e| {
         log::error!("Failed to read nodes: {}", e);
@@ -152,9 +151,10 @@ pub async fn list_nodes_hourly(
 #[handler]
 pub async fn list_nodes_monthly(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let page = req.extract::<Page>(&mut Default::default()).await?;
+    let page = req.extract::<Page>(depot).await?;
     let pool = get_pg_pool();
     let nodes = read_nodes_monthly(pool, page).await.map_err(|e| {
         log::error!("Failed to read nodes: {}", e);
@@ -170,11 +170,10 @@ pub async fn list_nodes_monthly(
 #[handler]
 pub async fn nodes_fuzzy_by_name_or_id(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<FuzzyNodeName>(&mut Default::default())
-        .await?;
+    let params = req.extract::<FuzzyNodeName>(depot).await?;
     let pool = get_pg_pool();
 
     let nodes = query_nodes_fuzzy_by_name(pool, params).await.map_err(|e| {
@@ -191,9 +190,10 @@ pub async fn nodes_fuzzy_by_name_or_id(
 #[handler]
 pub async fn nodes_by_region(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req.extract::<NodeByRegion>(&mut Default::default()).await?;
+    let params = req.extract::<NodeByRegion>(depot).await?;
     let pool = get_pg_pool();
     let nodes = query_nodes_by_region(pool, params).await.map_err(|e| {
         log::error!("Failed to query nodes by region: {}", e);
@@ -209,9 +209,10 @@ pub async fn nodes_by_region(
 #[handler]
 pub async fn list_channels_hourly(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let page = req.extract::<Page>(&mut Default::default()).await?;
+    let page = req.extract::<Page>(depot).await?;
     let pool = get_pg_pool();
     let channels = read_channels_hourly(pool, page).await.map_err(|e| {
         log::error!("Failed to read channels: {}", e);
@@ -227,9 +228,10 @@ pub async fn list_channels_hourly(
 #[handler]
 pub async fn list_channels_monthly(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let page = req.extract::<Page>(&mut Default::default()).await?;
+    let page = req.extract::<Page>(depot).await?;
     let pool = get_pg_pool();
 
     let channels = read_channels_monthly(pool, page).await.map_err(|e| {
@@ -281,11 +283,10 @@ impl ChannelSortBy {
 #[handler]
 pub async fn channels_by_node_id(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<ChannelByNodeIdParams>(&mut Default::default())
-        .await?;
+    let params = req.extract::<ChannelByNodeIdParams>(depot).await?;
     let pool = get_pg_pool();
     query_channels_by_node_id(pool, params).await.map_err(|e| {
         log::error!("Failed to query channels by node id: {}", e);
@@ -296,9 +297,10 @@ pub async fn channels_by_node_id(
 #[handler]
 pub async fn node_udt_infos(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let node_id = req.extract::<NodeId>(&mut Default::default()).await?;
+    let node_id = req.extract::<NodeId>(depot).await?;
     let pool = get_pg_pool();
     let udt_infos = crate::pg_read::query_node_udt_relation(pool, node_id.node_id, node_id.net)
         .await
@@ -310,8 +312,12 @@ pub async fn node_udt_infos(
 }
 
 #[handler]
-pub async fn node_info(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let node_id = req.extract::<NodeId>(&mut Default::default()).await?;
+pub async fn node_info(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let node_id = req.extract::<NodeId>(depot).await?;
     let pool = get_pg_pool();
     let info = query_node_info(pool, node_id.node_id, node_id.net)
         .await
@@ -323,8 +329,12 @@ pub async fn node_info(req: &mut Request, _res: &mut Response) -> Result<String,
 }
 
 #[handler]
-pub async fn nodes_by_udt(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let udt = req.extract::<NodesByUdt>(&mut Default::default()).await?;
+pub async fn nodes_by_udt(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let udt = req.extract::<NodesByUdt>(depot).await?;
     let pool = get_pg_pool();
     let nodes = crate::pg_read::query_nodes_by_udt(pool, udt.udt, udt.net)
         .await
@@ -346,11 +356,10 @@ pub(crate) struct AnalysisHourlyParams {
 #[handler]
 pub async fn analysis_hourly(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<AnalysisHourlyParams>(&mut Default::default())
-        .await?;
+    let params = req.extract::<AnalysisHourlyParams>(depot).await?;
     let pool = get_pg_pool();
     let capacitys = query_analysis_hourly(pool, params).await.map_err(|e| {
         log::error!("Failed to query channel capacity analysis: {}", e);
@@ -362,10 +371,12 @@ pub async fn analysis_hourly(
 }
 
 #[handler]
-pub async fn analysis(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<AnalysisParams>(&mut Default::default())
-        .await?;
+pub async fn analysis(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let params = req.extract::<AnalysisParams>(depot).await?;
     let pool = get_pg_pool();
     let capacitys = query_analysis(pool, &params).await.map_err(|e| {
         log::error!("Failed to query channel capacity analysis: {}", e);
@@ -385,8 +396,12 @@ struct ChannelId {
 }
 
 #[handler]
-pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let channel_id = req.extract::<ChannelId>(&mut Default::default()).await?;
+pub async fn channel_state(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let channel_id = req.extract::<ChannelId>(depot).await?;
     let pool = get_pg_pool();
     let state = query_channel_state(pool, channel_id.channel_outpoint, channel_id.net)
         .await
@@ -398,8 +413,12 @@ pub async fn channel_state(req: &mut Request, _res: &mut Response) -> Result<Str
 }
 
 #[handler]
-pub async fn channel_info(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let channel_id = req.extract::<ChannelId>(&mut Default::default()).await?;
+pub async fn channel_info(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let channel_id = req.extract::<ChannelId>(depot).await?;
     let pool = get_pg_pool();
     let info = query_channel_info(pool, channel_id.channel_outpoint, channel_id.net)
         .await
@@ -484,11 +503,10 @@ impl Order {
 #[handler]
 pub async fn channel_by_state(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req
-        .extract::<ChannelByStateParams>(&mut Default::default())
-        .await?;
+    let params = req.extract::<ChannelByStateParams>(depot).await?;
     let pool = get_pg_pool();
     let states = group_channel_by_state(pool, params).await.map_err(|e| {
         log::error!("Failed to query channels by state: {}", e);
@@ -500,9 +518,10 @@ pub async fn channel_by_state(
 #[handler]
 pub async fn channel_count_by_state(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req.extract::<NetworkInfo>(&mut Default::default()).await?;
+    let params = req.extract::<NetworkInfo>(depot).await?;
     let pool = get_pg_pool();
     let counts = group_channel_count_by_state(pool, params.net)
         .await
@@ -516,9 +535,10 @@ pub async fn channel_count_by_state(
 #[handler]
 pub async fn channel_count_by_asset(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let params = req.extract::<NetworkInfo>(&mut Default::default()).await?;
+    let params = req.extract::<NetworkInfo>(depot).await?;
     let pool = get_pg_pool();
 
     let counts = query_channel_count_by_asset(pool, params.net)
@@ -534,9 +554,10 @@ pub async fn channel_count_by_asset(
 #[handler]
 pub async fn channel_capacity_distribution(
     req: &mut Request,
+    depot: &mut Depot,
     _res: &mut Response,
 ) -> Result<String, salvo::Error> {
-    let network_info = req.extract::<NetworkInfo>(&mut Default::default()).await?;
+    let network_info = req.extract::<NetworkInfo>(depot).await?;
     let pool = get_pg_pool();
     let distribution = query_channel_capacity_distribution(pool, network_info.net)
         .await
@@ -550,8 +571,12 @@ pub async fn channel_capacity_distribution(
 }
 
 #[handler]
-pub async fn all_region(req: &mut Request, _res: &mut Response) -> Result<String, salvo::Error> {
-    let network_info = req.extract::<NetworkInfo>(&mut Default::default()).await?;
+pub async fn all_region(
+    req: &mut Request,
+    depot: &mut Depot,
+    _res: &mut Response,
+) -> Result<String, salvo::Error> {
+    let network_info = req.extract::<NetworkInfo>(depot).await?;
     let pool = get_pg_pool();
     let regions = crate::pg_read::query_nodes_all_regions(pool, network_info.net)
         .await
