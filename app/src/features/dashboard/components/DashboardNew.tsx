@@ -66,8 +66,8 @@ export const DashboardNew = () => {
   const searchParams = useSearchParams();
   const { apiClient, currentNetwork } = useNetwork();
   
-  // 从 URL 读取资产值
-  const urlAsset = searchParams.get('asset') || '';
+  // 从 URL 读取资产值，默认为 'ckb'
+  const urlAsset = searchParams.get('asset') || 'ckb';
   const [selectedAsset, setSelectedAsset] = useState<string>(urlAsset);
   const [metricType, setMetricType] = useState<"capacity" | "liquidity">("capacity");
   
