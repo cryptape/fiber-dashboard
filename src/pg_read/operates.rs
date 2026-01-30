@@ -153,21 +153,41 @@ pub(crate) async fn query_channels_by_node_id(
         .get("total_count");
     let sql = format!(
         "
+        with channels as (
+            select COUNT(DISTINCT n.channel_outpoint) as total_count
+            from {} n
+            WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
+        ),
+        channel_tx_count as (
+            select c.channel_outpoint, count(*) as tx_count 
+            from {} c
+            inner join {} s on c.channel_outpoint = s.channel_outpoint
+            join channels on 1=1
+            group by c.channel_outpoint
+        )
             select
             n.channel_outpoint, 
             n.bucket as last_seen_hour, 
             n.capacity as asset,
             c.capacity as capacity,
             n.created_timestamp,
+            COALESCE(m.name, 'ckb') as name,
             c.state,
+            t.tx_count,
             c.last_commit_time
             from {} n
             left join {} c on n.channel_outpoint = c.channel_outpoint
+            left join {} m on n.udt_type_script = m.id
+            left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
             WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
             ORDER BY {} {}
         ",
         params.net.mv_online_channels(),
         params.net.channel_states(),
+        params.net.channel_txs(),
+        params.net.mv_online_channels(),
+        params.net.channel_states(),
+        params.net.udt_infos(),
         params.sort_by.as_str(),
         params.order.as_str(),
     );
@@ -178,9 +198,11 @@ pub(crate) async fn query_channels_by_node_id(
         last_seen_hour: DateTime<Utc>,
         capacity: String,
         asset: String,
+        name: String,
         created_timestamp: DateTime<Utc>,
         state: String,
         last_commit_time: DateTime<Utc>,
+        tx_count: i64,
     }
 
     #[derive(Serialize, Deserialize)]
@@ -210,6 +232,8 @@ pub(crate) async fn query_channels_by_node_id(
             created_timestamp: row.get("created_timestamp"),
             state: row.get("state"),
             last_commit_time: row.get("last_commit_time"),
+            name: row.get("name"),
+            tx_count: row.get("tx_count"),
         })
         .collect();
 
