@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import {
   DetailCard,
   KpiCard,
@@ -14,12 +15,24 @@ import { useChannelData } from "../hooks/useChannelData";
 import { ChannelParticipants } from "./ChannelParticipants";
 import { ChannelLifecycle } from "./ChannelLifecycle";
 import { getAssetColor } from "../utils/assetColors";
+import { useNetwork } from "@/features/networks/context/NetworkContext";
 
 export default function ChannelDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { currentNetwork } = useNetwork();
+  const initialNetworkRef = useRef(currentNetwork);
+
   const channelOutpoint = params.channelOutpoint
     ? decodeURIComponent(params.channelOutpoint as string)
     : "";
+
+  // 监听网络切换，如果切换了网络则跳转回 /channels 页面
+  useEffect(() => {
+    if (initialNetworkRef.current !== currentNetwork) {
+      router.push("/channels");
+    }
+  }, [currentNetwork, router]);
 
   const {
     channelInfo,

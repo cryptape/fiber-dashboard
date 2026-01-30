@@ -40,14 +40,14 @@ interface ChannelData extends Record<string, unknown> {
 // 容量区间定义（CKB）
 // 根据实际数据范围调整为合理的对数刻度
 const CAPACITY_RANGES = [
-  { min: 0, max: 100, label: "10^0" },           // 0-100
-  { min: 100, max: 1_000, label: "10^1" },       // 100-1K
-  { min: 1_000, max: 10_000, label: "10^2" },    // 1K-10K
-  { min: 10_000, max: 100_000, label: "10^3" },  // 10K-100K
-  { min: 100_000, max: 1_000_000, label: "10^4" }, // 100K-1M
-  { min: 1_000_000, max: 10_000_000, label: "10^5" }, // 1M-10M
-  { min: 10_000_000, max: 100_000_000, label: "10^6" }, // 10M-100M
-  { min: 100_000_000, max: 1_000_000_000, label: "10^7" }, // 100M-1B
+  { min: 0, max: 100, label: "10^0k" },           // 0-100
+  { min: 100, max: 1_000, label: "10^1k" },       // 100-1K
+  { min: 1_000, max: 10_000, label: "10^2k" },    // 1K-10K
+  { min: 10_000, max: 100_000, label: "10^3k" },  // 10K-100K
+  { min: 100_000, max: 1_000_000, label: "10^4k" }, // 100K-1M
+  { min: 1_000_000, max: 10_000_000, label: "10^5k" }, // 1M-10M
+  { min: 10_000_000, max: 100_000_000, label: "10^6k" }, // 10M-100M
+  { min: 100_000_000, max: 1_000_000_000, label: "10^7k" }, // 100M-1B
 ];
 
 // 格式化容量范围显示
@@ -74,8 +74,8 @@ export const Channels = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // 从 URL 读取初始资产值
-  const urlAsset = searchParams.get('asset') || '';
+  // 从 URL 读取初始资产值，默认为 'ckb'
+  const urlAsset = searchParams.get('asset') || 'ckb';
   
   const [currentPage, setCurrentPage] = useState(1); // 1-based for display
   const [selectedStates, setSelectedStates] = useState<ChannelState[]>([]); // 默认为空，表示 all statuses
@@ -305,7 +305,7 @@ export const Channels = () => {
     if (!overviewAsset) {
       // All assets: 聚合 CKB 和 USDI 的容量分布
       const result = CAPACITY_RANGES.map(range => {
-        const key = `Capacity 10^${range.label.replace('10^', '')}k`;
+        const key = `Capacity ${range.label}`;
         const ckbCount = (capacityData["ckb"] || {})[key] || 0;
         const usdiCount = (capacityData["USDI"] || {})[key] || 0; // 使用大写 USDI
         return {
@@ -322,7 +322,7 @@ export const Channels = () => {
       const assetKey = overviewAsset === 'usdi' ? 'USDI' : overviewAsset;
       const assetCapacity = capacityData[assetKey] || {};
       const result = CAPACITY_RANGES.map(range => {
-        const key = `Capacity 10^${range.label.replace('10^', '')}k`;
+        const key = `Capacity ${range.label}`;
         const count = assetCapacity[key] || 0;
         return {
           label: range.label,
@@ -355,7 +355,7 @@ export const Channels = () => {
     const usdiAssetData = assetData["USDI"] || {};
     
     const result = CAPACITY_RANGES.map(range => {
-      const key = `Asset 10^${range.label.replace('10^', '')}k`;
+      const key = `Asset ${range.label}`;
       const count = usdiAssetData[key] || 0;
       return {
         label: range.label,
@@ -683,8 +683,8 @@ export const Channels = () => {
           </GlassCardContainer>
         )}
         
-        {/* Capacity Distribution - 在单资产模式时显示在第一行第二列 */}
-        {overviewAsset && (
+        {/* Capacity Distribution - 只在 CKB 资产模式时显示在第一行第二列 */}
+        {overviewAsset === 'ckb' && (
           <GlassCardContainer>
             <BarChart
               data={capacityDistributionData}
@@ -701,6 +701,32 @@ export const Channels = () => {
                 
                 return [
                   { label: "Capacity Range", value: range },
+                  { label: "Total Channels", value: item.value.toString() },
+                  { label: "% of Total", value: `${percentage}%` },
+                ];
+              }}
+            />
+          </GlassCardContainer>
+        )}
+
+        {/* USDI Liquidity Distribution - 在 USDI 模式时显示在第一行第二列 */}
+        {overviewAsset === 'usdi' && (
+          <GlassCardContainer>
+            <BarChart
+              data={usdiLiquidityDistributionData}
+              title="USDI Liquidity Distribution"
+              height="400px"
+              tooltipFormatter={item => {
+                const dataItem = usdiLiquidityDistributionData.find(d => d.label === item.label);
+                const percentage = totalChannelsForLiquidity > 0 
+                  ? ((item.value / totalChannelsForLiquidity) * 100).toFixed(1)
+                  : "0.0";
+                const range = dataItem 
+                  ? formatCapacityRange(dataItem.min, dataItem.max)
+                  : item.label;
+                
+                return [
+                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
@@ -729,34 +755,6 @@ export const Channels = () => {
                 
                 return [
                   { label: "Capacity Range", value: range },
-                  { label: "Total Channels", value: item.value.toString() },
-                  { label: "% of Total", value: `${percentage}%` },
-                ];
-              }}
-            />
-          </GlassCardContainer>
-        </div>
-      )}
-
-      {/* 第二行：USDI Liquidity Distribution 柱状图 - 只在 USDI 模式显示 */}
-      {overviewAsset === 'usdi' && (
-        <div className="mt-6">
-          <GlassCardContainer>
-            <BarChart
-              data={usdiLiquidityDistributionData}
-              title="USDI Liquidity Distribution"
-              height="400px"
-              tooltipFormatter={item => {
-                const dataItem = usdiLiquidityDistributionData.find(d => d.label === item.label);
-                const percentage = totalChannelsForLiquidity > 0 
-                  ? ((item.value / totalChannelsForLiquidity) * 100).toFixed(1)
-                  : "0.0";
-                const range = dataItem 
-                  ? formatCapacityRange(dataItem.min, dataItem.max)
-                  : item.label;
-                
-                return [
-                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
