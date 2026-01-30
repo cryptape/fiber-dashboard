@@ -69,7 +69,7 @@ export const DashboardNew = () => {
   // 从 URL 读取资产值，默认为 'ckb'
   const urlAsset = searchParams.get('asset') || 'ckb';
   const [selectedAsset, setSelectedAsset] = useState<string>(urlAsset);
-  const [metricType, setMetricType] = useState<"capacity" | "liquidity">("capacity");
+  const [metricType, setMetricType] = useState<"capacity" | "liquidity">("liquidity");
   
   // 同步 URL 参数到 selectedAsset（仅在 URL 变化时）
   useEffect(() => {
@@ -175,8 +175,8 @@ export const DashboardNew = () => {
               <RadioGroup
                 label="Metrics:"
                 options={[
-                  { value: "capacity", label: "Channel capacity" },
                   { value: "liquidity", label: "Asset liquidity" },
+                  { value: "capacity", label: "Channel capacity" },
                 ]}
                 value={metricType}
                 onChange={(value) => setMetricType(value as "capacity" | "liquidity")}

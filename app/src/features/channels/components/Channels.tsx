@@ -683,8 +683,8 @@ export const Channels = () => {
           </GlassCardContainer>
         )}
         
-        {/* Capacity Distribution - 在单资产模式时显示在第一行第二列 */}
-        {overviewAsset && (
+        {/* Capacity Distribution - 只在 CKB 资产模式时显示在第一行第二列 */}
+        {overviewAsset === 'ckb' && (
           <GlassCardContainer>
             <BarChart
               data={capacityDistributionData}
@@ -701,6 +701,32 @@ export const Channels = () => {
                 
                 return [
                   { label: "Capacity Range", value: range },
+                  { label: "Total Channels", value: item.value.toString() },
+                  { label: "% of Total", value: `${percentage}%` },
+                ];
+              }}
+            />
+          </GlassCardContainer>
+        )}
+
+        {/* USDI Liquidity Distribution - 在 USDI 模式时显示在第一行第二列 */}
+        {overviewAsset === 'usdi' && (
+          <GlassCardContainer>
+            <BarChart
+              data={usdiLiquidityDistributionData}
+              title="USDI Liquidity Distribution"
+              height="400px"
+              tooltipFormatter={item => {
+                const dataItem = usdiLiquidityDistributionData.find(d => d.label === item.label);
+                const percentage = totalChannelsForLiquidity > 0 
+                  ? ((item.value / totalChannelsForLiquidity) * 100).toFixed(1)
+                  : "0.0";
+                const range = dataItem 
+                  ? formatCapacityRange(dataItem.min, dataItem.max)
+                  : item.label;
+                
+                return [
+                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
@@ -729,34 +755,6 @@ export const Channels = () => {
                 
                 return [
                   { label: "Capacity Range", value: range },
-                  { label: "Total Channels", value: item.value.toString() },
-                  { label: "% of Total", value: `${percentage}%` },
-                ];
-              }}
-            />
-          </GlassCardContainer>
-        </div>
-      )}
-
-      {/* 第二行：USDI Liquidity Distribution 柱状图 - 只在 USDI 模式显示 */}
-      {overviewAsset === 'usdi' && (
-        <div className="mt-6">
-          <GlassCardContainer>
-            <BarChart
-              data={usdiLiquidityDistributionData}
-              title="USDI Liquidity Distribution"
-              height="400px"
-              tooltipFormatter={item => {
-                const dataItem = usdiLiquidityDistributionData.find(d => d.label === item.label);
-                const percentage = totalChannelsForLiquidity > 0 
-                  ? ((item.value / totalChannelsForLiquidity) * 100).toFixed(1)
-                  : "0.0";
-                const range = dataItem 
-                  ? formatCapacityRange(dataItem.min, dataItem.max)
-                  : item.label;
-                
-                return [
-                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
