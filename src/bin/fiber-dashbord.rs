@@ -1,7 +1,14 @@
-use std::{sync::LazyLock, vec};
+use std::{
+    sync::{
+        LazyLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    vec,
+};
 
+use ckb_jsonrpc_types::JsonBytes;
 use fiber_dashbord_backend::{
-    RpcClient,
+    CHANNEL_MONITOR_HEARTBEAT, RpcClient,
     clock_timer::ClockTimer,
     create_pg_pool, get_pg_pool, init_db,
     pg_write::{
@@ -51,8 +58,29 @@ async fn http_server() {
         nodes_fuzzy_by_name_or_id,
     };
     use salvo::{
-        Listener, Router, Server, Service, conn::TcpListener, cors::AllowOrigin, cors::Cors,
+        Depot, Listener, Request, Response, Router, Server, Service, conn::TcpListener,
+        cors::AllowOrigin, cors::Cors, handler,
     };
+
+    #[handler]
+    pub async fn health_check(
+        _req: &mut Request,
+        _depot: &mut Depot,
+        _res: &mut Response,
+    ) -> Result<String, salvo::Error> {
+        let timed_commit_states_heartbeat = TIMED_COMMIT_STATES_HEARTBEAT.load(Ordering::Acquire);
+        let daily_commit_task_heartbeat = DAILY_COMMIT_TASK_HEARTBEAT.load(Ordering::Acquire);
+        let hourly_fresh_task_heartbeat = HOURLY_FRESH_TASK_HEARTBEAT.load(Ordering::Acquire);
+        let channel_monitor_heartbeat = CHANNEL_MONITOR_HEARTBEAT.load(Ordering::Acquire);
+
+        Ok(serde_json::to_string(&serde_json::json!({
+            "timed_commit_states_heartbeat": timed_commit_states_heartbeat,
+            "daily_commit_task_heartbeat": daily_commit_task_heartbeat,
+            "hourly_fresh_task_heartbeat": hourly_fresh_task_heartbeat,
+            "channel_monitor_heartbeat": channel_monitor_heartbeat,
+        }))
+        .unwrap())
+    }
 
     use salvo::http::Method;
     let cors = Cors::new()
@@ -79,9 +107,8 @@ async fn http_server() {
         .push(Router::with_path("nodes_by_region").get(nodes_by_region))
         .push(Router::with_path("nodes_fuzzy_by_name").get(nodes_fuzzy_by_name_or_id))
         .push(Router::with_path("all_region").get(all_region))
-        .push(
-            Router::with_path("channel_capacity_distribution").get(channel_capacity_distribution),
-        );
+        .push(Router::with_path("channel_capacity_distribution").get(channel_capacity_distribution))
+        .push(Router::with_path("health_check").get(health_check));
 
     let service = Service::new(router).hoop(cors);
     let http_port = std::env::var("HTTP_PORT").unwrap_or("8000".to_string());
@@ -132,210 +159,254 @@ static NETS: LazyLock<Vec<fiber_dashbord_backend::Network>> = LazyLock::new(|| {
         .collect::<Vec<_>>()
 });
 
+static TIMED_COMMIT_STATES_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
+
 async fn timed_commit_states() {
     let mut rpc = RpcClient::new();
     let (tx, rx) = tokio::sync::mpsc::channel(8);
 
     tokio::spawn(channel_states_monitor(rpc.clone(), rx));
     let (mut testnet_init, mut mainnet_init) = (false, false);
+
+    let mut heartbeat_timer = tokio::time::interval(tokio::time::Duration::from_secs(60));
+    heartbeat_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut timed_timer = tokio::time::interval(tokio::time::Duration::from_secs(60 * 30));
+    timed_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
-        for net in NETS.iter() {
-            let url = match net {
-                fiber_dashbord_backend::Network::Mainnet => {
-                    rpc.set_bearer_token(MAINNET_FIBER_RPC_BEARER_TOKEN.clone());
-                    MAINNET_FIBER_RPC_URL.clone().unwrap()
+        tokio::select! {
+                _ = heartbeat_timer.tick() => {
+                    let timestamp = Utc::now().timestamp() as u64;
+                    TIMED_COMMIT_STATES_HEARTBEAT.store(timestamp, Ordering::Release);
                 }
-                fiber_dashbord_backend::Network::Testnet => {
-                    rpc.set_bearer_token(TESTNET_FIBER_RPC_BEARER_TOKEN.clone());
-                    TESTNET_FIBER_RPC_URL.clone().unwrap()
-                }
-            };
-
-            let mut raw_nodes = Vec::new();
-            let mut after_cursor = None;
-
-            loop {
-                if let Ok(nodes) = rpc
-                    .get_node_graph(
-                        url.clone(),
-                        GraphNodesParams {
-                            limit: None,
-                            after: after_cursor.clone(),
-                        },
-                    )
-                    .await
-                {
-                    let has_more = nodes.nodes.len() == 500;
-                    raw_nodes.extend(nodes.nodes);
-
-                    if !has_more {
-                        break;
-                    }
-
-                    after_cursor = Some(nodes.last_cursor);
-                } else {
-                    log::warn!("Failed to get {:?}'s node graph", net);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
-            }
-
-            let mut raw_channels = Vec::new();
-            let mut after_cursor = None;
-
-            loop {
-                if let Ok(channels) = rpc
-                    .get_channel_graph(
-                        url.clone(),
-                        GraphChannelsParams {
-                            limit: None,
-                            after: after_cursor.clone(),
-                        },
-                    )
-                    .await
-                {
-                    let has_more = channels.channels.len() == 500;
-                    raw_channels.extend(channels.channels);
-
-                    if !has_more {
-                        break;
-                    }
-
-                    after_cursor = Some(channels.last_cursor);
-                } else {
-                    log::warn!("Failed to get {:?}'s channel graph", net);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
-            }
-
-            let mut node_schemas = Vec::with_capacity(raw_nodes.len());
-            let mut udt_infos = Vec::new();
-            let mut udt_dep_relations = Vec::new();
-            let mut udt_node_relations = Vec::new();
-            for node in raw_nodes {
-                let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
-                    from_rpc_to_db_schema(node, *net).await;
-                node_schemas.push(node_schema);
-                udt_infos.extend(udt_info);
-                udt_dep_relations.extend(udt_dep_relation);
-                udt_node_relations.extend(udt_node_relation);
-            }
-
-            let mut channel_schemas = Vec::with_capacity(raw_channels.len());
-            tx.send((
-                *net,
-                raw_channels
-                    .iter()
-                    .map(|c| c.channel_outpoint.clone())
-                    .collect::<Vec<_>>(),
-            ))
-            .await
-            .expect("Failed to send channel outpoints to monitor");
-            for channel in raw_channels {
-                let channel_schema: ChannelInfoDBSchema = (channel, *net).into();
-                channel_schemas.push(channel_schema);
-            }
-
-            log::info!(
-                "{:?} Fetched {} nodes and {} channels",
-                net,
-                node_schemas.len(),
-                channel_schemas.len()
-            );
-
-            let now = Utc::now();
-
-            let pool = get_pg_pool();
-            insert_batch(
-                pool,
-                &udt_infos,
-                &udt_dep_relations,
-                &udt_node_relations,
-                &node_schemas,
-                &channel_schemas,
-                &now,
-                *net,
-            )
-            .await
-            .expect("Failed to insert batch");
-            if match net {
-                fiber_dashbord_backend::Network::Mainnet => !mainnet_init,
-                fiber_dashbord_backend::Network::Testnet => !testnet_init,
-            } {
-                let sql = format!("SELECT COUNT(*) FROM {}", net.online_nodes_hourly());
-                let count = sqlx::query(&sql)
-                    .fetch_one(pool)
-                    .await
-                    .map(|row| row.get::<i64, _>(0))
-                    .expect("Failed to count rows");
-                if count == 0 {
-                    let flush_nodes_sql = format!(
-                        "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
-                        net.online_nodes_hourly()
-                    );
-                    let flush_channels_sql = format!(
-                        "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
-                        net.online_channels_hourly()
-                    );
-                    sqlx::query(&flush_nodes_sql)
-                        .execute(pool)
-                        .await
-                        .expect("Failed to refresh continuous aggregate");
-                    sqlx::query(&flush_channels_sql)
-                        .execute(pool)
-                        .await
-                        .expect("Failed to refresh continuous aggregate");
-                }
-                match net {
-                    fiber_dashbord_backend::Network::Mainnet => mainnet_init = true,
-                    fiber_dashbord_backend::Network::Testnet => testnet_init = true,
-                }
+                _ = timed_timer.tick() => {
+                     timed_commit_states_inner(&mut rpc, &tx, &mut mainnet_init, &mut testnet_init).await;
             }
         }
-        tokio::time::sleep(tokio::time::Duration::from_secs(60 * 30)).await;
     }
 }
 
-async fn daily_commit() {
-    let mut clock_timer = ClockTimer::new_daily(0, 11, true);
-    loop {
-        let trigger_time = clock_timer.tick().await;
+async fn timed_commit_states_inner(
+    rpc: &mut RpcClient,
+    tx: &tokio::sync::mpsc::Sender<(fiber_dashbord_backend::Network, Vec<JsonBytes>)>,
+    mainnet_init: &mut bool,
+    testnet_init: &mut bool,
+) {
+    for net in NETS.iter() {
+        let url = match net {
+            fiber_dashbord_backend::Network::Mainnet => {
+                rpc.set_bearer_token(MAINNET_FIBER_RPC_BEARER_TOKEN.clone());
+                MAINNET_FIBER_RPC_URL.clone().unwrap()
+            }
+            fiber_dashbord_backend::Network::Testnet => {
+                rpc.set_bearer_token(TESTNET_FIBER_RPC_BEARER_TOKEN.clone());
+                TESTNET_FIBER_RPC_URL.clone().unwrap()
+            }
+        };
+
+        let mut raw_nodes = Vec::new();
+        let mut after_cursor = None;
+
+        loop {
+            if let Ok(nodes) = rpc
+                .get_node_graph(
+                    url.clone(),
+                    GraphNodesParams {
+                        limit: None,
+                        after: after_cursor.clone(),
+                    },
+                )
+                .await
+            {
+                let has_more = nodes.nodes.len() == 500;
+                raw_nodes.extend(nodes.nodes);
+
+                if !has_more {
+                    break;
+                }
+
+                after_cursor = Some(nodes.last_cursor);
+            } else {
+                log::warn!("Failed to get {:?}'s node graph", net);
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
+
+        let mut raw_channels = Vec::new();
+        let mut after_cursor = None;
+
+        loop {
+            if let Ok(channels) = rpc
+                .get_channel_graph(
+                    url.clone(),
+                    GraphChannelsParams {
+                        limit: None,
+                        after: after_cursor.clone(),
+                    },
+                )
+                .await
+            {
+                let has_more = channels.channels.len() == 500;
+                raw_channels.extend(channels.channels);
+
+                if !has_more {
+                    break;
+                }
+
+                after_cursor = Some(channels.last_cursor);
+            } else {
+                log::warn!("Failed to get {:?}'s channel graph", net);
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
+
+        let mut node_schemas = Vec::with_capacity(raw_nodes.len());
+        let mut udt_infos = Vec::new();
+        let mut udt_dep_relations = Vec::new();
+        let mut udt_node_relations = Vec::new();
+        for node in raw_nodes {
+            let (node_schema, udt_info, udt_dep_relation, udt_node_relation) =
+                from_rpc_to_db_schema(node, *net).await;
+            node_schemas.push(node_schema);
+            udt_infos.extend(udt_info);
+            udt_dep_relations.extend(udt_dep_relation);
+            udt_node_relations.extend(udt_node_relation);
+        }
+
+        let mut channel_schemas = Vec::with_capacity(raw_channels.len());
+        tx.send((
+            *net,
+            raw_channels
+                .iter()
+                .map(|c| c.channel_outpoint.clone())
+                .collect::<Vec<_>>(),
+        ))
+        .await
+        .expect("Failed to send channel outpoints to monitor");
+        for channel in raw_channels {
+            let channel_schema: ChannelInfoDBSchema = (channel, *net).into();
+            channel_schemas.push(channel_schema);
+        }
+
+        log::info!(
+            "{:?} Fetched {} nodes and {} channels",
+            net,
+            node_schemas.len(),
+            channel_schemas.len()
+        );
+
+        let now = Utc::now();
+
         let pool = get_pg_pool();
-        daily_statistics(
+        insert_batch(
             pool,
-            Some(Utc::now() - chrono::Duration::days(20)),
-            NETS.iter(),
+            &udt_infos,
+            &udt_dep_relations,
+            &udt_node_relations,
+            &node_schemas,
+            &channel_schemas,
+            &now,
+            *net,
         )
         .await
-        .unwrap();
-        log::info!("Daily statistics committed at {}", trigger_time);
+        .expect("Failed to insert batch");
+        if match net {
+            fiber_dashbord_backend::Network::Mainnet => !*mainnet_init,
+            fiber_dashbord_backend::Network::Testnet => !*testnet_init,
+        } {
+            let sql = format!("SELECT COUNT(*) FROM {}", net.online_nodes_hourly());
+            let count = sqlx::query(&sql)
+                .fetch_one(pool)
+                .await
+                .map(|row| row.get::<i64, _>(0))
+                .expect("Failed to count rows");
+            if count == 0 {
+                let flush_nodes_sql = format!(
+                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                    net.online_nodes_hourly()
+                );
+                let flush_channels_sql = format!(
+                    "CALL refresh_continuous_aggregate('{}', NULL, NULL)",
+                    net.online_channels_hourly()
+                );
+                sqlx::query(&flush_nodes_sql)
+                    .execute(pool)
+                    .await
+                    .expect("Failed to refresh continuous aggregate");
+                sqlx::query(&flush_channels_sql)
+                    .execute(pool)
+                    .await
+                    .expect("Failed to refresh continuous aggregate");
+            }
+            match net {
+                fiber_dashbord_backend::Network::Mainnet => *mainnet_init = true,
+                fiber_dashbord_backend::Network::Testnet => *testnet_init = true,
+            }
+        }
+    }
+}
+
+static DAILY_COMMIT_TASK_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
+static HOURLY_FRESH_TASK_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
+
+async fn daily_commit() {
+    let mut clock_timer = ClockTimer::new_daily(0, 11, true);
+    let mut heartbeat_timer = tokio::time::interval(tokio::time::Duration::from_secs(60));
+    heartbeat_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            _ = heartbeat_timer.tick() => {
+                let timestamp = Utc::now().timestamp() as u64;
+                DAILY_COMMIT_TASK_HEARTBEAT.store(timestamp, Ordering::Release);
+            }
+            trigger_time = clock_timer.tick() => {
+                let pool = get_pg_pool();
+                daily_statistics(
+                    pool,
+                    Some(Utc::now() - chrono::Duration::days(20)),
+                    NETS.iter(),
+                )
+                .await
+                .unwrap();
+                log::info!("Daily statistics committed at {}", trigger_time);
+            }
+        }
     }
 }
 
 async fn hourly_fresh() {
     let mut clock_timer = ClockTimer::new_interval_with_minute(5, 30, true);
+    let mut heartbeat_timer = tokio::time::interval(tokio::time::Duration::from_secs(60));
+    heartbeat_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        let trigger_time = clock_timer.tick().await;
-
-        let pool = get_pg_pool();
-        let nets = NETS.iter();
-        for net in nets {
-            let refresh_nodes_sql = format!(
-                "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
-                net.mv_online_nodes()
-            );
-            let refresh_channels_sql = format!(
-                "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
-                net.mv_online_channels()
-            );
-            sqlx::query(&refresh_nodes_sql)
-                .execute(pool)
-                .await
-                .expect("Failed to refresh continuous aggregate");
-            sqlx::query(&refresh_channels_sql)
-                .execute(pool)
-                .await
-                .expect("Failed to refresh continuous aggregate");
+        tokio::select! {
+            _ = heartbeat_timer.tick() => {
+                let timestamp = Utc::now().timestamp() as u64;
+                HOURLY_FRESH_TASK_HEARTBEAT.store(timestamp, Ordering::Release);
+            }
+            trigger_time = clock_timer.tick() => {
+                let pool = get_pg_pool();
+                let nets = NETS.iter();
+                for net in nets {
+                    let refresh_nodes_sql = format!(
+                        "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
+                        net.mv_online_nodes()
+                    );
+                    let refresh_channels_sql = format!(
+                        "REFRESH MATERIALIZED VIEW CONCURRENTLY {}",
+                        net.mv_online_channels()
+                    );
+                    sqlx::query(&refresh_nodes_sql)
+                        .execute(pool)
+                        .await
+                        .expect("Failed to refresh continuous aggregate");
+                    sqlx::query(&refresh_channels_sql)
+                        .execute(pool)
+                        .await
+                        .expect("Failed to refresh continuous aggregate");
+                }
+                log::info!("Hourly continuous aggregates refreshed at {}", trigger_time);
+            }
         }
-        log::info!("Hourly continuous aggregates refreshed at {}", trigger_time);
     }
 }

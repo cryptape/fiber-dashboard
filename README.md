@@ -20,6 +20,7 @@ http api default on 8080, method list:
 /nodes_fuzzy_by_name?node_name=Cr&page=0&sort_by=region/last_seen/channel_count&order=asc/desc
 /channel_capacity_distribution
 /all_region
+/health_check
 post /nodes_by_udt body={ udt: Script }
 post /analysis need json body
 ```

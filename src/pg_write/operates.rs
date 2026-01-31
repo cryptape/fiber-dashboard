@@ -644,12 +644,17 @@ pub async fn channel_states_monitor(
 
     let mut internal = tokio::time::interval(std::time::Duration::from_secs(10 * 60));
     internal.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut heartbeat_timer = tokio::time::interval(std::time::Duration::from_secs(60));
+    heartbeat_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
             _ = internal.tick() => {
                 log::info!("channel states updated");
                 channel_tx_update(&mut channel_states, &mut rpc).await;
+            }
+            _ = heartbeat_timer.tick() => {
+                CHANNEL_MONITOR_HEARTBEAT.store(Utc::now().timestamp() as u64, std::sync::atomic::Ordering::Release);
             }
             Some((net, new)) = recv.recv() => {
                 let new = new.into_iter().filter_map(|op| {
@@ -671,6 +676,9 @@ pub async fn channel_states_monitor(
         }
     }
 }
+
+pub static CHANNEL_MONITOR_HEARTBEAT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Clone)]
 enum UpdateType {

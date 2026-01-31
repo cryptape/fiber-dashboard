@@ -6,6 +6,7 @@ pub mod pg_write;
 mod rpc_client;
 pub mod types;
 
+pub use pg_write::CHANNEL_MONITOR_HEARTBEAT;
 pub use rpc_client::{CKB_MAINNET_RPC, CKB_TESTNET_RPC, RpcClient};
 
 use std::env;
