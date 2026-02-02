@@ -1352,7 +1352,7 @@ impl ChannelGroup {
                         State::ClosedWaitingOnchainSettlement {
                             tx_hash: self.txs.last().unwrap().0.clone(),
                             block_number: self.txs.last().unwrap().1,
-                            commitment_args: self.txs.last().unwrap().3.clone().unwrap(),
+                            commitment_args: self.txs.last().unwrap().4.clone().unwrap(),
                         }
                     }
                     DBState::ClosedUncooperative => State::ClosedUncooperative,
