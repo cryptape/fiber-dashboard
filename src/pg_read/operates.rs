@@ -137,32 +137,15 @@ pub(crate) async fn query_channels_by_node_id(
     let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
     let offset = params.page.saturating_mul(page_size);
     let hour_bucket = Utc::now() - chrono::Duration::hours(3);
-    let sql_count = format!(
-        "
-            select COUNT(DISTINCT n.channel_outpoint) as total_count
-            from {} n
-            WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
-        ",
-        params.net.mv_online_channels(),
-    );
-    let total_count: i64 = sqlx::query(&sql_count)
-        .bind(hour_bucket)
-        .bind(faster_hex::hex_string(params.node_id.as_bytes()))
-        .fetch_one(pool)
-        .await?
-        .get("total_count");
+    let normalized_asset_names = normalize_asset_names(&params.asset_name);
+    let has_asset_filter = normalized_asset_names.is_some();
+    let asset_filter_clause = build_asset_filter_clause(3, has_asset_filter);
     let sql = format!(
         "
-        with channels as (
-            select COUNT(DISTINCT n.channel_outpoint) as total_count
-            from {} n
-            WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
-        ),
-        channel_tx_count as (
+        with channel_tx_count as (
             select c.channel_outpoint, count(*) as tx_count 
             from {} c
             inner join {} s on c.channel_outpoint = s.channel_outpoint
-            join channels on 1=1
             group by c.channel_outpoint
         )
             select
@@ -174,22 +157,27 @@ pub(crate) async fn query_channels_by_node_id(
             COALESCE(m.name, 'ckb') as name,
             c.state,
             t.tx_count,
-            c.last_commit_time
+            c.last_commit_time,
+            COUNT(*) OVER() as total_count
             from {} n
             left join {} c on n.channel_outpoint = c.channel_outpoint
             left join {} m on n.udt_type_script = m.id
             left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
             WHERE n.bucket >= $1::timestamp and (n.node1 = $2 OR n.node2 = $2)
+            {}
             ORDER BY {} {}
+            LIMIT {} OFFSET {}
         ",
-        params.net.mv_online_channels(),
         params.net.channel_states(),
         params.net.channel_txs(),
         params.net.mv_online_channels(),
         params.net.channel_states(),
         params.net.udt_infos(),
+        asset_filter_clause,
         params.sort_by.as_str(),
         params.order.as_str(),
+        page_size,
+        offset,
     );
 
     #[derive(Serialize, Deserialize)]
@@ -212,30 +200,40 @@ pub(crate) async fn query_channels_by_node_id(
         total_count: usize,
     }
 
-    let channels = sqlx::query(&format!("{} LIMIT {} OFFSET {}", sql, page_size, offset))
-        .bind(hour_bucket)
-        .bind(faster_hex::hex_string(params.node_id.as_bytes()))
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(|row| Channel {
-            channel_outpoint: format!("0x{}", row.get::<String, _>("channel_outpoint")),
-            last_seen_hour: row.get("last_seen_hour"),
-            capacity: {
-                let be_hex: String = row.get("capacity");
-                format!("0x{}", &be_hex)
-            },
-            asset: {
-                let be_hex: String = row.get("asset");
-                format!("0x{}", &be_hex)
-            },
-            created_timestamp: row.get("created_timestamp"),
-            state: row.get("state"),
-            last_commit_time: row.get("last_commit_time"),
-            name: row.get("name"),
-            tx_count: row.get("tx_count"),
-        })
-        .collect();
+    let (channels, total_count) = {
+        let mut query = sqlx::query(&sql)
+            .bind(hour_bucket)
+            .bind(faster_hex::hex_string(params.node_id.as_bytes()));
+        if let Some(asset_names) = &normalized_asset_names {
+            query = query.bind(asset_names);
+        }
+        let rows = query.fetch_all(pool).await?;
+        let total_count = rows
+            .first()
+            .map(|row| row.get::<i64, _>("total_count"))
+            .unwrap_or(0);
+        let channels = rows
+            .into_iter()
+            .map(|row| Channel {
+                channel_outpoint: format!("0x{}", row.get::<String, _>("channel_outpoint")),
+                last_seen_hour: row.get("last_seen_hour"),
+                capacity: {
+                    let be_hex: String = row.get("capacity");
+                    format!("0x{}", &be_hex)
+                },
+                asset: {
+                    let be_hex: String = row.get("asset");
+                    format!("0x{}", &be_hex)
+                },
+                created_timestamp: row.get("created_timestamp"),
+                state: row.get("state"),
+                last_commit_time: row.get("last_commit_time"),
+                name: row.get("name"),
+                tx_count: row.get("tx_count"),
+            })
+            .collect();
+        (channels, total_count)
+    };
 
     Ok(serde_json::to_string(&ChannelWithPage {
         channels,
@@ -243,6 +241,20 @@ pub(crate) async fn query_channels_by_node_id(
         total_count: total_count as usize,
     })
     .unwrap())
+}
+
+fn build_asset_filter_clause(index: usize, has_asset_filter: bool) -> String {
+    if has_asset_filter {
+        format!(" AND LOWER(COALESCE(m.name, 'ckb')) = ANY(${})", index)
+    } else {
+        String::new()
+    }
+}
+
+fn normalize_asset_names(asset_names: &Option<Vec<String>>) -> Option<Vec<String>> {
+    asset_names
+        .as_ref()
+        .map(|names| names.iter().map(|name| name.to_lowercase()).collect())
 }
 
 pub async fn query_node_udt_relation(
@@ -899,44 +911,10 @@ pub(crate) async fn group_channel_by_state(
 ) -> Result<String, sqlx::Error> {
     let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
     let offset = params.page.saturating_mul(page_size);
-    let mut sql_count = format!(
-        r#"
-        select COUNT(*) as total_count
-        from {} n
-        left join {} k on n.channel_outpoint = k.channel_outpoint
-        left join {} m on k.udt_type_script = m.id
-        where state = Any($1) 
-    "#,
-        params.net.channel_states(),
-        params.net.mv_online_channels(),
-        params.net.udt_infos()
-    );
     let index = if params.fuzz_name.is_some() {
-        sql_count.push_str(" AND (POSITION($2 IN n.channel_outpoint) > 0)");
         3
     } else {
         2
-    };
-    if params.asset_name.is_some() {
-        sql_count.push_str(&format!(
-            " AND LOWER(COALESCE(m.name, 'ckb')) = LOWER(${})",
-            index
-        ));
-    }
-    let total_count: i64 = {
-        let mut query = sqlx::query(&sql_count).bind(params.state.to_sql());
-        if let Some(fuzz_name) = &params.fuzz_name {
-            let name = if fuzz_name.starts_with("0x") || fuzz_name.starts_with("0X") {
-                &fuzz_name[2..]
-            } else {
-                fuzz_name
-            };
-            query = query.bind(name);
-        }
-        if let Some(asset_name) = &params.asset_name {
-            query = query.bind(asset_name);
-        }
-        query.fetch_one(pool).await?.get("total_count")
     };
     let sql = format!(
         r#"
@@ -946,7 +924,7 @@ pub(crate) async fn group_channel_by_state(
             inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = Any($1)
             group by c.channel_outpoint
         )
-        select n.channel_outpoint, n.state, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name
+        select n.channel_outpoint, n.state, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name, COUNT(*) OVER() as total_count
         from {} n
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
         left join {} k on n.channel_outpoint = k.channel_outpoint
@@ -987,9 +965,12 @@ pub(crate) async fn group_channel_by_state(
     if let Some(asset_name) = &params.asset_name {
         query = query.bind(asset_name);
     }
-    let rows = query
-        .fetch_all(pool)
-        .await?
+    let rows = query.fetch_all(pool).await?;
+    let total_count = rows
+        .first()
+        .map(|row| row.get::<i64, _>("total_count"))
+        .unwrap_or(0);
+    let rows = rows
         .into_iter()
         .map(|row| {
             let channel_outpoint: String = row.get("channel_outpoint");
@@ -1290,4 +1271,29 @@ pub async fn query_channel_count_by_asset(
         .collect::<HashMap<_, _>>();
 
     Ok(serde_json::to_string(&res).unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_asset_filter_clause, normalize_asset_names};
+
+    #[test]
+    fn asset_filter_none_builds_empty_clause() {
+        assert_eq!(build_asset_filter_clause(3, false), "");
+    }
+
+    #[test]
+    fn asset_filter_some_builds_any_clause() {
+        assert_eq!(
+            build_asset_filter_clause(3, true),
+            " AND LOWER(COALESCE(m.name, 'ckb')) = ANY($3)"
+        );
+    }
+
+    #[test]
+    fn normalize_asset_names_lowercases_values() {
+        let input = Some(vec!["CKB".to_owned(), "UsDt".to_owned()]);
+        let output = normalize_asset_names(&input);
+        assert_eq!(output, Some(vec!["ckb".to_owned(), "usdt".to_owned()]));
+    }
 }
