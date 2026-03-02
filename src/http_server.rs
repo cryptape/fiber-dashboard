@@ -476,8 +476,8 @@ pub(crate) enum ChannelStateSortBy {
 impl ChannelStateSortBy {
     pub fn as_str(&self) -> &str {
         match self {
-            ChannelStateSortBy::CreateTime => "create_time",
-            ChannelStateSortBy::LastCommitTime => "last_commit_time",
+            ChannelStateSortBy::CreateTime => "n.create_time",
+            ChannelStateSortBy::LastCommitTime => "n.last_commit_time",
             ChannelStateSortBy::Asset => "k.capacity",
         }
     }
