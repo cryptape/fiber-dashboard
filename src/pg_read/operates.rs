@@ -926,7 +926,7 @@ pub(crate) async fn group_channel_by_state(
         left join {} k on n.channel_outpoint = k.channel_outpoint
         left join {} m on k.udt_type_script = m.id
         where n.state = Any($1) {} {}
-        order by n.{} {}
+        order by {} {}
         LIMIT {} OFFSET {}
         "#,
         params.net.channel_txs(),
