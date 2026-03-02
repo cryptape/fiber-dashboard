@@ -478,7 +478,7 @@ impl ChannelStateSortBy {
         match self {
             ChannelStateSortBy::CreateTime => "create_time",
             ChannelStateSortBy::LastCommitTime => "last_commit_time",
-            ChannelStateSortBy::Asset => "udt_value",
+            ChannelStateSortBy::Asset => "k.capacity",
         }
     }
 }
