@@ -1,5 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@theme {
+  /* --breakpoint-md: 1400px; */
+}
+
 /* @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";

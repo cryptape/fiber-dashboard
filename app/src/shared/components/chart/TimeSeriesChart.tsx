@@ -58,6 +58,7 @@ export default function TimeSeriesChart({
     const primaryColor = getComputedStyle(document.documentElement)
       .getPropertyValue('--text-primary')
       .trim();
+    const channelsColor = '#B45309'; // channels 数字的固定颜色
     
     // 获取字体样式
     const captionFontSize = getComputedStyle(document.documentElement)
@@ -137,9 +138,12 @@ export default function TimeSeriesChart({
               const name = param.seriesName;
               const formattedValue = formatNumber(value);
               
+              // 左侧数值颜色：第一个数据项用 color，第二个数据项用 channelsColor (#B45309)
+              const valueColor = index === 1 ? channelsColor : color;
+              
               // 左侧数值（type-caption + 对应颜色） + 右侧标题（type-caption + text-tertiary）
               result += `<div style="display:flex;justify-content:space-between;align-items:center;${index < paramArray.length - 1 ? 'margin-bottom:4px;' : ''}">`;
-              result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${color};">${formattedValue}</span>`;
+              result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${valueColor};">${formattedValue}</span>`;
               result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${tertiaryColor};margin-left:16px;">${name}</span>`;
               result += `</div>`;
             });

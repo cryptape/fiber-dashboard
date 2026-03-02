@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import {
   Table,
   Pagination,
   ColumnDef,
   SortState,
   GlassCardContainer,
-  SearchInput,
-  AssetSelect,
   StatusSelect,
   StatusBadge,
+  RadioGroup,
 } from "@/shared/components/ui";
 import BarChart from "@/shared/components/chart/BarChart";
 import PieChart from "@/shared/components/chart/PieChart";
@@ -20,8 +20,7 @@ import { ChannelState, BasicChannelInfo } from "@/lib/types";
 import { hexToDecimal } from "@/lib/utils";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { useQuery } from "@tanstack/react-query";
-import { createAssetColorMap } from "../utils/assetColors";
-import { SUPPORTED_ASSETS } from "@/lib/config/assets";
+import { getAssetColor as getAssetColorUtil } from "../utils/assetColors";
 
 // 通道数据类型
 interface ChannelData extends Record<string, unknown> {
@@ -70,6 +69,53 @@ const ALL_CHANNEL_STATES: ChannelState[] = [
   "closed_cooperative",
 ];
 
+// Channel Outpoint Cell 组件
+const ChannelOutpointCell = ({ value }: { value: string }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+  
+  // 中间省略显示：前12个字符 + "..." + 后12个字符
+  const displayValue = value.length > 30 
+    ? `${value.slice(0, 12)}...${value.slice(-12)}`
+    : value;
+  
+  return (
+    <div className="flex items-center gap-2 group min-w-0">
+      <span 
+        className="text-primary text-sm font-mono hover:underline cursor-pointer transition-colors" 
+        title={value}
+        onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
+        onMouseLeave={(e) => e.currentTarget.style.color = ''}
+      >
+        {displayValue}
+      </span>
+      <button
+        onClick={handleCopy}
+        className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
+        title={copied ? "Copied!" : "Copy"}
+      >
+        <Image
+          src={copied ? "/copy_success.svg" : "/copy.svg"}
+          alt={copied ? "Copied" : "Copy"}
+          width={16}
+          height={16}
+          className="w-4 h-4"
+        />
+      </button>
+    </div>
+  );
+};
+
 export const Channels = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,12 +126,9 @@ export const Channels = () => {
   const [currentPage, setCurrentPage] = useState(1); // 1-based for display
   const [selectedStates, setSelectedStates] = useState<ChannelState[]>([]); // 默认为空，表示 all statuses
   const [selectedStatus, setSelectedStatus] = useState<string>(''); // 状态下拉选择框，''表示 all statuses
-  const [selectedAsset, setSelectedAsset] = useState<string>(''); // ''表示 All assets - 用于 Channels 列表筛选
   const [overviewAsset, setOverviewAsset] = useState<string>(urlAsset); // 从 URL 初始化 - 用于 Channel Overview 图表筛选
   const [sortKey, setSortKey] = useState<string>("");
   const [sortState, setSortState] = useState<SortState>("none");
-  const [searchValue, setSearchValue] = useState(''); // 搜索框输入值
-  const [debouncedSearchValue, setDebouncedSearchValue] = useState(''); // 防抖后的搜索值
   const PAGE_SIZE = 10; // 每页显示10条
   const { apiClient, currentNetwork } = useNetwork();
   
@@ -163,27 +206,18 @@ export const Channels = () => {
     backendPage,
     backendSortBy,
     backendOrder,
-    debouncedSearchValue, // 传入防抖后的搜索值
-    selectedAsset // 传入选中的资产名称
+    '', // 不使用搜索功能
+    overviewAsset // 使用 Channel Overview 的资产筛选
   );
-  
-  // 搜索防抖：用户输入完 500ms 后才触发搜索
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchValue(searchValue);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchValue]);
-  
-  // 当选中的资产变化时，重置到第一页
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedAsset]);
   
   // 从返回数据中提取 total_count
   const totalCount = channelsData?.total_count ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // 当资产选择变化时，重置到第一页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [overviewAsset]);
 
   // 获取全量状态数据（所有资产聚合，用于状态选择器）
   const getAllStateCount = useCallback((state: ChannelState) => {
@@ -260,25 +294,9 @@ export const Channels = () => {
     }
   }, [channelCountByAsset, overviewAsset]);
 
-  // 为每个资产分配颜色，使用工具函数统一管理
-  const assetColorMap = useMemo(() => {
-    const assetNames = assetDistributionData.map(asset => asset.name);
-    return createAssetColorMap(assetNames);
-  }, [assetDistributionData]);
-
-  // 根据资产名称获取颜色
-  const getAssetColor = useCallback((assetName: string) => {
-    return assetColorMap.get(assetName.toLowerCase()) || "#5470c6";
-  }, [assetColorMap]);
-
   // 处理 Channel Overview 区域的资产选择变化
   const handleOverviewAssetChange = (asset: string) => {
     setOverviewAsset(asset);
-  };
-
-  // 处理 Channels 列表区域的资产选择变化
-  const handleAssetChange = (asset: string) => {
-    setSelectedAsset(asset);
   };
 
   // 计算容量分布数据 - 使用后端返回的分桶结果
@@ -404,7 +422,7 @@ export const Channels = () => {
     
     // 获取资产名称和颜色
     const assetName = channel.name || 'ckb'; // 默认为 ckb
-    const assetColor = getAssetColor(assetName);
+    const assetColor = getAssetColorUtil(assetName);
     
     // 计算资产流动性
     let assetLiquidity = '';
@@ -454,12 +472,8 @@ export const Channels = () => {
     {
       key: "channelId",
       label: "Channel Outpoint",
-      width: "w-64 lg:flex-1 lg:min-w-64",
-      render: (value) => (
-        <div className="truncate min-w-0 text-primary text-sm" title={String(value)}>
-          {value as string}
-        </div>
-      ),
+      width: "w-140 lg:flex-1 lg:min-w-94",
+      render: (value) => <ChannelOutpointCell value={String(value)} />,
     },
     {
       key: "asset",
@@ -476,30 +490,30 @@ export const Channels = () => {
         </div>
       ),
     },
-    {
-      key: "transactions",
-      label: "Transactions",
-      width: "w-40",
-      sortable: false,
-    },
-    {
-      key: "capacity",
-      label: "Capacity (CKB)",
-      width: "w-48",
-      sortable: true,
-      render: (value) => (
-        <div className="text-purple font-semibold truncate">
-          {value as string}
-        </div>
-      ),
-    },
+    // {
+    //   key: "transactions",
+    //   label: "Transactions",
+    //   width: "w-40",
+    //   sortable: false,
+    // },
+    // {
+    //   key: "capacity",
+    //   label: "Capacity (CKB)",
+    //   width: "w-48",
+    //   sortable: true,
+    //   render: (value) => (
+    //     <div className="text-purple font-semibold truncate">
+    //       {value as string}
+    //     </div>
+    //   ),
+    // },
     {
       key: "assetLiquidity",
       label: "Asset liquidity",
       width: "w-48",
       sortable: false,
       render: (value, row) => (
-        <div className="text-primary text-sm truncate">
+        <div className="text-purple font-semibold truncate">
           {value as string} {row.assetLiquidityUnit as string}
         </div>
       ),
@@ -547,18 +561,6 @@ export const Channels = () => {
       setSelectedStates([statusValue as ChannelState]);
     }
   };
-
-  // 重置所有筛选条件
-  const handleResetFilters = () => {
-    setSelectedAsset('');
-    setSelectedStatus('');
-    setSelectedStates([]);
-    setSearchValue(''); // 清空搜索框
-    setDebouncedSearchValue(''); // 清空防抖搜索值
-  };
-
-  // 检查是否有筛选条件被选中（包括搜索框）
-  const hasFilters = selectedAsset !== '' || selectedStatus !== '' || searchValue.trim() !== '';
   
   // 状态颜色映射
   const STATUS_COLORS: Record<string, string> = {
@@ -619,19 +621,13 @@ export const Channels = () => {
         </h2>
         {/* 资产选择器 - 只显示 CKB/USDI/All assets，距离标题右侧 16px */}
         <div className="ml-4">
-          <AssetSelect
+          <RadioGroup
             options={[
-              ...SUPPORTED_ASSETS.map(asset => ({
-                value: asset.value,
-                label: asset.label,
-                color: asset.color,
-              })),
-              { value: "", label: "All assets" },
+              { value: "ckb", label: "CKB" },
+              { value: "usdi", label: "USDI" },
             ]}
             value={overviewAsset}
             onChange={handleOverviewAssetChange}
-            placeholder="All assets"
-            className="w-[207px]"
           />
         </div>
       </div>
@@ -667,7 +663,7 @@ export const Channels = () => {
               data={assetDistributionData}
               title="Asset Distribution"
               height="400px"
-              colors={assetDistributionData.map(asset => getAssetColor(asset.name))}
+              colors={assetDistributionData.map(asset => getAssetColorUtil(asset.name))}
               tooltipFormatter={(params) => {
                 const percentage = totalChannelsForAsset > 0
                   ? ((params.value / totalChannelsForAsset) * 100).toFixed(1)
@@ -688,7 +684,7 @@ export const Channels = () => {
           <GlassCardContainer>
             <BarChart
               data={capacityDistributionData}
-              title={`${overviewAsset.toUpperCase()} Channel Capacity Distribution`}
+              title={`${overviewAsset.toUpperCase()} Channel Liquidity Distribution`}
               height="400px"
               tooltipFormatter={item => {
                 const dataItem = capacityDistributionData.find(d => d.label === item.label);
@@ -700,7 +696,7 @@ export const Channels = () => {
                   : item.label;
                 
                 return [
-                  { label: "Capacity Range", value: range },
+                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
@@ -742,7 +738,7 @@ export const Channels = () => {
           <GlassCardContainer>
             <BarChart
               data={capacityDistributionData}
-              title="Channel Capacity Distribution"
+              title="Channel Liquidity Distribution"
               height="400px"
               tooltipFormatter={item => {
                 const dataItem = capacityDistributionData.find(d => d.label === item.label);
@@ -754,7 +750,7 @@ export const Channels = () => {
                   : item.label;
                 
                 return [
-                  { label: "Capacity Range", value: range },
+                  { label: "Liquidity Range", value: range },
                   { label: "Total Channels", value: item.value.toString() },
                   { label: "% of Total", value: `${percentage}%` },
                 ];
@@ -764,34 +760,7 @@ export const Channels = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <h2 className="type-h2 font-semibold text-primary">
-          Channels
-        </h2>
-        <SearchInput
-          value={searchValue}
-          placeholder="by channel outpoint"
-          onChange={setSearchValue}
-          className="w-80"
-        />
-      </div>
       <div className="flex items-center gap-4 flex-wrap">
-        {/* Asset Select - 固定值 CKB/USDI/All assets */}
-        <AssetSelect
-          options={[
-            ...SUPPORTED_ASSETS.map(asset => ({
-              value: asset.value,
-              label: asset.label,
-              color: asset.color,
-            })),
-            { value: "", label: "All assets" },
-          ]}
-          value={selectedAsset}
-          onChange={handleAssetChange}
-          placeholder="All assets"
-          className="w-[207px]"
-        />
-        
         {/* Status Select - 使用下拉选择框 */}
         <StatusSelect
           options={statusOptions}
@@ -800,16 +769,6 @@ export const Channels = () => {
           placeholder="All statuses"
           className="w-[260px]"
         />
-        
-        {/* Reset filters 按钮 */}
-        {hasFilters && (
-          <button
-            onClick={handleResetFilters}
-            className="type-button1 text-purple hover:text-purple/80 transition-colors ml-4"
-          >
-            Reset filters
-          </button>
-        )}
       </div>
 
       <GlassCardContainer className="relative min-h-[528px]">

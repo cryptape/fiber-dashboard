@@ -18,13 +18,13 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
   {
     value: "ckb",
     label: "CKB",
-    color: "#00CC9B",
+    color: "#7459e6",
     unit: "CKB",
   },
   {
     value: "usdi",
     label: "USDI",
-    color: "#7459E6",
+    color: "#6ED4CA",
     unit: "USDI",
   },
 ];

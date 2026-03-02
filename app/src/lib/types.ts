@@ -394,9 +394,12 @@ export const ChannelByNodeSchema = z.object({
   channel_outpoint: z.string(),
   last_seen_hour: z.string(),
   capacity: z.string(),
+  asset: z.string(),
+  name: z.string(),
   created_timestamp: z.string(),
   state: z.string(),
   last_commit_time: z.string(),
+  tx_count: z.number(),
 });
 
 export const ChannelsByNodeIdResponseSchema = z.object({

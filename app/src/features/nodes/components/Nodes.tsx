@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
-import { formatCompactNumber } from "@/lib/utils";
+import Image from "next/image";
 import {
   SectionHeader,
   Table,
@@ -55,6 +55,18 @@ export const Nodes = () => {
   const [sortKey, setSortKey] = useState<string>(''); // 排序字段，默认为空表示不排序
   const [sortState, setSortState] = useState<SortState>('none'); // 排序方向，默认为 none
   const [selectedRegion, setSelectedRegion] = useState<string>(''); // 选中的 region
+  const [copiedId, setCopiedId] = useState<string | null>(null); // 复制状态
+
+  // 处理复制操作
+  const handleCopy = async (nodeId: string) => {
+    try {
+      await navigator.clipboard.writeText(nodeId);
+      setCopiedId(nodeId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("复制失败:", err);
+    }
+  };
 
   // 获取所有 region 选项
   const { data: regionsData } = useQuery({
@@ -300,16 +312,40 @@ export const Nodes = () => {
       label: 'Node ID',
       width: 'w-32 lg:flex-1 lg:min-w-32',
       sortable: false,
-      render: (value) => {
-        // const shortId = (value as string).slice(0, 8) + '...' + (value as string).slice(-4);
+      render: (value, row) => {
+        const nodeId = value as string;
+        // 显示前10位...后6位，总共约20个字符
+        const displayId = nodeId.length > 20 
+          ? `${nodeId.slice(0, 30)}...${nodeId.slice(-20)}`
+          : nodeId;
+        
         return (
-          <span
-            className="text-primary font-mono text-xs truncate block"
-            title={value as string}
-          >
-            {/* {shortId} */}
-            {value as string}
-          </span>
+          <div className="flex items-center gap-2 group">
+            <button
+              onClick={() => router.push(`/node/${row.nodeId}`)}
+              className="text-primary hover:underline font-mono text-xs block cursor-pointer transition-colors"
+              onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
+              onMouseLeave={(e) => e.currentTarget.style.color = ''}
+              title={nodeId}
+            >
+              {displayId}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopy(row.nodeId);
+              }}
+              className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
+            >
+              <Image
+                src={copiedId === row.nodeId ? "/copy_success.svg" : "/copy.svg"}
+                alt="Copy"
+                width={16}
+                height={16}
+                className="w-4 h-4"
+              />
+            </button>
+          </div>
         );
       },
     },
@@ -318,9 +354,32 @@ export const Nodes = () => {
       label: "Node name",
       width: "w-48 md:w-60",
       sortable: false,
-      render: (value) => (
-        <div className="truncate text-primary text-sm min-w-0" title={String(value)}>
-          {value as string}
+      render: (value, row) => (
+        <div className="flex items-center gap-2 group">
+          <button
+            onClick={() => router.push(`/node/${row.nodeId}`)}
+            className="truncate hover:underline text-sm min-w-0 cursor-pointer transition-colors"
+            onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
+            onMouseLeave={(e) => e.currentTarget.style.color = ''}
+            title={String(value)}
+          >
+            {value as string}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy(value as string);
+            }}
+            className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
+          >
+            <Image
+              src={copiedId === (value as string) ? "/copy_success.svg" : "/copy.svg"}
+              alt="Copy"
+              width={16}
+              height={16}
+              className="w-4 h-4"
+            />
+          </button>
         </div>
       ),
     },
@@ -336,15 +395,15 @@ export const Nodes = () => {
       width: "w-36",
       sortable: true, // 对应服务端 sort_by=region (country_or_region)
     },
-    {
-      key: "autoAccept",
-      label: "Auto Accept (CKB)",
-      width: "w-48",
-      sortable: false,
-      showInfo: true,
-      infoTooltip: "The minimum CKB a peer must fund when opening a channel to this node",
-      render: (value) => formatCompactNumber(value as number),
-    },
+    // {
+    //   key: "autoAccept",
+    //   label: "Auto Accept (CKB)",
+    //   width: "w-48",
+    //   sortable: false,
+    //   showInfo: true,
+    //   infoTooltip: "The minimum CKB a peer must fund when opening a channel to this node",
+    //   render: (value) => formatCompactNumber(value as number),
+    // },
     {
       key: "lastSeen",
       label: "Last seen on",
