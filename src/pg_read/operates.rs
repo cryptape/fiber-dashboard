@@ -911,11 +911,7 @@ pub(crate) async fn group_channel_by_state(
 ) -> Result<String, sqlx::Error> {
     let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
     let offset = params.page.saturating_mul(page_size);
-    let index = if params.fuzz_name.is_some() {
-        3
-    } else {
-        2
-    };
+    let index = if params.fuzz_name.is_some() { 3 } else { 2 };
     let sql = format!(
         r#"
         with channel_tx_count as (
@@ -924,7 +920,7 @@ pub(crate) async fn group_channel_by_state(
             inner join {} s on c.channel_outpoint = s.channel_outpoint and s.state = Any($1)
             group by c.channel_outpoint
         )
-        select n.channel_outpoint, n.state, n.funding_args, n.capacity, n.udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name, COUNT(*) OVER() as total_count
+        select n.channel_outpoint, n.state, n.funding_args, n.capacity, k.capacity as udt_value, n.last_block_number, n.create_time, n.last_commit_time, n.last_tx_hash, n.last_commitment_args, coalesce(t.tx_count, 0) as tx_count, COALESCE(m.name, 'ckb') as name, COUNT(*) OVER() as total_count
         from {} n
         left join channel_tx_count t on n.channel_outpoint = t.channel_outpoint
         left join {} k on n.channel_outpoint = k.channel_outpoint
