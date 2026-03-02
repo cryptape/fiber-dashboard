@@ -5,6 +5,7 @@
 
 export const ASSET_COLORS: Record<string, string> = {
   'ckb': '#7459e6',      // purple
+  'usdi': '#6ED4CA',     // custom teal
   'btc': '#fb923c',      // orange-400
   'other': '#64748b',    // slate-500
 };

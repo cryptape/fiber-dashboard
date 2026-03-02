@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./style.css";
-import {  FooterNew, NavBarNew } from "@/shared/components/layout";
+import {  FooterNew, NavBarNew, ConditionalSearchBar } from "@/shared/components/layout";
 import { NetworkProvider } from "@/features/networks/context/NetworkContext";
 
 const inter = Inter({
@@ -38,7 +38,8 @@ export default function RootLayout({
       >
         <NetworkProvider>
           <NavBarNew />
-          <main className="flex-1 container mt-[60px] md:mt-[72px] py-10">{children}</main>
+          <ConditionalSearchBar />
+          <main className="flex-1 container py-6 md:py-10">{children}</main>
           <FooterNew />
         </NetworkProvider>
       </body>

@@ -1234,7 +1234,7 @@ export class APIClient {
 
     return {
       capacity: {
-        label: `${assetLabel} ${useCapacityAnalysis ? 'capacity' : 'liquidity'}`,
+        label: `${assetLabel} liquidity`,
         data: capacityTimeSeries,
       },
       channels: {

@@ -1,6 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
-import { GlassCardContainer } from './GlassCardContainer';
 
 export interface RadioOption {
   value: string;
@@ -16,62 +14,31 @@ export interface RadioGroupProps {
 }
 
 export const RadioGroup: React.FC<RadioGroupProps> = ({
-  label,
   options,
   value,
   onChange,
   className = '',
 }) => {
   return (
-    <GlassCardContainer className={`!p-0 ${className}`}>
-      <div className="h-10 px-3 inline-flex justify-start items-center gap-2">
-        {label && (
-          <div className="justify-start text-primary text-base font-medium font-['Inter'] leading-5">
-            {label}
+    <div className={`p-1 bg-layer/30 rounded-lg glass-card outline-offset-[-2px] outline-white backdrop-blur-[5px] inline-flex justify-start items-center ${className}`}>
+      {options.map((option) => {
+        const isSelected = value === option.value;
+        return (
+          <div
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            className={`flex-1 px-2.5 py-1 pt-2 md:pt-1 rounded flex justify-center items-center gap-2.5 cursor-pointer ${
+              isSelected ? 'bg-popover' : ''
+            }`}
+          >
+            <div className={`justify-start text-base font-medium font-['Inter'] leading-5 ${
+              isSelected ? 'text-primary' : 'text-tertiary'
+            }`}>
+              {option.label}
+            </div>
           </div>
-        )}
-        <div className="flex justify-start items-center gap-2">
-          {options.map((option) => (
-            <RadioItem
-              key={option.value}
-              label={option.label}
-              selected={value === option.value}
-              onClick={() => onChange(option.value)}
-            />
-          ))}
-        </div>
-      </div>
-    </GlassCardContainer>
-  );
-};
-
-interface RadioItemProps {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}
-
-const RadioItem: React.FC<RadioItemProps> = ({ label, selected, onClick }) => {
-  return (
-    <div
-      className="flex justify-start items-center gap-1 cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="w-4 h-4 relative">
-        <Image
-          src={selected ? '/radio-check.svg' : '/radio.svg'}
-          alt={selected ? 'Selected' : 'Unselected'}
-          width={16}
-          height={16}
-        />
-      </div>
-      <div
-        className={`justify-start text-base font-medium font-['Inter'] leading-5 ${
-          selected ? 'text-primary' : 'text-tertiary'
-        }`}
-      >
-        {label}
-      </div>
+        );
+      })}
     </div>
   );
 };

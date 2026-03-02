@@ -22,6 +22,7 @@ export const queryKeys = {
   ispRankings: ["dashboard", "ispRankings"] as const,
   nodes: ["dashboard", "nodes"] as const,
   channels: ["dashboard", "channels"] as const,
+  snapshot: ["dashboard", "snapshot"] as const,
 } as const;
 
 // 预取 Dashboard 数据

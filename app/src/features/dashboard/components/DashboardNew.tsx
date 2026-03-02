@@ -3,13 +3,12 @@ import {
   KpiCard,
   SectionHeader,
   GlassCardContainer,
-  EasyTable,
   RadioGroup,
 } from "@/shared/components/ui";
-import { AssetSelect } from "@/shared/components/ui/AssetSelect";
+import { NodeTreeMap } from "@/shared/components/chart/NodeTreeMap";
 import { SUPPORTED_ASSETS } from "@/lib/config/assets";
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { queryKeys } from "@/features/dashboard/hooks/useDashboard";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,7 +19,7 @@ const TIME_RANGE = "hourly" as const;
 // Mock data for TimeSeriesChart
 const MOCK_TIME_SERIES_DATA = [
   {
-    label: "Total capacity",
+    label: "Total liquidity",
     data: [
       { timestamp: "2024-10-17", value: 55000000 },
       { timestamp: "2024-10-18", value: 68000000 },
@@ -49,13 +48,13 @@ const MOCK_TIME_SERIES_DATA2 = [
   {
     label: "Total active nodes",
     data: [
-  { timestamp: "2024-10-17", value: 2500 },
-      { timestamp: "2024-10-18", value: 2400 },
-      { timestamp: "2024-10-19", value: 2200 },
-      { timestamp: "2024-10-20", value: 2100 },
-      { timestamp: "2024-10-21", value: 1800 },
-      { timestamp: "2024-10-22", value: 2000 },
-      { timestamp: "2024-10-23", value: 2200 },
+      { timestamp: "2024-10-17", value: 400 },
+      { timestamp: "2024-10-18", value: 410 },
+      { timestamp: "2024-10-19", value: 420 },
+      { timestamp: "2024-10-20", value: 415 },
+      { timestamp: "2024-10-21", value: 430 },
+      { timestamp: "2024-10-22", value: 440 },
+      { timestamp: "2024-10-23", value: 450 },
     ],
   }
 ];
@@ -64,12 +63,12 @@ export const DashboardNew = () => {
   const timeRange = TIME_RANGE; // 固定使用 hourly
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { apiClient, currentNetwork } = useNetwork();
   
   // 从 URL 读取资产值，默认为 'ckb'
   const urlAsset = searchParams.get('asset') || 'ckb';
   const [selectedAsset, setSelectedAsset] = useState<string>(urlAsset);
-  const [metricType, setMetricType] = useState<"capacity" | "liquidity">("liquidity");
   
   // 同步 URL 参数到 selectedAsset（仅在 URL 变化时）
   useEffect(() => {
@@ -91,221 +90,299 @@ export const DashboardNew = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAsset]); // 只依赖 selectedAsset，避免循环
 
-  // 判断是否显示 "CHANNEL" 前缀：All assets 或 CKB 或非 CKB 的 capacity 模式
-  const isChannelMode = !selectedAsset || selectedAsset === "ckb" || metricType === "capacity";
-  // 获取资产标签用于 CHANNELS KPI
-  const assetLabel = selectedAsset 
-    ? SUPPORTED_ASSETS.find(a => a.value === selectedAsset)?.label.toUpperCase() || "CKB"
-    : "TOTAL";
+  // 获取资产标签
+  const assetLabel = SUPPORTED_ASSETS.find(a => a.value === selectedAsset)?.label.toUpperCase() || "CKB";
 
-  // 根据资产和模式生成 tooltip 文案
-  const getCapacityTooltip = () => {
-    if (isChannelMode) {
-      // Channel capacity 模式
-      if (!selectedAsset) {
-        // All assets 模式
-        return `The total amount of CKB locked on-chain by all Fiber channels to reserve storage, across all supported assets.`;
-      }
-      return `The total amount of CKB locked on-chain to reserve storage for Fiber channels that support ${selectedAsset === "ckb" ? "native CKB" : assetLabel} transfers.`;
-    } else {
-      // Asset liquidity 模式
-      return `The total amount of ${assetLabel} currently available across all Fiber channels.`;
-    }
-  };
-
-  const { data: kpi } = useQuery({
-    queryKey: [...queryKeys.kpis, currentNetwork, timeRange, selectedAsset, metricType],
-    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange, selectedAsset, metricType),
+  // Fiber Network Snapshot 数据
+  const { data: snapshotDataCurrent } = useQuery({
+    queryKey: [...queryKeys.snapshot, currentNetwork, "current"],
+    queryFn: () => apiClient.getActiveAnalysisHourly(),
     refetchInterval: 30000,
   });
 
-  const { data: timeSeriesData } = useQuery({
-    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange, selectedAsset, metricType],
-    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange, selectedAsset, metricType),
-    refetchInterval: 30000,
-  });
-
-  const { data: topNodes, isLoading: topNodesLoading } = useQuery({
-    queryKey: [...queryKeys.nodes, "ranking", currentNetwork, timeRange],
+  const { data: snapshotDataLastWeek } = useQuery({
+    queryKey: [...queryKeys.snapshot, currentNetwork, "lastWeek"],
     queryFn: () => {
-      if (timeRange === "hourly") {
-        return apiClient.fetchTopNodesByCapacity(3, "hourly");
-      } else {
-        // monthly: 取最近30天的数据
-        const now = new Date();
-        const end = now.toISOString().split('T')[0];
-        const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split('T')[0];
-        return apiClient.fetchTopNodesByCapacity(3, "monthly", start, end);
-      }
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return apiClient.getActiveAnalysisHourly(oneWeekAgo.toISOString());
     },
     refetchInterval: 30000,
   });
 
-  // 移除时间范围选择功能，固定使用 hourly
+  // 计算 Total Channels (CKB + USDI)
+  const totalChannelsData = useMemo(() => {
+    if (!snapshotDataCurrent?.asset_analysis) return { current: 0, change: 0 };
+    
+    const currentCkb = snapshotDataCurrent.asset_analysis.find(
+      a => a.name.toLowerCase() === 'ckb'
+    );
+    const currentUsdi = snapshotDataCurrent.asset_analysis.find(
+      a => a.name.toLowerCase() === 'usdi'
+    );
+    const current = (Number(currentCkb?.channel_len || 0) + Number(currentUsdi?.channel_len || 0));
+
+    if (!snapshotDataLastWeek?.asset_analysis) return { current, change: 0 };
+
+    const lastWeekCkb = snapshotDataLastWeek.asset_analysis.find(
+      a => a.name.toLowerCase() === 'ckb'
+    );
+    const lastWeekUsdi = snapshotDataLastWeek.asset_analysis.find(
+      a => a.name.toLowerCase() === 'usdi'
+    );
+    const lastWeek = (Number(lastWeekCkb?.channel_len || 0) + Number(lastWeekUsdi?.channel_len || 0));
+
+    const change = lastWeek > 0 ? ((current - lastWeek) / lastWeek) * 100 : 0;
+
+    return { current, change };
+  }, [snapshotDataCurrent, snapshotDataLastWeek]);
+
+  // 计算 Total Active Nodes
+  const totalNodesData = useMemo(() => {
+    if (!snapshotDataCurrent) return { current: 0, change: 0 };
+    
+    const current = Number(snapshotDataCurrent.total_nodes || 0);
+
+    if (!snapshotDataLastWeek) return { current, change: 0 };
+
+    const lastWeek = Number(snapshotDataLastWeek.total_nodes || 0);
+    const change = lastWeek > 0 ? ((current - lastWeek) / lastWeek) * 100 : 0;
+
+    return { current, change };
+  }, [snapshotDataCurrent, snapshotDataLastWeek]);
+
+  // Channels 区域数据 - 固定使用 liquidity
+  const { data: kpi } = useQuery({
+    queryKey: [...queryKeys.kpis, currentNetwork, timeRange, selectedAsset, "liquidity"],
+    queryFn: () => apiClient.fetchKpiDataByTimeRange(timeRange, selectedAsset, "liquidity"),
+    refetchInterval: 30000,
+  });
+
+  const { data: timeSeriesData } = useQuery({
+    queryKey: [...queryKeys.timeSeries, currentNetwork, timeRange, selectedAsset, "liquidity"],
+    queryFn: () => apiClient.fetchTimeSeriesDataByTimeRange(timeRange, selectedAsset, "liquidity"),
+    refetchInterval: 30000,
+  });
+
+  // 获取节点数据用于 TreeMap
+  const { data: nodesData, isLoading: nodesLoading } = useQuery({
+    queryKey: [...queryKeys.nodes, currentNetwork, "all"],
+    queryFn: () => apiClient.getActiveNodesByPage(0, "channel_count", "desc", 500),
+    refetchInterval: 30000,
+  });
+
+  // 生成最后更新时间
+  const lastUpdated = useMemo(() => {
+    const now = new Date();
+    const month = now.toLocaleString('en-US', { month: 'short' });
+    const day = now.getDate();
+    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `Last updated: ${month} ${day}, ${time}`;
+  }, []);
+
+  // 刷新所有接口数据
+  const handleRefresh = () => {
+    // 刷新 Fiber Network Snapshot 数据
+    queryClient.invalidateQueries({ queryKey: [...queryKeys.snapshot, currentNetwork] });
+    
+    // 刷新 Channels 区域数据
+    queryClient.invalidateQueries({ queryKey: [...queryKeys.kpis, currentNetwork] });
+    queryClient.invalidateQueries({ queryKey: [...queryKeys.timeSeries, currentNetwork] });
+    
+    // 刷新 Nodes 数据
+    queryClient.invalidateQueries({ queryKey: [...queryKeys.nodes, currentNetwork] });
+  };
 
   return (
     <div className="flex flex-col gap-5">
-      {/* 桌面端左右两大块布局 - 7:3 比例 */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* 左侧块 - 70% */}
-        <div className="flex flex-col gap-4 lg:w-[70%]">
-          {/* Channel Overview 标题 */}
-          <div className="flex items-center gap-4">
-            <SectionHeader
-              title="Channel Overview"
-            />
-            <AssetSelect
-              options={[
-                ...SUPPORTED_ASSETS.map(asset => ({
-                  value: asset.value,
-                  label: asset.label,
-                  color: asset.color,
-                })),
-                { value: "", label: "All assets" },
-              ]}
-              value={selectedAsset}
-              onChange={setSelectedAsset}
-              placeholder="Select asset"
-              className="w-[207px]"
-            />
-            {/* 当选择非 CKB 资产时显示指标选择器；All assets 模式不显示 */}
-            {selectedAsset && selectedAsset !== "ckb" && (
-              <RadioGroup
-                label="Metrics:"
-                options={[
-                  { value: "liquidity", label: "Asset liquidity" },
-                  { value: "capacity", label: "Channel capacity" },
-                ]}
-                value={metricType}
-                onChange={(value) => setMetricType(value as "capacity" | "liquidity")}
-              />
-            )}
-          </div>
-          {/* 顶部两个 KPI 横向排列 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <KpiCard
-              label={isChannelMode ? "CHANNEL CAPACITY" : `${assetLabel} LIQUIDITY`}
-              value={String(kpi?.totalCapacity ?? 0)}
-              unit={kpi?.capacityUnit || "CKB"}
-              changePercent={kpi?.totalCapacityChange ?? 0}
-              trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-              tooltip={getCapacityTooltip()}
-            />
-            <KpiCard
-              label={`${assetLabel} CHANNELS`}
-              value={String(kpi?.totalChannels ?? 0)}
-              changePercent={kpi?.totalChannelsChange ?? 0}
-              trending={(kpi?.totalChannelsChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-              onViewDetails={() => {
-                const url = selectedAsset 
-                  ? `/channels?asset=${selectedAsset}` 
-                  : '/channels';
-                router.push(url);
-              }}
-            />
-          </div>
-
-          <GlassCardContainer>
-            <TimeSeriesChart
-              data={timeSeriesData ? [timeSeriesData.capacity, timeSeriesData.channels] : MOCK_TIME_SERIES_DATA}
-              height="321px"
-              className="w-full"
-              colors={["#7459e6", "#fab83d"]}
-              timeRange={timeRange}
-            />
-          </GlassCardContainer>
-          
-          {/* 左侧下方的 4 个 KPI 卡片 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <KpiCard
-              label={isChannelMode ? "MIN CHANNEL CAPACITY" : `MIN ${assetLabel} LIQUIDITY`}
-              value={String(kpi?.minChannelCapacity ?? 0)}
-              unit={kpi?.capacityUnit || "CKB"}
-              changePercent={kpi?.minChannelCapacityChange ?? 0}
-              trending={(kpi?.minChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-            />
-            <KpiCard
-              label={isChannelMode ? "MAX CHANNEL CAPACITY" : `MAX ${assetLabel} LIQUIDITY`}
-              value={String(kpi?.maxChannelCapacity ?? 0)}
-              unit={kpi?.capacityUnit || "CKB"}
-              changePercent={kpi?.maxChannelCapacityChange ?? 0}
-              trending={(kpi?.maxChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-            />
-            <KpiCard
-              label={isChannelMode ? "AVG CHANNEL CAPACITY" : `AVG ${assetLabel} LIQUIDITY`}
-              value={String(kpi?.averageChannelCapacity ?? 0)}
-              unit={kpi?.capacityUnit || "CKB"}
-              changePercent={kpi?.averageChannelCapacityChange ?? 0}
-              trending={(kpi?.averageChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-            />
-            <KpiCard
-              label={isChannelMode ? "MEDIAN CHANNEL CAPACITY" : `MEDIAN ${assetLabel} LIQUIDITY`}
-              value={String(kpi?.medianChannelCapacity ?? 0)}
-              unit={kpi?.capacityUnit || "CKB"}
-              changePercent={kpi?.medianChannelCapacityChange ?? 0}
-              trending={(kpi?.medianChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
-              changeLabel="from last week"
-            />
-          </div>
-        </div>
-
-        {/* 右侧块 - 30% */}
-        <div className="flex flex-col gap-4 lg:w-[30%]">
-          {/* Nodes Overview 标题 */}
-          <SectionHeader
-            title="Nodes Overview"
+      {/* 第一部分: Fiber Network Snapshot */}
+      <div className="flex flex-col gap-4">
+        <SectionHeader
+          title="Fiber Network Snapshot"
+          lastUpdated={lastUpdated}
+          onRefresh={handleRefresh}
+        />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <KpiCard
+            label="TOTAL CHANNELS"
+            value={String(totalChannelsData.current)}
+            changePercent={Number(totalChannelsData.change.toFixed(1))}
+            trending={totalChannelsData.change >= 0 ? "up" : "down"}
+            changeLabel="from last week"
           />
           <KpiCard
             label="TOTAL ACTIVE NODES"
-            value={String(kpi?.totalNodes ?? 0)}
-            changePercent={kpi?.totalNodesChange ?? 0}
-            trending={(kpi?.totalNodesChange ?? 0) >= 0 ? "up" : "down"}
+            value={String(totalNodesData.current)}
+            changePercent={Number(totalNodesData.change.toFixed(1))}
+            trending={totalNodesData.change >= 0 ? "up" : "down"}
             changeLabel="from last week"
-            onViewDetails={() => router.push('/nodes')}
           />
-          <GlassCardContainer>
-            <TimeSeriesChart
-              data={timeSeriesData ? [timeSeriesData.nodes] : MOCK_TIME_SERIES_DATA2}
-              height="321px"
-              className="w-full"
-              colors={["#59ABE6"]}
-              timeRange={timeRange}
+        </div>
+      </div>
+
+      {/* 第二部分: Channels */}
+      <div className="flex flex-col gap-4">
+        {/* 移动端和桌面端不同的布局 */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* 移动端：标题 + View details */}
+          {/* 桌面端：标题 + RadioGroup */}
+          <div className="flex items-center justify-between md:justify-start gap-4">
+            <SectionHeader
+              title="Channels"
             />
-          </GlassCardContainer>
-          <EasyTable
-            title="NODES RANKING"
-            actionText="View All"
-            onActionClick={() => router.push('/nodes')}
-            data={topNodes || []}
-            loading={topNodesLoading}
-            loadingText="Loading nodes ranking..."
-            onRowClick={(row) => router.push(`/node/${row.node_id}`)}
-            columns={[
-              {
-                key: "node_id",
-                label: "Node ID",
-                format: (value) => (
-                  <div className="truncate w-full">
-                    {String(value)}
-                  </div>
-                ),
-              },
-              {
-                key: "channel_count",
-                label: "Channels",
-                format: value => {
-                  return String(value || 0);
-                },
-              },
-            ]}
+            <button 
+              onClick={() => router.push(`/channels?asset=${selectedAsset}`)}
+              className="type-button1 text-purple cursor-pointer md:hidden"
+            >
+              View details
+            </button>
+            <div className="hidden md:block">
+              <RadioGroup
+                options={[
+                  { value: "ckb", label: "CKB" },
+                  { value: "usdi", label: "USDI" },
+                ]}
+                value={selectedAsset}
+                onChange={setSelectedAsset}
+              />
+            </div>
+          </div>
+          
+          {/* 移动端：RadioGroup 独占一行 */}
+          <div className="md:hidden w-full">
+            <RadioGroup
+              options={[
+                { value: "ckb", label: "CKB" },
+                { value: "usdi", label: "USDI" },
+              ]}
+              value={selectedAsset}
+              onChange={setSelectedAsset}
+              className="h-[45px] w-full flex"
+            />
+          </div>
+          
+          {/* 桌面端：View details 按钮在右边 */}
+          <button 
+            onClick={() => router.push(`/channels?asset=${selectedAsset}`)}
+            className="hidden md:block type-button1 text-purple cursor-pointer"
+          >
+            View details
+          </button>
+        </div>
+        
+        {/* 第一行: Liquidity 和 Channels 卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <KpiCard
+            label={`${assetLabel} LIQUIDITY`}
+            value={String(kpi?.totalCapacity ?? 0)}
+            unit={kpi?.capacityUnit || "CKB"}
+            changePercent={kpi?.totalCapacityChange ?? 0}
+            trending={(kpi?.totalCapacityChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+            tooltip={`The total amount of ${assetLabel} currently available across ${assetLabel} channels.`}
           />
+          <KpiCard
+            label={`${assetLabel} CHANNELS`}
+            value={String(kpi?.totalChannels ?? 0)}
+            changePercent={kpi?.totalChannelsChange ?? 0}
+            trending={(kpi?.totalChannelsChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+            // onViewDetails={() => router.push(`/channels?asset=${selectedAsset}`)}
+          />
+        </div>
+
+        {/* 第二行: TimeSeriesChart 图表 */}
+        <GlassCardContainer>
+          <TimeSeriesChart
+            data={timeSeriesData ? [timeSeriesData.capacity, timeSeriesData.channels] : MOCK_TIME_SERIES_DATA}
+            height="321px"
+            className="w-full"
+            colors={["#7459e6", "#fab83d"]}
+            timeRange={timeRange}
+          />
+        </GlassCardContainer>
+        
+        {/* 第三行: 4 个 Liquidity KPI 卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            label={`MIN ${assetLabel} LIQUIDITY`}
+            value={String(kpi?.minChannelCapacity ?? 0)}
+            unit={kpi?.capacityUnit || "CKB"}
+            changePercent={kpi?.minChannelCapacityChange ?? 0}
+            trending={(kpi?.minChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+          />
+          <KpiCard
+            label={`MAX ${assetLabel} LIQUIDITY`}
+            value={String(kpi?.maxChannelCapacity ?? 0)}
+            unit={kpi?.capacityUnit || "CKB"}
+            changePercent={kpi?.maxChannelCapacityChange ?? 0}
+            trending={(kpi?.maxChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+          />
+          <KpiCard
+            label={`AVG ${assetLabel} LIQUIDITY`}
+            value={String(kpi?.averageChannelCapacity ?? 0)}
+            unit={kpi?.capacityUnit || "CKB"}
+            changePercent={kpi?.averageChannelCapacityChange ?? 0}
+            trending={(kpi?.averageChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+          />
+          <KpiCard
+            label={`MEDIAN ${assetLabel} LIQUIDITY`}
+            value={String(kpi?.medianChannelCapacity ?? 0)}
+            unit={kpi?.capacityUnit || "CKB"}
+            changePercent={kpi?.medianChannelCapacityChange ?? 0}
+            trending={(kpi?.medianChannelCapacityChange ?? 0) >= 0 ? "up" : "down"}
+            changeLabel="from last week"
+          />
+        </div>
+      </div>
+
+      {/* 第三部分: Nodes */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <SectionHeader
+            title="Nodes"
+          />
+          <button 
+            onClick={() => router.push('/nodes')}
+            className="type-button1 text-purple cursor-pointer"
+          >
+            View details
+          </button>
+        </div>
+        
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* 左侧: Total Active Nodes 时序图 */}
+          <div className="flex-1">
+            <GlassCardContainer className="h-[480px]">
+              <TimeSeriesChart
+                data={timeSeriesData ? [timeSeriesData.nodes] : MOCK_TIME_SERIES_DATA2}
+                height="480px"
+                className="w-full"
+                colors={["#59ABE6"]}
+                timeRange={timeRange}
+              />
+            </GlassCardContainer>
+          </div>
+
+          {/* 右侧: TreeMap */}
+          <div className="flex-1">
+            <GlassCardContainer className="h-[480px] lg:h-full flex flex-col">
+              <div className="type-label text-secondary uppercase mb-4">
+                Channel share by ACTIVE nodes
+              </div>
+              <div className="flex-1">
+                <NodeTreeMap
+                  data={nodesData?.nodes || []}
+                  height="100%"
+                  loading={nodesLoading}
+                  onNodeClick={(nodeId) => router.push(`/node/${nodeId}`)}
+                />
+              </div>
+            </GlassCardContainer>
+          </div>
         </div>
       </div>
     </div>
