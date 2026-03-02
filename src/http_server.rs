@@ -256,6 +256,7 @@ pub(crate) struct ChannelByNodeIdParams {
     pub(crate) order: Order,
     #[serde(default)]
     pub(crate) net: Network,
+    pub(crate) asset_name: Option<Vec<String>>,
     pub(crate) page_size: Option<usize>,
 }
 
