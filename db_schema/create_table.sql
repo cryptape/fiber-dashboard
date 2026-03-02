@@ -59,6 +59,7 @@ create index idx_daily_summarized_data_day on daily_summarized_data(day);
 create index idx_channel_txs_outpoint on channel_txs(channel_outpoint);
 create index idx_channel_states_state on channel_states(state);
 create index idx_channel_states_last_commit_time on channel_states(last_commit_time);
+create index idx_channel_states_udt_value on channel_states(udt_value);
 
 create table node_infos (
     time TIMESTAMPTZ NOT NULL,
@@ -343,6 +344,7 @@ create index idx_daily_summarized_data_day_testnet on daily_summarized_data_test
 create index idx_channel_txs_outpoint_testnet on channel_txs_testnet(channel_outpoint);
 create index idx_channel_states_state_testnet on channel_states_testnet(state);
 create index idx_channel_states_last_commit_time_testnet on channel_states_testnet(last_commit_time);
+create index idx_channel_states_udt_value_testnet on channel_states_testnet(udt_value);
 
 create table node_infos_testnet (
     time TIMESTAMPTZ NOT NULL,
