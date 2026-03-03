@@ -911,11 +911,7 @@ pub(crate) async fn group_channel_by_state(
 ) -> Result<String, sqlx::Error> {
     let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
     let offset = params.page.saturating_mul(page_size);
-    let index = if params.fuzz_name.is_some() {
-        3
-    } else {
-        2
-    };
+    let index = if params.fuzz_name.is_some() { 3 } else { 2 };
     let sql = format!(
         r#"
         with channel_tx_count as (
@@ -930,7 +926,7 @@ pub(crate) async fn group_channel_by_state(
         left join {} k on n.channel_outpoint = k.channel_outpoint
         left join {} m on k.udt_type_script = m.id
         where n.state = Any($1) {} {}
-        order by n.{} {}
+        order by {} {}
         LIMIT {} OFFSET {}
         "#,
         params.net.channel_txs(),

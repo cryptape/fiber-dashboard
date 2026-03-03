@@ -269,6 +269,8 @@ pub(crate) enum ChannelSortBy {
     LastCommitTime,
     #[serde(rename = "asset")]
     Asset,
+    #[serde(rename = "capacity")]
+    Capacity,
 }
 
 impl ChannelSortBy {
@@ -277,6 +279,7 @@ impl ChannelSortBy {
             ChannelSortBy::CreateTime => "n.created_timestamp",
             ChannelSortBy::LastCommitTime => "c.last_commit_time",
             ChannelSortBy::Asset => "n.capacity",
+            ChannelSortBy::Capacity => "c.capacity",
         }
     }
 }
@@ -471,14 +474,17 @@ pub(crate) enum ChannelStateSortBy {
     LastCommitTime,
     #[serde(rename = "asset")]
     Asset,
+    #[serde(rename = "capacity")]
+    Capacity,
 }
 
 impl ChannelStateSortBy {
     pub fn as_str(&self) -> &str {
         match self {
-            ChannelStateSortBy::CreateTime => "create_time",
-            ChannelStateSortBy::LastCommitTime => "last_commit_time",
-            ChannelStateSortBy::Asset => "udt_value",
+            ChannelStateSortBy::CreateTime => "n.create_time",
+            ChannelStateSortBy::LastCommitTime => "n.last_commit_time",
+            ChannelStateSortBy::Asset => "n.udt_value",
+            ChannelStateSortBy::Capacity => "n.capacity",
         }
     }
 }
