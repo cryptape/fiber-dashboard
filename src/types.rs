@@ -35,6 +35,7 @@ pub struct NodeInfo {
     /// The addresses of the node.
     pub addresses: Vec<MultiAddr>,
     /// The identity public key of the node.
+    #[serde(alias = "pubkey")]
     pub node_id: Bytes,
     #[serde_as(as = "U64Hex")]
     /// The latest timestamp set by the owner for the node announcement.
