@@ -161,6 +161,7 @@ export const Channels = () => {
       'createdOn': 'create_time',
       'lastCommitted': 'last_commit_time',
       'capacity': 'capacity',
+      'assetLiquidity': 'asset',
     };
     return mapping[frontendKey] || 'last_commit_time';
   };
@@ -511,7 +512,7 @@ export const Channels = () => {
       key: "assetLiquidity",
       label: "Asset liquidity",
       width: "w-48",
-      sortable: false,
+      sortable: true,
       render: (value, row) => (
         <div className="text-purple font-semibold truncate">
           {value as string} {row.assetLiquidityUnit as string}

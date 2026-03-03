@@ -106,6 +106,7 @@ export const NodeDetail = () => {
   });
 
   // 使用新接口：直接拉取该节点的通道数据（支持分页和排序）
+  // 只筛选 CKB 和 USDI 资产
   const { data: channelsResponse, isLoading: channelsLoading } = useQuery({
     queryKey: ["node-channels", nodeId, currentNetwork, currentPage, sortKey, sortState],
     queryFn: () => {
@@ -119,7 +120,7 @@ export const NodeDetail = () => {
       const order = sortState === 'ascending' ? 'asc' : 'desc';
       console.log('[NodeDetail] Sort params - sortKey:', sortKey, 'sortState:', sortState);
       console.log('[NodeDetail] Backend params - sortBy:', sortBy, 'order:', order);
-      return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order);
+      return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order, PAGE_SIZE, ['ckb', 'usdi']);
     },
     enabled: !!nodeId,
     staleTime: 0, // 关闭缓存，确保每次排序都重新请求
@@ -365,8 +366,8 @@ export const NodeDetail = () => {
       label: "Asset name",
       width: "flex-1",
       render: (value) => {
-        // CKB: #00CC9B (绿色), USDI: #7459E6 (紫色)
-        const color = value === 'CKB' ? '#00CC9B' : '#7459E6';
+        // 使用统一的资产颜色配置
+        const color = getAssetColorUtil(String(value).toLowerCase());
         return (
           <div className="flex items-center gap-2">
             <div 

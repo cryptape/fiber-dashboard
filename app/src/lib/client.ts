@@ -460,12 +460,22 @@ export class APIClient {
   async getChannelsByNodeId(
     nodeId: string,
     page: number = 0,
-    sortBy: "create_time" | "last_commit_time" | "capacity" = "last_commit_time",
+    sortBy: "create_time" | "last_commit_time" | "capacity" | "asset" = "last_commit_time",
     order: "asc" | "desc" = "desc",
-    pageSize: number = 10
+    pageSize: number = 10,
+    assetName?: string[]
   ): Promise<ChannelsByNodeIdResponse> {
+    let endpoint = `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}&page_size=${pageSize}`;
+    
+    // 添加 asset_name 参数
+    if (assetName && assetName.length > 0) {
+      assetName.forEach(asset => {
+        endpoint += `&asset_name=${encodeURIComponent(asset)}`;
+      });
+    }
+    
     return this.apiRequest<ChannelsByNodeIdResponse>(
-      `/channels_by_node_id?node_id=${encodeURIComponent(nodeId)}&page=${page}&sort_by=${sortBy}&order=${order}&page_size=${pageSize}`,
+      endpoint,
       undefined,
       ChannelsByNodeIdResponseSchema
     );
