@@ -197,11 +197,14 @@ export default function ChannelDetailPage() {
       </div>
 
       {/* Nodes */}
-      <div className="mt-3">
-        <SectionHeader title="Channel Participants" />
-      </div>
-
-      <ChannelParticipants node1Info={node1Info} node2Info={node2Info} />
+      {(node1Info || node2Info) && (
+        <>
+          <div className="mt-3">
+            <SectionHeader title="Channel Participants" />
+          </div>
+          <ChannelParticipants node1Info={node1Info} node2Info={node2Info} />
+        </>
+      )}
 
       <div className="mt-3">
         <SectionHeader title="Channel Lifecycle" />
@@ -209,6 +212,7 @@ export default function ChannelDetailPage() {
 
       <ChannelLifecycle
         channelState={channelState}
+        network={currentNetwork}
       />
       
     </div>

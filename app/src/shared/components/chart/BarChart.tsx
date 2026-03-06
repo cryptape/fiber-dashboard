@@ -68,12 +68,21 @@ export default function BarChart({
     const h3FontSize = getComputedStyle(document.documentElement)
       .getPropertyValue('--font-size-18')
       .trim();
+    const h3FontSizeMobile = getComputedStyle(document.documentElement)
+      .getPropertyValue('--font-size-16')
+      .trim();
     const mediumWeight = getComputedStyle(document.documentElement)
       .getPropertyValue('--weight-medium')
       .trim();
     const lineHeight120 = getComputedStyle(document.documentElement)
       .getPropertyValue('--line-120')
       .trim();
+
+    // 根据屏幕宽度选择字体大小（桌面端 18px，平板与移动设备 16px）
+    const isMobile = window.innerWidth < 1360;
+    const titleFontSize = isMobile 
+      ? parseInt(h3FontSizeMobile) || 16 
+      : parseInt(h3FontSize) || 18;
 
     // 数字格式化函数
     const formatNumber = (value: number) => {
@@ -94,7 +103,7 @@ export default function BarChart({
         top: '-10%',
         textStyle: {
           color: primaryColor,
-          fontSize: parseInt(h3FontSize),
+          fontSize: titleFontSize,
           fontWeight: 600,
           lineHeight: parseInt(lineHeight120),
         },
@@ -154,8 +163,8 @@ export default function BarChart({
         },
       },
       grid: {
-        left: 0,
-        right: 0,
+        left: 16,
+        right: 16,
         bottom: "3%",
         top: "50px", // title高度 + 间距
         containLabel: true,

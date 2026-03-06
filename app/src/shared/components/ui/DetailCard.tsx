@@ -123,13 +123,16 @@ export const DetailCard: React.FC<DetailCardProps> = ({
               Tx hash:
             </div>
           )}
-          <div className="text-purple text-sm leading-5 break-all flex-1">
-            {hash}
+          <div className="flex items-start min-w-0 flex-1">
+            <div className="text-purple text-sm leading-5 break-all">
+              {hash}
+            </div>
+            <CopyButton
+              text={hash}
+              ariaLabel="复制哈希"
+              className="ml-2 flex-shrink-0"
+            />
           </div>
-          <CopyButton
-            text={hash}
-            ariaLabel="复制哈希"
-          />
         </div>
 
         {/* 位置 */}

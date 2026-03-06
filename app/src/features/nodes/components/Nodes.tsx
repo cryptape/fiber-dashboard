@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
-import Image from "next/image";
 import {
   SectionHeader,
   Table,
@@ -16,6 +15,7 @@ import {
   SearchInput,
   CustomSelect,
   SelectOption,
+  CopyButton,
 } from "@/shared/components/ui";
 import NodeNetworkMap, { NodeMapData, NodeConnectionData } from "@/shared/components/chart/NodeNetworkMap";
 
@@ -55,18 +55,7 @@ export const Nodes = () => {
   const [sortKey, setSortKey] = useState<string>(''); // 排序字段，默认为空表示不排序
   const [sortState, setSortState] = useState<SortState>('none'); // 排序方向，默认为 none
   const [selectedRegion, setSelectedRegion] = useState<string>(''); // 选中的 region
-  const [copiedId, setCopiedId] = useState<string | null>(null); // 复制状态
 
-  // 处理复制操作
-  const handleCopy = async (nodeId: string) => {
-    try {
-      await navigator.clipboard.writeText(nodeId);
-      setCopiedId(nodeId);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      console.error("复制失败:", err);
-    }
-  };
 
   // 获取所有 region 选项
   const { data: regionsData } = useQuery({
@@ -320,31 +309,17 @@ export const Nodes = () => {
           : nodeId;
         
         return (
-          <div className="flex items-center gap-2 group">
+          <div className="flex items-center gap-2 group min-w-0">
             <button
               onClick={() => router.push(`/node/${row.nodeId}`)}
-              className="text-primary hover:underline font-mono text-xs block cursor-pointer transition-colors"
+              className="text-primary hover:underline font-mono text-xs block cursor-pointer transition-colors truncate min-w-0 flex-1"
               onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
               onMouseLeave={(e) => e.currentTarget.style.color = ''}
               title={nodeId}
             >
               {displayId}
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopy(row.nodeId);
-              }}
-              className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
-            >
-              <Image
-                src={copiedId === row.nodeId ? "/copy_success.svg" : "/copy.svg"}
-                alt="Copy"
-                width={16}
-                height={16}
-                className="w-4 h-4"
-              />
-            </button>
+            <CopyButton text={row.nodeId} className="opacity-0 group-hover:opacity-100 flex-shrink-0" />
           </div>
         );
       },
@@ -355,31 +330,17 @@ export const Nodes = () => {
       width: "w-48 md:w-60",
       sortable: false,
       render: (value, row) => (
-        <div className="flex items-center gap-2 group">
+        <div className="flex items-center gap-2 group min-w-0">
           <button
             onClick={() => router.push(`/node/${row.nodeId}`)}
-            className="truncate hover:underline text-sm min-w-0 cursor-pointer transition-colors"
+            className="truncate hover:underline text-sm min-w-0 flex-1 cursor-pointer transition-colors"
             onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
             onMouseLeave={(e) => e.currentTarget.style.color = ''}
             title={String(value)}
           >
-            {value as string}
+            {(value as string) || "-"}
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy(value as string);
-            }}
-            className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
-          >
-            <Image
-              src={copiedId === (value as string) ? "/copy_success.svg" : "/copy.svg"}
-              alt="Copy"
-              width={16}
-              height={16}
-              className="w-4 h-4"
-            />
-          </button>
+          <CopyButton text={value as string} className="opacity-0 group-hover:opacity-100 flex-shrink-0" />
         </div>
       ),
     },

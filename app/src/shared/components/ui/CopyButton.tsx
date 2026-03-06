@@ -21,7 +21,8 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
   const [showCopied, setShowCopied] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(text);
       setShowCopied(true);

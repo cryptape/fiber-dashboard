@@ -13,13 +13,16 @@ import {
 } from "@/shared/components/ui";
 import { formatTimestamp, parseLockArgsV2, parseWitnessV2, formatBlockNumber, type ParsedWitnessData } from "../utils";
 import type { ChannelStateInfo } from "@/lib/types";
+import { buildTransactionLinkUrl } from "@/lib/utils";
 
 interface ChannelLifecycleProps {
   channelState: ChannelStateInfo;
+  network: "mainnet" | "testnet";
 }
 
 export function ChannelLifecycle({
   channelState,
+  network,
 }: ChannelLifecycleProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCommitmentDialogOpen, setIsCommitmentDialogOpen] = useState(false);
@@ -51,7 +54,7 @@ export function ChannelLifecycle({
               {
                 text: "View on Explore",
                 onClick: () => {
-                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
+                  const explorerUrl = buildTransactionLinkUrl(channelState.txs[0].tx_hash, network);
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 },
               },
@@ -84,7 +87,7 @@ export function ChannelLifecycle({
           title="Transaction Details"
           secondaryButtonText="View on Explorer"
           onSecondaryClick={() => {
-            const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
+            const explorerUrl = buildTransactionLinkUrl(channelState.txs[0].tx_hash, network);
             window.open(explorerUrl, "_blank", "noopener,noreferrer");
           }}
           primaryButtonIcon={
@@ -160,7 +163,7 @@ export function ChannelLifecycle({
               {
                 text: "View on Explore",
                 onClick: () => {
-                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
+                  const explorerUrl = buildTransactionLinkUrl(channelState.txs[0].tx_hash, network);
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 },
               },
@@ -347,7 +350,7 @@ export function ChannelLifecycle({
                   text: "View on Explore",
                   onClick: () => {
                     const lastTx = channelState.txs[channelState.txs.length - 1];
-                    const explorerUrl = `https://testnet.explorer.app5.org/transaction/${lastTx.tx_hash}`;
+                  const explorerUrl = buildTransactionLinkUrl(lastTx.tx_hash, network);
                     window.open(explorerUrl, "_blank", "noopener,noreferrer");
                   },
                 },
@@ -377,7 +380,7 @@ export function ChannelLifecycle({
           title="Transaction Details"
           secondaryButtonText="View on Explorer"
           onSecondaryClick={() => {
-            const explorerUrl = `https://testnet.explorer.app5.org/transaction/${channelState.txs[0].tx_hash}`;
+            const explorerUrl = buildTransactionLinkUrl(channelState.txs[0].tx_hash, network);
             window.open(explorerUrl, "_blank", "noopener,noreferrer");
           }}
           primaryButtonIcon={
@@ -451,7 +454,7 @@ export function ChannelLifecycle({
                 title="Transaction Details"
                 secondaryButtonText="View on Explorer"
                 onSecondaryClick={() => {
-                  const explorerUrl = `https://testnet.explorer.app5.org/transaction/${tx.tx_hash}`;
+                  const explorerUrl = buildTransactionLinkUrl(tx.tx_hash, network);
                   window.open(explorerUrl, "_blank", "noopener,noreferrer");
                 }}
                 primaryButtonIcon={

@@ -46,10 +46,10 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     // closed_uncooperative 状态 - 红色 #B34846
     statusStyles = "bg-error border-error text-error";
   } else if (status === "closed_cooperative") {
-    // closed_cooperative 状态 - 紫色 #9B87C8
-    statusStyles = "border-[#9B87C8] text-[#9B87C8]";
+    // closed_cooperative 状态 - 蓝色 info 色板
+    statusStyles = "border-[#DBEAFE] text-[#2563EB]";
     // 使用自定义背景色
-    statusStyles += " bg-[#9B87C81A]"; // 10% opacity
+    statusStyles += " bg-[#EFF6FF]";
   } else if (status === "Inactive") {
     // Inactive 状态 - 灰色
     statusStyles = "bg-gray-100 border-gray-300 text-gray-700";
@@ -69,7 +69,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 
   return (
     <div
-      className={`h-6 px-2 rounded-full border inline-flex justify-center items-center gap-1 ${statusStyles} ${className}`.trim()}
+      className={`min-h-6 px-2 py-0.5 rounded-full border inline-flex justify-center items-center gap-1 whitespace-nowrap ${statusStyles} ${className}`.trim()}
     >
       <div className="text-sm leading-5">{displayText}</div>
     </div>

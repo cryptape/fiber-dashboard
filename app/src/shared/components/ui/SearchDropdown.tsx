@@ -5,8 +5,10 @@ interface SearchDropdownProps {
   showNoResults: boolean;
   searchHistory: string[];
   query: string;
+  highlightedIndex?: number;
   onClearHistory: () => void;
   onHistoryClick: (item: string) => void;
+  onHighlightChange?: (index: number) => void;
 }
 
 export default function SearchDropdown({
@@ -14,8 +16,10 @@ export default function SearchDropdown({
   showNoResults,
   searchHistory,
   query,
+  highlightedIndex = -1,
   onClearHistory,
   onHistoryClick,
+  onHighlightChange,
 }: SearchDropdownProps) {
   return (
     <>
@@ -24,7 +28,7 @@ export default function SearchDropdown({
         <div className="absolute left-0 right-0 mt-1 bg-popover rounded-xl shadow-[0px_4px_6px_0px_rgba(0,0,0,0.08)] z-50">
           <div className="px-5 pt-4 pb-2 flex flex-col gap-2">
             <div className="flex justify-between items-start">
-              <div className="type-caption text-tertiary uppercase">Recently Searched</div>
+              <div className="type-caption text-tertiary uppercase">Recent Searches</div>
               <button
                 onClick={onClearHistory}
                 className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
@@ -44,7 +48,12 @@ export default function SearchDropdown({
                 <button
                   key={index}
                   onClick={() => onHistoryClick(item)}
-                  className="h-8 flex items-center gap-2 hover:bg-[var(--surface-layer)] transition-colors"
+                  onMouseEnter={() => onHighlightChange?.(index)}
+                  onMouseLeave={() => onHighlightChange?.(-1)}
+                  style={{
+                    backgroundColor: index === highlightedIndex ? 'rgba(0,0,0,0.05)' : undefined,
+                  }}
+                  className="h-8 flex items-center gap-2 transition-colors cursor-pointer px-2 rounded-md"
                 >
                   <Image
                     src="/history.svg"

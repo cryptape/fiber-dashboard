@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk } from "next/font/google";
 import "./style.css";
 import {  FooterNew, NavBarNew, ConditionalSearchBar } from "@/shared/components/layout";
 import { NetworkProvider } from "@/features/networks/context/NetworkContext";
+import { PostHogProvider } from "@/lib/analytics";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -36,12 +37,14 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased min-h-screen bg-background text-foreground flex flex-col`}
       >
-        <NetworkProvider>
-          <NavBarNew />
-          <ConditionalSearchBar />
-          <main className="flex-1 container py-6 md:py-10">{children}</main>
-          <FooterNew />
-        </NetworkProvider>
+        <PostHogProvider>
+          <NetworkProvider>
+            <NavBarNew />
+            <ConditionalSearchBar />
+            <main className="flex-1 container py-6 md:py-10">{children}</main>
+            <FooterNew />
+          </NetworkProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
