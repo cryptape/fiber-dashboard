@@ -125,12 +125,8 @@ export default function NavBarNew() {
 
       if (e.key === '/') {
         e.preventDefault();
-        // 平滑滚动到顶部
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        // 延迟聚焦，等待滚动动画开始
-        setTimeout(() => {
-          searchBarRef.current?.focus();
-        }, 200);
+        // 直接聚焦搜索框，不滚动到顶部
+        searchBarRef.current?.focus();
       }
     };
 
@@ -147,6 +143,9 @@ export default function NavBarNew() {
     // 动态路由匹配（例如 /nodes/xxx 或 /node/xxx 匹配到 nodes）
     if (path.startsWith("/node")) return "nodes";
     if (path.startsWith("/channel")) return "channels";
+
+    // 搜索结果页不高亮任何 tab
+    if (path.startsWith("/search")) return "";
 
     return "overview";
   };
@@ -209,7 +208,7 @@ export default function NavBarNew() {
 
   return (
     <>
-    <nav className={`navbar-fixed ${isScrolled ? 'navbar-scrolled-white' : 'navbar-scrolled'} z-50 transition-colors duration-300`}>
+    <nav className={`navbar-fixed ${isScrolled ? 'navbar-scrolled-white' : 'navbar-scrolled'} z-50 transition-colors duration-300`} style={isScrolled ? { boxShadow: '0px 1px 4px 0px rgba(15, 15, 16, 0.10)' } : {}}>
       <div className="flex items-center justify-between relative h-16">
         {/* Left item - Logo + Main NavBar */}
         <div className="flex items-center">
@@ -264,9 +263,9 @@ export default function NavBarNew() {
         </div>
         {/* Right item - Search Bar + Network Select (hidden on mobile and tablet, visible on desktop) */}
         <div className="hidden lg:flex items-center gap-4 relative h-12" ref={selectRef}>
-          {/* Search Bar - 只在非首页和非 search 页面显示，滚动超过64px时隐藏 */}
-          {pathname !== '/' && pathname !== '/search' && !isScrolled && (
-            <HeaderSearchBar ref={searchBarRef} />
+          {/* Search Bar - 只在非首页和非 search 页面显示 */}
+          {pathname !== '/' && pathname !== '/search' && (
+            <HeaderSearchBar ref={searchBarRef} scrolled={isScrolled} />
           )}
 
           {/* Network Select */}
@@ -360,20 +359,24 @@ export default function NavBarNew() {
           {pathname !== '/' && pathname !== '/search' && (
             <button
               onClick={handleToggleMobileSearch}
-              className="flex items-center justify-center transition-opacity hover:opacity-70 mr-10"
+              className="flex items-center justify-center transition-opacity hover:opacity-70 mr-7"
               aria-label="搜索"
             >
-              <Image
-                src={isMobileSearchOpen ? "/search3.svg" : "/search2.svg"}
-                alt="搜索"
-                width={48}
-                height={48}
+              <span
                 className={
                   isMobileSearchOpen
-                    ? "w-[14px] h-[14px] md:w-12 md:h-12 lg:w-12 lg:h-12"
-                    : "w-[14px] h-[14px] md:w-6 md:h-6 lg:w-12 lg:h-12"
+                    ? "flex items-center justify-center rounded-full bg-white w-8 h-8 md:w-12 md:h-12"
+                    : "flex items-center justify-center p-[7px] md:p-[12px]"
                 }
-              />
+              >
+                <Image
+                  src="/search2.svg"
+                  alt="搜索"
+                  width={24}
+                  height={24}
+                  className="w-[18px] h-[18px] md:w-6 md:h-6"
+                />
+              </span>
             </button>
           )}
           
@@ -385,11 +388,11 @@ export default function NavBarNew() {
               aria-label="关闭搜索"
             >
               <Image
-                src="/close.svg"
+                src="/close3.svg"
                 alt="关闭"
                 width={24}
                 height={24}
-                className="w-6 h-6"
+                className="w-[18px] h-[18px] md:w-6 md:h-6"
               />
             </button>
           ) : (

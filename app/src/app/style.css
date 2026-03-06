@@ -2,7 +2,8 @@
 @import "tw-animate-css";
 
 @theme {
-  /* --breakpoint-md: 1400px; */
+  --breakpoint-md: 42rem;    /* 1360px */
+  --breakpoint-lg: 85rem;    /* 1440px */
 }
 
 /* @import "@fontsource/inter/400.css";
@@ -272,7 +273,7 @@
     line-height: var(--line-100);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) {
     .type-h1 {
       font-size: var(--font-size-28);
     }
@@ -292,7 +293,7 @@
     line-height: var(--line-120);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) {
     .type-h2 {
       font-size: var(--font-size-22);
     }
@@ -312,7 +313,7 @@
     line-height: var(--line-120);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) {
     .type-h3 {
       font-size: var(--font-size-16);
     }
@@ -326,7 +327,7 @@
     line-height: var(--line-140);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) {
     .type-subheader {
       font-size: var(--font-size-14);
     }
@@ -371,7 +372,7 @@
     line-height: var(--line-120);
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) {
     .type-button1 {
       font-size: var(--font-size-14);
     }
@@ -457,7 +458,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1360px) {
   .container {
     padding-left: var(--spacing-desktop);
     padding-right: var(--spacing-desktop);

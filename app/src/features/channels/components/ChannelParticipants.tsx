@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { DetailCard } from "@/shared/components/ui";
-import { Skeleton } from "@/shared/components/ui/skeleton";
 import { formatTimestamp } from "../utils";
 import type { NodeInfoResponse } from "@/lib/types";
 
@@ -20,7 +19,7 @@ export function ChannelParticipants({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       {/* Node 1 */}
-      {node1Info ? (
+      {node1Info && (
         <DetailCard
           name={node1Info.node_name || "Unknown Node"}
           status="Active"
@@ -46,12 +45,10 @@ export function ChannelParticipants({
             </div>
           }
         />
-      ) : (
-        <Skeleton className="h-48 w-full" />
       )}
 
       {/* Node 2 */}
-      {node2Info ? (
+      {node2Info && (
         <DetailCard
           name={node2Info.node_name || "Unknown Node"}
           status="Active"
@@ -77,8 +74,6 @@ export function ChannelParticipants({
             </div>
           }
         />
-      ) : (
-        <Skeleton className="h-48 w-full" />
       )}
     </div>
   );

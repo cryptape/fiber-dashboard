@@ -72,8 +72,8 @@ const statusColorMap: Record<
     badge: { bg: "bg-info", border: "border-info", text: "text-info" },
   },
   purple: {
-    dot: "bg-[#9B87C8]",
-    badge: { bg: "bg-[#9B87C81A]", border: "border-[#9B87C8]", text: "text-[#9B87C8]" },
+    dot: "bg-[#2563EB]",
+    badge: { bg: "bg-[#EFF6FF]", border: "border-[#DBEAFE]", text: "text-[#2563EB]" },
   },
 };
 
@@ -130,7 +130,7 @@ export const TimelineEvent = <T extends Record<string, unknown>>({
           {/* 头部：标题 + 标签 */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
-              <div className="flex justify-start items-center gap-2">
+              <div className="flex flex-wrap justify-start items-center gap-2">
                 <h3 className="text-primary text-lg font-semibold leading-5">
                   {title}
                 </h3>

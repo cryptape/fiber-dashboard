@@ -11,9 +11,11 @@ export function useSearch() {
   const [isSearching, setIsSearching] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const router = useRouter();
   const { apiClient } = useNetwork();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // 加载搜索历史
   useEffect(() => {
@@ -27,12 +29,14 @@ export function useSearch() {
     }
   }, []);
 
-  // 点击外部关闭下拉框
+  // 点击外部关闭下拉框并失焦输入框
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setShowHistory(false);
         setShowNoResults(false);
+        setHighlightedIndex(-1);
+        inputRef.current?.blur();
       }
     };
 
@@ -110,18 +114,12 @@ export function useSearch() {
     setShowNoResults(false);
   };
 
-  // 处理回车键
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      handleSearch();
-    }
-  };
-
   // 处理聚焦
   const handleFocus = () => {
     if (searchHistory.length > 0) {
       setShowHistory(true);
       setShowNoResults(false);
+      setHighlightedIndex(-1);
     }
   };
 
@@ -135,6 +133,7 @@ export function useSearch() {
   const handleHistoryClick = (historyItem: string) => {
     setQuery(historyItem);
     setShowHistory(false);
+    setHighlightedIndex(-1);
     // 直接搜索
     setTimeout(() => {
       const rawValue = historyItem.trim();
@@ -157,6 +156,36 @@ export function useSearch() {
     }, 100);
   };
 
+  // 处理键盘事件
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showHistory && searchHistory.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedIndex(prev => (prev + 1) % searchHistory.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedIndex(prev => (prev <= 0 ? searchHistory.length - 1 : prev - 1));
+        return;
+      }
+      if (event.key === "Enter" && highlightedIndex >= 0) {
+        event.preventDefault();
+        handleHistoryClick(searchHistory[highlightedIndex]);
+        return;
+      }
+    }
+    if (event.key === "Escape") {
+      setShowHistory(false);
+      setHighlightedIndex(-1);
+      inputRef.current?.blur();
+      return;
+    }
+    if (event.key === "Enter") {
+      handleSearch();
+    }
+  };
+
   return {
     // State
     query,
@@ -164,7 +193,9 @@ export function useSearch() {
     isSearching,
     showHistory,
     searchHistory,
+    highlightedIndex,
     wrapperRef,
+    inputRef,
     // Actions
     handleSearch,
     handleInputChange,
@@ -173,6 +204,7 @@ export function useSearch() {
     clearQuery,
     clearHistory,
     handleHistoryClick,
+    setHighlightedIndex,
     setQuery,
   };
 }

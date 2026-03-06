@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useImperativeHandle } from "react";
 import { useSearch } from "@/shared/hooks/useSearch";
 import SearchDropdown from "@/shared/components/ui/SearchDropdown";
 import Image from "next/image";
@@ -10,15 +10,15 @@ export interface HomeSearchBarRef {
 }
 
 const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  
   const {
     query,
     showNoResults,
     isSearching,
     showHistory,
     searchHistory,
+    highlightedIndex,
     wrapperRef,
+    inputRef,
     handleSearch,
     handleInputChange,
     handleKeyDown,
@@ -26,12 +26,13 @@ const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
     clearQuery,
     clearHistory,
     handleHistoryClick,
+    setHighlightedIndex,
   } = useSearch();
 
   // 暴露 focus 方法给父组件
   useImperativeHandle(ref, () => ({
     focus: () => {
-      searchInputRef.current?.focus();
+      inputRef.current?.focus();
     }
   }));
 
@@ -42,9 +43,19 @@ const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
           <div className="relative">
             <div className="px-5 py-2 bg-popover rounded-[999px] outline outline-2 outline-offset-[-2px] outline-white backdrop-blur-[5px] flex items-center gap-3">
               <input
-                ref={searchInputRef}
+                ref={inputRef}
                 type="text"
-                className="flex-1 bg-transparent border-none outline-none text-primary type-button1 placeholder:text-secondary"
+                className="flex-1 bg-transparent border-none outline-none text-primary type-button1 placeholder:text-secondary md:hidden"
+                placeholder="Search..."
+                value={query}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onFocus={handleFocus}
+                disabled={isSearching}
+              />
+              <input
+                type="text"
+                className="flex-1 bg-transparent border-none outline-none text-primary type-button1 placeholder:text-secondary hidden md:block"
                 placeholder="Search by Channel outpoint / Node ID / Node name"
                 value={query}
                 onChange={handleInputChange}
@@ -68,20 +79,31 @@ const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
                   />
                 </button>
               )}
-              <button
-                type="button"
-                className="w-8 h-8 bg-purple rounded-[999px] flex justify-center items-center shrink-0"
-                onClick={handleSearch}
-                disabled={isSearching}
-              >
-                <Image
-                  src="/search.svg"
-                  alt="Search"
-                  width={16}
-                  height={16}
-                  className="w-4 h-4"
-                />
-              </button>
+              {isSearching ? (
+                <div className="w-8 h-8 flex justify-center items-center shrink-0">
+                  <Image
+                    src="/loading2.svg"
+                    alt="Loading"
+                    width={16}
+                    height={16}
+                    className="w-4 h-4 animate-spin"
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="w-8 h-8 bg-purple rounded-[999px] flex justify-center items-center shrink-0"
+                  onClick={handleSearch}
+                >
+                  <Image
+                    src="/search.svg"
+                    alt="Search"
+                    width={16}
+                    height={16}
+                    className="w-4 h-4"
+                  />
+                </button>
+              )}
             </div>
             
             <SearchDropdown
@@ -89,8 +111,10 @@ const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
               showNoResults={showNoResults}
               searchHistory={searchHistory}
               query={query}
+              highlightedIndex={highlightedIndex}
               onClearHistory={clearHistory}
               onHistoryClick={handleHistoryClick}
+              onHighlightChange={setHighlightedIndex}
             />
           </div>
         </div>

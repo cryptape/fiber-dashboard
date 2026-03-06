@@ -9,7 +9,6 @@ const footerLinks = {
   social: [
     { name: 'GitHub', href: 'https://github.com/driftluo/fiber-dashboard', icon: '/github.svg' },
     { name: 'Twitter', href: 'https://x.com/FiberDevs', icon: '/x.svg' },
-    { name: 'Email', href: 'mailto:contact@example.com', icon: '/mail.svg' },
   ],
   resources: [
     { name: 'Documentation', href: 'https://docs.fiber.world' },

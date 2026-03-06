@@ -39,7 +39,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1360px) {
   .navbar-fixed.navbar-scrolled > div,
   .navbar-fixed.navbar-scrolled-white > div {
     padding: 0 var(--spacing-desktop);
@@ -54,7 +54,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1360px) {
   .navbar-fixed {
     left: var(--spacing-desktop);
     right: var(--spacing-desktop);

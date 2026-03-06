@@ -1,4 +1,4 @@
-import { PageHeader, SectionHeader, Table, Pagination, GlassCardContainer, StatusBadge } from "@/shared/components/ui";
+import { PageHeader, SectionHeader, Table, Pagination, GlassCardContainer, StatusBadge, CopyButton } from "@/shared/components/ui";
 import type { ColumnDef, SortState } from "@/shared/components/ui";
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -7,7 +7,6 @@ import { useNetwork } from "@/features/networks/context/NetworkContext";
 import { RustNodeInfo } from "@/lib/types";
 import { hexToDecimal } from "@/lib/utils";
 import { NodeDetailCard } from "./NodeDetailCard";
-import Image from "next/image";
 import { getAssetColor as getAssetColorUtil } from "@/features/channels/utils/assetColors";
 
 interface ChannelData extends Record<string, unknown> {
@@ -28,19 +27,6 @@ interface AssetData extends Record<string, unknown> {
 
 // Channel Outpoint Cell 组件
 const ChannelOutpointCell = ({ value }: { value: string }) => {
-  const [copied, setCopied] = useState(false);
-  
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-  
   // 中间省略显示：前12个字符 + "..." + 后12个字符
   const displayValue = value.length > 30 
     ? `${value.slice(0, 12)}...${value.slice(-12)}`
@@ -49,26 +35,14 @@ const ChannelOutpointCell = ({ value }: { value: string }) => {
   return (
     <div className="flex items-center gap-2 group min-w-0">
       <span 
-        className="text-primary text-sm font-mono hover:underline cursor-pointer transition-colors" 
+        className="text-primary text-sm font-mono hover:underline cursor-pointer transition-colors truncate min-w-0 flex-1" 
         title={value}
         onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
         onMouseLeave={(e) => e.currentTarget.style.color = ''}
       >
         {displayValue}
       </span>
-      <button
-        onClick={handleCopy}
-        className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
-        title={copied ? "Copied!" : "Copy"}
-      >
-        <Image
-          src={copied ? "/copy_success.svg" : "/copy.svg"}
-          alt={copied ? "Copied" : "Copy"}
-          width={16}
-          height={16}
-          className="w-4 h-4"
-        />
-      </button>
+      <CopyButton text={value} className="opacity-0 group-hover:opacity-100 flex-shrink-0" />
     </div>
   );
 };
@@ -106,6 +80,7 @@ export const NodeDetail = () => {
   });
 
   // 使用新接口：直接拉取该节点的通道数据（支持分页和排序）
+  // 只筛选 CKB 和 USDI 资产
   const { data: channelsResponse, isLoading: channelsLoading } = useQuery({
     queryKey: ["node-channels", nodeId, currentNetwork, currentPage, sortKey, sortState],
     queryFn: () => {
@@ -119,7 +94,7 @@ export const NodeDetail = () => {
       const order = sortState === 'ascending' ? 'asc' : 'desc';
       console.log('[NodeDetail] Sort params - sortKey:', sortKey, 'sortState:', sortState);
       console.log('[NodeDetail] Backend params - sortBy:', sortBy, 'order:', order);
-      return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order);
+      return apiClient.getChannelsByNodeId(nodeId, currentPage - 1, sortBy, order, PAGE_SIZE, ['ckb', 'usdi']);
     },
     enabled: !!nodeId,
     staleTime: 0, // 关闭缓存，确保每次排序都重新请求
@@ -338,7 +313,7 @@ export const NodeDetail = () => {
     {
       key: "state",
       label: "Status",
-      width: "w-70",
+      width: "w-90",
       sortable: false,
       render: (value) => (
         <StatusBadge status={value as string} />
@@ -365,8 +340,8 @@ export const NodeDetail = () => {
       label: "Asset name",
       width: "flex-1",
       render: (value) => {
-        // CKB: #00CC9B (绿色), USDI: #7459E6 (紫色)
-        const color = value === 'CKB' ? '#00CC9B' : '#7459E6';
+        // 使用统一的资产颜色配置
+        const color = getAssetColorUtil(String(value).toLowerCase());
         return (
           <div className="flex items-center gap-2">
             <div 
@@ -390,7 +365,7 @@ export const NodeDetail = () => {
     <div>
       <PageHeader title="Node Details" />
       <NodeDetailCard
-        name={nodeInfo?.node_name || ""}
+        name={nodeInfo?.node_name || "-"}
         status="Active"
         hash={nodeInfo?.node_id || ""}
         location={locationText}

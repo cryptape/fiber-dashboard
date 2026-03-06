@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import {
   Table,
   Pagination,
@@ -12,6 +11,7 @@ import {
   StatusSelect,
   StatusBadge,
   RadioGroup,
+  CopyButton,
 } from "@/shared/components/ui";
 import BarChart from "@/shared/components/chart/BarChart";
 import PieChart from "@/shared/components/chart/PieChart";
@@ -71,19 +71,6 @@ const ALL_CHANNEL_STATES: ChannelState[] = [
 
 // Channel Outpoint Cell 组件
 const ChannelOutpointCell = ({ value }: { value: string }) => {
-  const [copied, setCopied] = useState(false);
-  
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-  
   // 中间省略显示：前12个字符 + "..." + 后12个字符
   const displayValue = value.length > 30 
     ? `${value.slice(0, 12)}...${value.slice(-12)}`
@@ -92,26 +79,14 @@ const ChannelOutpointCell = ({ value }: { value: string }) => {
   return (
     <div className="flex items-center gap-2 group min-w-0">
       <span 
-        className="text-primary text-sm font-mono hover:underline cursor-pointer transition-colors" 
+        className="text-primary text-sm font-mono hover:underline cursor-pointer transition-colors truncate min-w-0 flex-1" 
         title={value}
         onMouseEnter={(e) => e.currentTarget.style.color = '#674BDC'}
         onMouseLeave={(e) => e.currentTarget.style.color = ''}
       >
         {displayValue}
       </span>
-      <button
-        onClick={handleCopy}
-        className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity opacity-0 group-hover:opacity-100"
-        title={copied ? "Copied!" : "Copy"}
-      >
-        <Image
-          src={copied ? "/copy_success.svg" : "/copy.svg"}
-          alt={copied ? "Copied" : "Copy"}
-          width={16}
-          height={16}
-          className="w-4 h-4"
-        />
-      </button>
+      <CopyButton text={value} className="opacity-0 group-hover:opacity-100 flex-shrink-0" />
     </div>
   );
 };
@@ -157,10 +132,15 @@ export const Channels = () => {
 
   // 将前端的 sortKey 映射到后端的 sort_by 字段
   const getBackendSortBy = (frontendKey: string): string => {
+    // assetLiquidity 根据当前资产类型选择不同排序字段：
+    // - ckb: 按 capacity 排序
+    // - usdi 或其他非 CKB 资产: 按 asset（udt_value）排序
+    const liquiditySortBy = (!overviewAsset || overviewAsset === 'ckb') ? 'capacity' : 'asset';
     const mapping: Record<string, string> = {
       'createdOn': 'create_time',
       'lastCommitted': 'last_commit_time',
       'capacity': 'capacity',
+      'assetLiquidity': liquiditySortBy,
     };
     return mapping[frontendKey] || 'last_commit_time';
   };
@@ -219,25 +199,7 @@ export const Channels = () => {
     setCurrentPage(1);
   }, [overviewAsset]);
 
-  // 获取全量状态数据（所有资产聚合，用于状态选择器）
-  const getAllStateCount = useCallback((state: ChannelState) => {
-    if (!channelCountByState) return 0;
-    
-    // 服务端返回格式：{"ckb": {"open": 100, ...}, "USDI": {...}}
-    // 注意：ckb 是小写，USDI 是大写
-    type StateData = Record<string, Record<string, number>>;
-    const stateData = channelCountByState as unknown as StateData;
-    
-    // 聚合所有资产的数量
-    let total = 0;
-    const ckbData = stateData["ckb"] || {};
-    const usdiData = stateData["USDI"] || {}; // 使用大写 USDI
-    total += ckbData[state] || 0;
-    total += usdiData[state] || 0;
-    return total;
-  }, [channelCountByState]);
-
-  // 根据选中的资产计算状态统计数据（使用 overviewAsset，用于 Channel Overview 图表）
+  // 根据选中的资产计算状态统计数据（使用 overviewAsset，用于 Channel Overview 图表和状态选择器）
   const getStateCount = useCallback((state: ChannelState) => {
     if (!channelCountByState) return 0;
     
@@ -511,7 +473,7 @@ export const Channels = () => {
       key: "assetLiquidity",
       label: "Asset liquidity",
       width: "w-48",
-      sortable: false,
+      sortable: true,
       render: (value, row) => (
         <div className="text-purple font-semibold truncate">
           {value as string} {row.assetLiquidityUnit as string}
@@ -521,10 +483,12 @@ export const Channels = () => {
     {
       key: "state",
       label: "Status",
-      width: "w-70",
+      width: "w-90",
       sortable: false,
       render: (value) => (
-        <StatusBadge status={value as string} />
+        <div className="flex items-center">
+          <StatusBadge status={value as string} />
+        </div>
       ),
     },
     {
@@ -566,33 +530,33 @@ export const Channels = () => {
   const STATUS_COLORS: Record<string, string> = {
     'open': '#208C73',
     'closed_waiting_onchain_settlement': '#FAB83D',
-    'closed_cooperative': '#9B87C8',
+    'closed_cooperative': '#2563EB',
     'closed_uncooperative': '#B34846',
   };
   
-  // 生成状态选择器选项（使用全量数据，不受 overviewAsset 影响）
+  // 生成状态选择器选项（根据 overviewAsset 过滤，与图表保持一致）
   const statusOptions = useMemo(() => {
     if (!channelCountByState) return [];
     
     const options: Array<{ value: string; label: string; color?: string }> = [
       {
         value: 'open',
-        label: `Open (${getAllStateCount("open")})`,
+        label: `Open (${getStateCount("open")})`,
         color: STATUS_COLORS['open'],
       },
       {
         value: 'closed_waiting_onchain_settlement',
-        label: `Closing (${getAllStateCount("closed_waiting_onchain_settlement")})`,
+        label: `Closing (${getStateCount("closed_waiting_onchain_settlement")})`,
         color: STATUS_COLORS['closed_waiting_onchain_settlement'],
       },
       {
         value: 'closed_cooperative',
-        label: `Cooperative closed (${getAllStateCount("closed_cooperative")})`,
+        label: `Cooperative closed (${getStateCount("closed_cooperative")})`,
         color: STATUS_COLORS['closed_cooperative'],
       },
       {
         value: 'closed_uncooperative',
-        label: `Uncooperative closed (${getAllStateCount("closed_uncooperative")})`,
+        label: `Uncooperative closed (${getStateCount("closed_uncooperative")})`,
         color: STATUS_COLORS['closed_uncooperative'],
       },
     ];
@@ -610,7 +574,7 @@ export const Channels = () => {
     });
     
     return options;
-  }, [channelCountByState, getAllStateCount]);
+  }, [channelCountByState, getStateCount]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -639,7 +603,7 @@ export const Channels = () => {
             data={pieChartData}
             title="Channel Status Distribution"
             height="400px"
-            colors={["#208C73", "#FAB83D", "#B34846", "#9B87C8"]}
+            colors={["#208C73", "#FAB83D", "#2563EB", "#B34846"]}
             tooltipFormatter={(params) => {
               const dataItem = pieChartData[params.dataIndex];
               const totalChannels = pieChartData.reduce((sum, item) => sum + item.value, 0);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import Image from "next/image";
 import { useSearch } from "@/shared/hooks/useSearch";
 import SearchDropdown from "@/shared/components/ui/SearchDropdown";
@@ -10,8 +10,11 @@ export interface HeaderSearchBarRef {
   focus: () => void;
 }
 
-const HeaderSearchBar = forwardRef<HeaderSearchBarRef>((props, ref) => {
-  const searchInputRef = useRef<HTMLInputElement>(null);
+interface HeaderSearchBarProps {
+  scrolled?: boolean;
+}
+
+const HeaderSearchBar = forwardRef<HeaderSearchBarRef, HeaderSearchBarProps>((_props, ref) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   const {
@@ -20,7 +23,9 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef>((props, ref) => {
     isSearching,
     showHistory,
     searchHistory,
+    highlightedIndex,
     wrapperRef,
+    inputRef,
     handleSearch,
     handleInputChange,
     handleKeyDown,
@@ -28,12 +33,13 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef>((props, ref) => {
     clearQuery,
     clearHistory,
     handleHistoryClick,
+    setHighlightedIndex,
   } = useSearch();
 
   // 暴露 focus 方法给父组件
   useImperativeHandle(ref, () => ({
     focus: () => {
-      searchInputRef.current?.focus();
+      inputRef.current?.focus();
     }
   }));
 
@@ -53,7 +59,7 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef>((props, ref) => {
           <SearchIcon className="text-secondary" />
         </div>
         <input
-          ref={searchInputRef}
+          ref={inputRef}
           type="text"
           value={query}
           onChange={handleInputChange}
@@ -101,8 +107,10 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef>((props, ref) => {
         showNoResults={showNoResults}
         searchHistory={searchHistory}
         query={query}
+        highlightedIndex={highlightedIndex}
         onClearHistory={clearHistory}
         onHistoryClick={handleHistoryClick}
+        onHighlightChange={setHighlightedIndex}
       />
     </div>
   );
