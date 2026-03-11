@@ -155,10 +155,10 @@ export default function NodeNetworkMap({
     // 根据 channel 数量计算节点颜色的辅助函数
     const getNodeColor = (channelCount: number): string => {
       if (channelCount >= 40) return "#2F1C96"; // 40+
-      if (channelCount >= 30) return "#5034C4"; // 30-39
-      if (channelCount >= 20) return "#7459E6"; // 20-29
-      if (channelCount >= 10) return "#B8A8F4"; // 10-19
-      return "#E6E2FB"; // 0-9
+      if (channelCount >= 30) return "#4A33B8"; // 30-39
+      if (channelCount >= 20) return "#6A55D9"; // 20-29
+      if (channelCount >= 10) return "#8F7BE9"; // 10-19
+      return "#B6A8F3"; // 0-9
     };
 
     // 转换节点数据为散点图数据
@@ -394,7 +394,7 @@ export default function NodeNetworkMap({
           itemStyle: {
             borderColor: "transparent",
             borderWidth: 0,
-            areaColor: "rgba(0, 0, 0, 0.04)", // 增加不透明度使阴影更明显
+            areaColor: "rgba(106, 85, 217, 0.08)", // 增加不透明度使阴影更明显
           },
           emphasis: {
             disabled: true,
@@ -424,7 +424,7 @@ export default function NodeNetworkMap({
           emphasis: {
             itemStyle: {
               areaColor: "#D5CDF7",
-              borderColor: "#88899E",
+              borderColor: "#76778B",
             },
             label: {
               show: false,
@@ -433,7 +433,7 @@ export default function NodeNetworkMap({
           select: {
             itemStyle: {
               areaColor: "#D5CDF7",
-              borderColor: "#88899E",
+              borderColor: "#76778B",
             },
           },
           tooltip: {
@@ -455,10 +455,10 @@ export default function NodeNetworkMap({
       //     fontSize: 10,
       //   },
       //   pieces: [
-      //     { min: 0, max: 10, color: "#E6E2FB" },
-      //     { min: 10, max: 20, color: "#B8A8F4" },
-      //     { min: 20, max: 30, color: "#7459E6" },
-      //     { min: 30, max: 40, color: "#5034C4" },
+      //     { min: 0, max: 10, color: "#B6A8F3" },
+      //     { min: 10, max: 20, color: "#8F7BE9" },
+      //     { min: 20, max: 30, color: "#6A55D9" },
+      //     { min: 30, max: 40, color: "#4A33B8" },
       //     { min: 40, max: 50, color: "#2F1C96" },
       //     { min: 50, color: "#2F1C96" },
       //   ],

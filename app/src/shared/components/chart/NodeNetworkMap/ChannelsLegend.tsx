@@ -24,10 +24,10 @@ export function ChannelsLegend({ className }: Props) {
           <div className="flex">
             {[
               { color: '#2F1C96' },
-              { color: '#5034C4' },
-              { color: '#7459E6' },
-              { color: '#B8A8F4' },
-              { color: '#E6E2FB' },
+              { color: '#4A33B8' },
+              { color: '#6A55D9' },
+              { color: '#8F7BE9' },
+              { color: '#B6A8F3' },
             ].map((item, index) => (
               <div key={index} className="flex-1 h-6" style={{ backgroundColor: item.color }} />
             ))}
@@ -50,7 +50,7 @@ export function ChannelsLegend({ className }: Props) {
           <div className="inline-flex flex-col justify-center items-start">
             <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#2F1C96' }} />
             <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#5034C4' }} />
-            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#7459E6' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#674BDC' }} />
             <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#B8A8F4' }} />
             <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#E6E2FB' }} />
           </div>

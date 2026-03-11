@@ -29,7 +29,7 @@ export default function PieChart({
   title,
   height = "400px",
   className = "",
-  colors = ["#BDEB88", "#FBE38E", "#E659AB"], // 默认使用指定的三种颜色
+  colors = ["#BDEB88", "#FBE38E", "#E06B6B"], // 默认使用指定的三种颜色
   showLegend = true,
   tooltipFormatter,
 }: PieChartProps) {
@@ -170,11 +170,11 @@ export default function PieChart({
                 // 如果需要显示色块，则在值前面添加圆点
                 if (item.showColorDot) {
                   result += `<span style="display:flex;align-items:center;font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${secondaryColor};margin-left:16px;">`;
-                  result += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${param.color};margin-right:6px;flex-shrink:0;"></span>`;
+                  result += `<span style="display:inline-block;width:8px;height:8px;background-color:${param.color};margin-right:4px;flex-shrink:0;"></span>`;
                   result += `${item.value}`;
                   result += `</span>`;
                 } else {
-                  result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${purpleColor};margin-left:16px;">${item.value}</span>`;
+                  result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${primaryColor};margin-left:16px;">${item.value}</span>`;
                 }
                 
                 result += `</div>`;
@@ -192,12 +192,12 @@ export default function PieChart({
             
             let result = '';
             
-            // Status 行（如果存在）- 带小圆点
+            // Status 行（如果存在）- 带小方块
             if (isStatus && dataItem.status) {
               result += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">`;
               result += `<span style="font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${tertiaryColor};white-space:nowrap;">Status</span>`;
               result += `<span style="display:flex;align-items:center;font-size:${captionFontSize};font-weight:${mediumWeight};line-height:${lineHeight120};color:${valueColor};flex:1;min-width:0;">`;
-              result += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${param.color};margin-right:6px;flex-shrink:0;"></span>`;
+              result += `<span style="display:inline-block;width:8px;height:8px;background-color:${param.color};margin-right:6px;flex-shrink:0;"></span>`;
               result += `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dataItem.status}</span>`;
               result += `</span>`;
               result += `</div>`;

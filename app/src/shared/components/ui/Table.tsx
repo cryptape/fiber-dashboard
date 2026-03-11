@@ -82,7 +82,7 @@ export const Table = <T extends Record<string, unknown>>({
                     key={column.key}
                     data-showinfo={column.showInfo || false}
                     data-sortable={column.sortable || false}
-                    className={`h-12 px-3 py-2.5 border-b-2 border-color flex items-center ${
+                    className={`h-12 px-3 py-2.5 border-b-2 border-default flex items-center ${
                       column.width || 'flex-1'
                     } ${column.sortable ? 'cursor-pointer' : ''} ${
                       column.width?.startsWith('flex') ? 'justify-start' : 'justify-between'
@@ -105,7 +105,7 @@ export const Table = <T extends Record<string, unknown>>({
                               alt="info"
                               width={16}
                               height={16}
-                              className="opacity-100 cursor-help"
+                              className="opacity-100 cursor-help ml-1"
                             />
                           </Tooltip.Trigger>
                           {column.infoTooltip && (
@@ -133,7 +133,7 @@ export const Table = <T extends Record<string, unknown>>({
                 <div
                   key={rowIndex}
                   className={`flex w-full transition-colors ${
-                    rowIndex < data.length - 1 ? 'border-b border-color' : ''
+                    rowIndex < data.length - 1 ? 'border-b border-default' : ''
                   } ${
                     onRowClick ? 'cursor-pointer' : ''
                   }`}

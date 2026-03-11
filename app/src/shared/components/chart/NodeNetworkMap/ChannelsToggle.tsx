@@ -18,7 +18,7 @@ export function ChannelsToggle({ showChannels, onToggle, className }: Props) {
           style={{ 
             width: '14px', 
             height: '14px',
-            backgroundColor: showChannels ? '#8B5CF6' : 'transparent',
+            backgroundColor: showChannels ? '#674BDC' : 'transparent',
             border: showChannels ? 'none' : '1px solid #d9d9d9',
             borderRadius: '2px'
           }} 

@@ -297,7 +297,7 @@ export const DashboardNew = () => {
             data={timeSeriesData ? [timeSeriesData.capacity, timeSeriesData.channels] : MOCK_TIME_SERIES_DATA}
             height="321px"
             className="w-full"
-            colors={["#7459e6", "#fab83d"]}
+            colors={["#674BDC", "#fab83d"]}
             timeRange={timeRange}
           />
         </GlassCardContainer>
@@ -359,7 +359,7 @@ export const DashboardNew = () => {
             <GlassCardContainer className="h-[480px]">
               <TimeSeriesChart
                 data={timeSeriesData ? [timeSeriesData.nodes] : MOCK_TIME_SERIES_DATA2}
-                height="480px"
+                height="100%"
                 className="w-full"
                 colors={["#59ABE6"]}
                 timeRange={timeRange}

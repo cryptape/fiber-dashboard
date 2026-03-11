@@ -37,19 +37,17 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   let statusStyles: string;
   
   if (status === "Active" || status === "open") {
-    // Active 和 open 状态 - 绿色 #208C73
+    // Active 和 open 状态 - 绿色 #156F5C
     statusStyles = "bg-success border-success text-success";
   } else if (status === "closed_waiting_onchain_settlement") {
-    // closed_waiting_onchain_settlement 状态 - 黄色 #FAB83D
+    // closed_waiting_onchain_settlement 状态 - 黄色 #B45309
     statusStyles = "bg-warning border-warning text-warning";
   } else if (status === "closed_uncooperative") {
     // closed_uncooperative 状态 - 红色 #B34846
     statusStyles = "bg-error border-error text-error";
   } else if (status === "closed_cooperative") {
-    // closed_cooperative 状态 - 蓝色 info 色板
-    statusStyles = "border-[#DBEAFE] text-[#2563EB]";
-    // 使用自定义背景色
-    statusStyles += " bg-[#EFF6FF]";
+    // closed_cooperative 状态 - 蓝色 #2563EB
+    statusStyles = "bg-info border-info text-info";
   } else if (status === "Inactive") {
     // Inactive 状态 - 灰色
     statusStyles = "bg-gray-100 border-gray-300 text-gray-700";
