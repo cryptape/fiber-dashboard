@@ -7,7 +7,7 @@ import './index.css';
 
 const footerLinks = {
   social: [
-    { name: 'GitHub', href: 'https://github.com/driftluo/fiber-dashboard', icon: '/github.svg' },
+    { name: 'GitHub', href: 'https://github.com/nervosnetwork/fiber', icon: '/github.svg' },
     { name: 'Twitter', href: 'https://x.com/FiberDevs', icon: '/x.svg' },
   ],
   resources: [

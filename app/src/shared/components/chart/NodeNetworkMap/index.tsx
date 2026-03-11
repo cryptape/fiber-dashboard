@@ -163,19 +163,11 @@ export default function NodeNetworkMap({
 
     // 转换节点数据为散点图数据
     // 先映射所有节点数据
+
     const rawScatterData = nodes
       .map(node => {
+        // 优先用 connections 统计值，若为 0 则 fallback 到接口返回的 channel_count
         const channelCount = nodeChannelCount.get(node.nodeId) || 0;
-        console.log(
-          nodeChannelCount.get(
-            "0x0327541071dbe2b22b532cea104a781fa9cc61bf8e47d5216e48c8738e3f969351"
-          ),
-          getNodeColor(
-            nodeChannelCount.get(
-              "0x0327541071dbe2b22b532cea104a781fa9cc61bf8e47d5216e48c8738e3f969351"
-            ) || 0
-          )
-        );
 
         return {
           name: `${node.nodeName || node.nodeId.slice(0, 8)}`,
@@ -325,7 +317,6 @@ export default function NodeNetworkMap({
 
       if (filteredData.length > 0) {
         const seriesName = `${range.label} (${filteredData.length})`;
-        console.log(`[NodeNetworkMap] ${seriesName} - width: ${range.width}`);
         lineSeries.push({
           name: seriesName,
           type: "lines",

@@ -127,13 +127,10 @@ export const Nodes = () => {
       ]);
       
       const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-      console.log(`[MapData timing] Data fetch completed, duration: ${duration}s`);
-      console.log(`[MapData timing] Node count: ${nodes.length}, Channel count: ${channels.length}`);
+      console.log(`[MapData timing] Node count: ${nodes.length}, Channel count: ${channels.length}, Duration: ${((endTime - startTime) / 1000).toFixed(2)}s`);
       
       return { nodes, channels };
     },
-    staleTime: 300000, // 5分钟缓存
     refetchInterval: 300000, // 5分钟轮询
   });
 
@@ -257,7 +254,7 @@ export const Nodes = () => {
         country: node.country_or_region || "Unknown",
         latitude: lat || 0,
         longitude: lng || 0,
-        capacity: 0, // capacity 已移除，保留字段但设为 0
+        capacity: 0,
       };
     });
 
@@ -275,9 +272,8 @@ export const Nodes = () => {
   const connectionData: NodeConnectionData[] = useMemo(() => {
     if (!allNodesData?.channels || !allNodesData?.nodes) return [];
 
-    const totalChannels = allNodesData.channels.length;
-    // 创建节点ID集合，用于快速查找
     const nodeIdSet = new Set(allNodesData.nodes.map(node => node.node_id));
+    const totalChannels = allNodesData.channels.length;
 
     const filteredChannels = allNodesData.channels.filter(channel => {
       // 确保两个节点都存在
@@ -289,10 +285,8 @@ export const Nodes = () => {
     return filteredChannels.map(channel => ({
       fromNodeId: channel.node1,
       toNodeId: channel.node2,
-      channelOutpoint: channel.channel_outpoint,
     }));
   }, [allNodesData]);
-  console.log(mapData, connectionData,'===')
 
   // 列定义（只有服务端支持的字段才标记 sortable）
   const columns: ColumnDef<NodeData>[] = [
