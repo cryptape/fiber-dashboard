@@ -118,18 +118,10 @@ export const Nodes = () => {
   const { data: allNodesData, isLoading: allNodesLoading } = useQuery({
     queryKey: ['allNodesForMap', currentNetwork],
     queryFn: async () => {
-      const startTime = performance.now();
-      console.log('[MapData时间统计] 开始获取全量节点和通道数据');
-      
       const [nodes, channels] = await Promise.all([
         apiClient.fetchAllActiveNodes(),
         apiClient.fetchAllActiveChannels(),
       ]);
-      
-      const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-      console.log(`[MapData时间统计] 数据获取完成，耗时: ${duration}s`);
-      console.log(`[MapData时间统计] 节点数量: ${nodes.length}, 通道数量: ${channels.length}`);
       
       return { nodes, channels };
     },
@@ -236,17 +228,11 @@ export const Nodes = () => {
 
   // 转换为地图数据格式 - 使用全量节点数据
   const mapData: NodeMapData[] = useMemo(() => {
-    const startTime = performance.now();
-    console.log('[MapData时间统计] 开始计算mapData');
-    
     if (!allNodesData?.nodes) {
-      console.log('[MapData时间统计] 无数据，返回空数组');
       return [];
     }
 
-    const total = allNodesData.nodes.length;
     const nodesWithLoc = allNodesData.nodes.filter(node => node.loc);
-    console.log('[MapData] 无loc过滤数量:', total - nodesWithLoc.length, '总数:', total);
 
     const mapped = nodesWithLoc.map(node => {
       const [lat, lng] = (node.loc || "").split(",").map(coord => parseFloat(coord.trim()));
@@ -257,16 +243,11 @@ export const Nodes = () => {
         country: node.country_or_region || "Unknown",
         latitude: lat || 0,
         longitude: lng || 0,
-        capacity: 0, // capacity 已移除，保留字段但设为 0
+        capacity: 0,
       };
     });
 
     const nodesWithCoords = mapped.filter(node => node.latitude !== 0 && node.longitude !== 0);
-    console.log('[MapData] 经纬度为0过滤数量:', mapped.length - nodesWithCoords.length, '映射后数:', mapped.length);
-
-    const endTime = performance.now();
-    const duration = ((endTime - startTime) / 1000).toFixed(2);
-    console.log(`[MapData时间统计] mapData计算完成，耗时: ${duration}s, 最终节点数: ${nodesWithCoords.length}`);
 
     return nodesWithCoords;
   }, [allNodesData]);
@@ -275,24 +256,12 @@ export const Nodes = () => {
   const connectionData: NodeConnectionData[] = useMemo(() => {
     if (!allNodesData?.channels || !allNodesData?.nodes) return [];
 
-    const totalChannels = allNodesData.channels.length;
-    // 创建节点ID集合，用于快速查找
-    const nodeIdSet = new Set(allNodesData.nodes.map(node => node.node_id));
-
-    const filteredChannels = allNodesData.channels.filter(channel => {
-      // 确保两个节点都存在
-      return nodeIdSet.has(channel.node1) && nodeIdSet.has(channel.node2);
-    });
-
-    console.log('[ConnectionData] 缺失节点过滤数量:', totalChannels - filteredChannels.length, '总通道数:', totalChannels);
-
-    return filteredChannels.map(channel => ({
+    return allNodesData.channels.map(channel => ({
       fromNodeId: channel.node1,
       toNodeId: channel.node2,
       channelOutpoint: channel.channel_outpoint,
     }));
   }, [allNodesData]);
-  console.log(mapData, connectionData,'===')
 
   // 列定义（只有服务端支持的字段才标记 sortable）
   const columns: ColumnDef<NodeData>[] = [
