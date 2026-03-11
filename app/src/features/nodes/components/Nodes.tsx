@@ -119,7 +119,7 @@ export const Nodes = () => {
     queryKey: ['allNodesForMap', currentNetwork],
     queryFn: async () => {
       const startTime = performance.now();
-      console.log('[MapData时间统计] 开始获取全量节点和通道数据');
+      console.log('[MapData timing] Start fetching full node and channel data');
       
       const [nodes, channels] = await Promise.all([
         apiClient.fetchAllActiveNodes(),
@@ -128,8 +128,8 @@ export const Nodes = () => {
       
       const endTime = performance.now();
       const duration = ((endTime - startTime) / 1000).toFixed(2);
-      console.log(`[MapData时间统计] 数据获取完成，耗时: ${duration}s`);
-      console.log(`[MapData时间统计] 节点数量: ${nodes.length}, 通道数量: ${channels.length}`);
+      console.log(`[MapData timing] Data fetch completed, duration: ${duration}s`);
+      console.log(`[MapData timing] Node count: ${nodes.length}, Channel count: ${channels.length}`);
       
       return { nodes, channels };
     },
@@ -237,16 +237,16 @@ export const Nodes = () => {
   // 转换为地图数据格式 - 使用全量节点数据
   const mapData: NodeMapData[] = useMemo(() => {
     const startTime = performance.now();
-    console.log('[MapData时间统计] 开始计算mapData');
+    console.log('[MapData timing] Start calculating mapData');
     
     if (!allNodesData?.nodes) {
-      console.log('[MapData时间统计] 无数据，返回空数组');
+      console.log('[MapData timing] No data, returning empty array');
       return [];
     }
 
     const total = allNodesData.nodes.length;
     const nodesWithLoc = allNodesData.nodes.filter(node => node.loc);
-    console.log('[MapData] 无loc过滤数量:', total - nodesWithLoc.length, '总数:', total);
+    console.log('[MapData] Filtered nodes without loc:', total - nodesWithLoc.length, 'Total:', total);
 
     const mapped = nodesWithLoc.map(node => {
       const [lat, lng] = (node.loc || "").split(",").map(coord => parseFloat(coord.trim()));
@@ -262,11 +262,11 @@ export const Nodes = () => {
     });
 
     const nodesWithCoords = mapped.filter(node => node.latitude !== 0 && node.longitude !== 0);
-    console.log('[MapData] 经纬度为0过滤数量:', mapped.length - nodesWithCoords.length, '映射后数:', mapped.length);
+    console.log('[MapData] Filtered nodes with zero coordinates:', mapped.length - nodesWithCoords.length, 'Mapped count:', mapped.length);
 
     const endTime = performance.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
-    console.log(`[MapData时间统计] mapData计算完成，耗时: ${duration}s, 最终节点数: ${nodesWithCoords.length}`);
+    console.log(`[MapData timing] mapData calculation completed, duration: ${duration}s, Final node count: ${nodesWithCoords.length}`);
 
     return nodesWithCoords;
   }, [allNodesData]);
@@ -284,7 +284,7 @@ export const Nodes = () => {
       return nodeIdSet.has(channel.node1) && nodeIdSet.has(channel.node2);
     });
 
-    console.log('[ConnectionData] 缺失节点过滤数量:', totalChannels - filteredChannels.length, '总通道数:', totalChannels);
+    console.log('[ConnectionData] Filtered channels with missing nodes:', totalChannels - filteredChannels.length, 'Total channels:', totalChannels);
 
     return filteredChannels.map(channel => ({
       fromNodeId: channel.node1,

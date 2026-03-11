@@ -16,7 +16,7 @@ export interface CopyButtonProps {
 export const CopyButton: React.FC<CopyButtonProps> = ({
   text,
   className = "",
-  ariaLabel = "复制",
+  ariaLabel = "Copy",
 }) => {
   const [showCopied, setShowCopied] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -30,7 +30,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
         setShowCopied(false);
       }, 2000);
     } catch (err) {
-      console.error("复制失败:", err);
+      console.error("Copy failed:", err);
     }
   };
 
@@ -41,7 +41,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
           <div className="flex items-center gap-1">
             <Image
               src="/copy_success.svg"
-              alt="成功"
+              alt="Success"
               width={16}
               height={16}
               className="w-4 h-4"
@@ -61,7 +61,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
         >
           <Image
             src="/copy.svg"
-            alt="复制"
+            alt="Copy"
             width={16}
             height={16}
             className="w-full h-full transition-all"

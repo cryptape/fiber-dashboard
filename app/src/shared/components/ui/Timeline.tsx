@@ -251,7 +251,7 @@ export const TimelineContentRow = ({
       {showCopy && (
         <CopyButton
           text={value}
-          ariaLabel={`复制 ${label}`}
+          ariaLabel={`Copy ${label}`}
         />
       )}
     </div>

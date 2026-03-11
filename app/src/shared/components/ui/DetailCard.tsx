@@ -129,7 +129,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             </div>
             <CopyButton
               text={hash}
-              ariaLabel="复制哈希"
+              ariaLabel="Copy hash"
               className="ml-2 flex-shrink-0"
             />
           </div>
@@ -142,7 +142,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
               <div className="w-4 h-4 relative">
                 <Image
                   src="/location.svg"
-                  alt="位置"
+                  alt="Location"
                   width={16}
                   height={16}
                   className="w-full h-full"
@@ -186,7 +186,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             {commitmentArgs !== "-" && (
               <CopyButton
                 text={commitmentArgs}
-                ariaLabel="复制 Commitment Args"
+                ariaLabel="Copy Commitment Args"
               />
             )}
           </div>
@@ -204,7 +204,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
             {witnessArgs !== "-" && (
               <CopyButton
                 text={witnessArgs}
-                ariaLabel="复制 Witness Structure"
+                ariaLabel="Copy Witness Structure"
               />
             )}
           </div>
@@ -250,7 +250,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
               {field.copyable && field.value !== "-" && (
                 <CopyButton
                   text={field.value}
-                  ariaLabel={`复制 ${field.label}`}
+                  ariaLabel={`Copy ${field.label}`}
                 />
               )}
             </div>

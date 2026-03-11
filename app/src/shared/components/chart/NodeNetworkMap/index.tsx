@@ -192,7 +192,7 @@ export default function NodeNetworkMap({
       });
 
     const allNodeData = rawScatterData.filter(item => item.channelCount > 0);
-    console.log('[NodeNetworkMap] channelCount为0过滤数量:', rawScatterData.length - allNodeData.length, '原始节点数:', rawScatterData.length);
+    console.log('[NodeNetworkMap] Filtered nodes with channelCount=0:', rawScatterData.length - allNodeData.length, 'Original node count:', rawScatterData.length);
 
     // 对相同经纬度的节点添加随机偏移，而不是去重
     const coordCountMap = new Map<string, number>();
@@ -200,7 +200,7 @@ export default function NodeNetworkMap({
     
     if (mock) {
       // Mock模式：对相同经纬度的节点添加随机偏移
-      console.log('[NodeNetworkMap] Mock模式：启用随机偏移');
+      console.log('[NodeNetworkMap] Mock mode: enable random offsets');
       nodeScatterData = allNodeData.map(item => {
       const key = `${item.value[0]},${item.value[1]}`;
       const count = coordCountMap.get(key) || 0;
@@ -228,10 +228,10 @@ export default function NodeNetworkMap({
     });
 
       const duplicateCount = Array.from(coordCountMap.values()).filter(c => c > 1).reduce((sum, c) => sum + c - 1, 0);
-      console.log('[NodeNetworkMap] 相同经纬度节点数（已添加偏移）:', duplicateCount, '最终节点数:', nodeScatterData.length);
+      console.log('[NodeNetworkMap] Nodes with duplicated coordinates (offset applied):', duplicateCount, 'Final node count:', nodeScatterData.length);
     } else {
       // 正常模式：按经纬度去重，保留 channelCount 最多的节点
-      console.log('[NodeNetworkMap] 正常模式：按经纬度去重');
+      console.log('[NodeNetworkMap] Normal mode: deduplicate by coordinates');
       const coordMap = new Map<string, (typeof allNodeData)[0]>();
       allNodeData.forEach(item => {
         const key = `${item.value[0]},${item.value[1]}`;
@@ -242,9 +242,9 @@ export default function NodeNetworkMap({
       });
 
       nodeScatterData = Array.from(coordMap.values());
-      console.log('[NodeNetworkMap] 重复经纬度去重数量:', allNodeData.length - nodeScatterData.length, '最终节点数:', nodeScatterData.length);
+      console.log('[NodeNetworkMap] Deduplicated duplicate coordinates:', allNodeData.length - nodeScatterData.length, 'Final node count:', nodeScatterData.length);
     }
-    console.log('[NodeNetworkMap] 前5个节点数据示例:', nodeScatterData.slice(0, 5).map(n => ({ name: n.name, value: n.value, channelCount: n.channelCount })));
+    console.log('[NodeNetworkMap] First 5 node samples:', nodeScatterData.slice(0, 5).map(n => ({ name: n.name, value: n.value, channelCount: n.channelCount })));
 
     console.log(nodeScatterData, "nodeScatterData");
     // 创建节点ID到坐标的映射（使用偏移后的坐标）
@@ -294,10 +294,10 @@ export default function NodeNetworkMap({
     });
 
     const linesData = Array.from(connectionGroups.values());
-    console.log('[NodeNetworkMap] 连线数据数量:', linesData.length, '原始连接数:', connections.length);
+    console.log('[NodeNetworkMap] Line data count:', linesData.length, 'Original connection count:', connections.length);
     // 打印 count 最大的前 10 条连线
     const topLines = [...linesData].sort((a, b) => b.count - a.count).slice(0, 10);
-    console.log('[NodeNetworkMap] count最大的10条连线:', topLines.map(l => ({ from: l.node1Name, to: l.node2Name, count: l.count })));
+    console.log('[NodeNetworkMap] Top 10 lines by count:', topLines.map(l => ({ from: l.node1Name, to: l.node2Name, count: l.count })));
 
     // 生成连线系列和图例数据（根据连接数量分组）
     const baseColor = "#59ABE6"; // 蓝色连线
@@ -618,8 +618,8 @@ export default function NodeNetworkMap({
       ],
     };
 
-    console.log('[NodeNetworkMap] 连线系列数量:', lineSeries.length, '节点系列: 1', '总系列数:', lineSeries.length + 1);
-    console.log('[NodeNetworkMap] 传给 ECharts 的节点数据数量:', nodeScatterData.length);
+    console.log('[NodeNetworkMap] Line series count:', lineSeries.length, 'Node series: 1', 'Total series:', lineSeries.length + 1);
+    console.log('[NodeNetworkMap] Node data count passed to ECharts:', nodeScatterData.length);
     chartInstance.current.setOption(option, {
       notMerge: true, // 不合并配置，完全替换
       lazyUpdate: false,
