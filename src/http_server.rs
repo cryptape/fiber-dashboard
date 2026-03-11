@@ -30,6 +30,7 @@ pub(crate) struct Page {
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
 struct NodeId {
+    #[serde(alias = "pubkey")]
     node_id: JsonBytes,
     #[serde(default)]
     page: usize,
@@ -248,6 +249,7 @@ pub async fn list_channels_monthly(
 #[derive(Debug, Extractible, Serialize, Deserialize)]
 #[salvo(extract(default_source(from = "query")))]
 pub(crate) struct ChannelByNodeIdParams {
+    #[serde(alias = "pubkey")]
     pub(crate) node_id: JsonBytes,
     pub(crate) page: usize,
     #[serde(default)]

@@ -291,6 +291,11 @@ impl HourlyNodeInfoDBRead {
         let page_size = std::cmp::min(params.page_size.unwrap_or(PAGE_SIZE), PAGE_SIZE);
         let offset = params.page.saturating_mul(page_size);
         let hour_bucket = Utc::now() - chrono::Duration::hours(3);
+        let node_name = if params.node_name.starts_with("0x") {
+            &params.node_name[2..]
+        } else {
+            &params.node_name
+        };
         let sql = format!(
             r#"
         SELECT
@@ -319,7 +324,7 @@ impl HourlyNodeInfoDBRead {
         );
         let rows = sqlx::query(&sql)
             .bind(hour_bucket)
-            .bind(params.node_name)
+            .bind(node_name)
             .fetch_all(pool)
             .await?;
         let (rows, total_count) = rows_with_total::<Self>(rows)?;
@@ -338,10 +343,7 @@ impl HourlyNodeInfoDBRead {
             .replace("{sort_by}", params.sort_by.as_str())
             .replace("{order}", params.order.as_str());
         let sql = format!("{} LIMIT {} OFFSET {}", sql, page_size, offset);
-        let rows = sqlx::query(&sql)
-            .bind(hour_bucket)
-            .fetch_all(pool)
-            .await?;
+        let rows = sqlx::query(&sql).bind(hour_bucket).fetch_all(pool).await?;
         let (rows, total_count) = rows_with_total::<Self>(rows)?;
         Ok((rows, params.page.saturating_add(1), total_count))
     }
@@ -358,7 +360,8 @@ impl HourlyNodeInfoDBRead {
         if end - start > chrono::Duration::days(30) || start > end {
             end = start + chrono::Duration::days(30);
         }
-        let base_sql = SELECT_MONTHLY_NODES_SQL.replace("{nodes}", params.net.online_nodes_hourly());
+        let base_sql =
+            SELECT_MONTHLY_NODES_SQL.replace("{nodes}", params.net.online_nodes_hourly());
         let sql = format!("{} LIMIT {} OFFSET {}", base_sql, page_size, offset);
         let rows = sqlx::query(&sql)
             .bind(start)
@@ -661,10 +664,7 @@ impl HourlyChannelInfoDBRead {
             .replace("{2}", params.net.udt_infos())
             .replace("{3}", params.net.channel_states());
         let sql = format!("{} LIMIT {} OFFSET {}", sql, page_size, offset);
-        let rows = sqlx::query(&sql)
-            .bind(hour_bucket)
-            .fetch_all(pool)
-            .await?;
+        let rows = sqlx::query(&sql).bind(hour_bucket).fetch_all(pool).await?;
         let (rows, total_count) = rows_with_total::<Self>(rows)?;
         Ok((rows, params.page.saturating_add(1), total_count))
     }
