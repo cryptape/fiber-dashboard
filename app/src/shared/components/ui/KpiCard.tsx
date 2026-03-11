@@ -57,6 +57,19 @@ function formatNumber(value: string): { number: string; suffix: string } {
   return { number: formatted, suffix: '' };
 }
 
+export function TrendIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 9" fill="none" className={className}>
+      <path
+        d="M15.1667 0.5L8.83333 6.83333L5.5 3.5L0.5 8.5M15.1667 0.5H11.1667M15.1667 0.5L15.1667 4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export interface KpiCardProps {
   /** 卡片标题 */
   label: string;
@@ -160,18 +173,7 @@ export default function KpiCard({
           >
             {/* 箭头图标 */}
             <div className={`w-4 h-4 relative flex items-center justify-center transition-transform ${!isPositive ? 'rotate-180 scale-x-[-1]' : ''}`.trim()}>
-              <Image
-                src="/trend.svg"
-                alt="trend"
-                width={14}
-                height={8}
-                className="w-3.5 h-2"
-                style={{
-                  filter: isPositive 
-                    ? 'invert(30%) sepia(50%) saturate(500%) hue-rotate(120deg)' 
-                    : 'invert(40%) sepia(50%) saturate(500%) hue-rotate(330deg)'
-                }}
-              />
+              <TrendIcon className={isPositive ? "text-[#156F5C]" : "text-[#B34846]"} />
             </div>
             <div className={`type-caption ${isPositive ? 'text-success' : 'text-error'}`.trim()}>
               {changePercent}%

@@ -4,20 +4,20 @@
  */
 
 export const ASSET_COLORS: Record<string, string> = {
-  'ckb': '#7459e6',      // purple
-  'usdi': '#6ED4CA',     // custom teal
-  'btc': '#fb923c',      // orange-400
-  'other': '#64748b',    // slate-500
+  'ckb': '#674BDC',      // purple
+  'usdi': '#6ED4CA',     // teal
+  'btc': '#EFA171',     
+  'other': '#64748b',
 };
 
 // 其他资产可用的颜色池
 export const AVAILABLE_ASSET_COLORS = [
-  '#facc15',  // yellow-400
-  '#3b82f6',  // blue-500
-  '#6366f1',  // indigo-500
-  '#14b8a6',  // teal-500
-  '#ec4899',  // pink-500
-  '#ef4444',  // red-500
+  '#FBE38E',
+  '#59ABE6',
+  '#7983D1',
+  '#BDEB88',
+  '#E659AB',
+  '#E06B6B',
 ];
 
 /**

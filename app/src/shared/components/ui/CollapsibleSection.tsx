@@ -55,12 +55,12 @@ export const CollapsibleSection = <T extends Record<string, unknown>>({
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className="flex items-center justify-start gap-1 cursor-pointer transition-opacity hover:opacity-70"
-              aria-label={isExpanded ? '收起' : '展开'}
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
             >
               <div className="relative h-4 w-4 overflow-hidden flex items-center justify-center">
                 <Image
                   src="/right.svg"
-                  alt={isExpanded ? '收起' : '展开'}
+                  alt={isExpanded ? 'Collapse' : 'Expand'}
                   width={16}
                   height={16}
                   className="transition-transform duration-200"

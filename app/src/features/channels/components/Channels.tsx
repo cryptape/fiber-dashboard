@@ -452,23 +452,6 @@ export const Channels = () => {
         </div>
       ),
     },
-    // {
-    //   key: "transactions",
-    //   label: "Transactions",
-    //   width: "w-40",
-    //   sortable: false,
-    // },
-    // {
-    //   key: "capacity",
-    //   label: "Capacity (CKB)",
-    //   width: "w-48",
-    //   sortable: true,
-    //   render: (value) => (
-    //     <div className="text-purple font-semibold truncate">
-    //       {value as string}
-    //     </div>
-    //   ),
-    // },
     {
       key: "assetLiquidity",
       label: "Asset liquidity",
@@ -528,8 +511,8 @@ export const Channels = () => {
   
   // 状态颜色映射
   const STATUS_COLORS: Record<string, string> = {
-    'open': '#208C73',
-    'closed_waiting_onchain_settlement': '#FAB83D',
+    'open': '#156F5C',
+    'closed_waiting_onchain_settlement': '#B45309',
     'closed_cooperative': '#2563EB',
     'closed_uncooperative': '#B34846',
   };
@@ -603,7 +586,7 @@ export const Channels = () => {
             data={pieChartData}
             title="Channel Status Distribution"
             height="400px"
-            colors={["#208C73", "#FAB83D", "#2563EB", "#B34846"]}
+            colors={["#BDEB88", "#FBE38E", "#59ABE6", "#E06B6B"]}
             tooltipFormatter={(params) => {
               const dataItem = pieChartData[params.dataIndex];
               const totalChannels = pieChartData.reduce((sum, item) => sum + item.value, 0);

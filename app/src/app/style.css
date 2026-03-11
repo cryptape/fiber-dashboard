@@ -14,14 +14,15 @@
 :root {
   /* Text - Light Mode */
   --text-primary: #0f0f10;
-  --text-secondary: #626377;
-  --text-tertiary: #88899e;
+  --text-secondary: #4A4B5E;
+  --text-tertiary: #76778B;
   --text-on: #ffffff;
 
   /* Surface - Light Mode */
   --surface-layer: rgba(255, 255, 255, 0.3);
   --surface-layer-hover: rgba(255, 255, 255, 0.6);
   --surface-popover: #ffffff;
+  --surface-popover-hover: #f1f1f1;
   --surface-inverse: #0f0f10;
 
   /* Border - Light Mode */
@@ -29,24 +30,24 @@
   --card-border: linear-gradient(165deg, #FFF -10.07%, rgba(255, 255, 255, 0.00) 89.61%);
 
   /* Functional - Light Mode */
-  --success-text: #208c73;
+  --success-text: #156F5C;
   --success-bg: #edfefa;
   --success-border: #d4eee8;
 
-  --warning-text: #d97706;
-  --warning-bg: #fef3c7;
-  --warning-border: #fde68a;
+  --warning-text: #B45309;
+  --warning-bg: #FFFBEB;
+  --warning-border: #FDE68A;
 
-  --error-text: #b34846;
-  --error-bg: #feeded;
-  --error-border: #ebcfce;
+  --error-text: #B34846;
+  --error-bg: #FEEDED;
+  --error-border: #EBCFCE;
 
   --info-text: #2563EB;
   --info-bg: #EFF6FF;
   --info-border: #DBEAFE;
 
   /* Palette - Light Mode */
-  --purple: #7459e6;
+  --purple: #674BDC;
   --yellow: #fab83d;
   --blue: #59abe6;
 
@@ -183,11 +184,11 @@
   }
 
   .border {
-    border-color: var(--border-default);
+    border: 1px solid transparent;
   }
-  .border-color{
-       border-color: var(--border-default);
- 
+
+  .border-default{
+    border-color: var(--border-default);
   }
 
   .text-success {

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSearch } from "@/shared/hooks/useSearch";
 import SearchDropdown from "@/shared/components/ui/SearchDropdown";
 import { SearchIcon } from "@/shared/components/icons";
+import { cn } from "@/lib/utils";
 
 export interface HeaderSearchBarRef {
   focus: () => void;
@@ -14,7 +15,7 @@ interface HeaderSearchBarProps {
   scrolled?: boolean;
 }
 
-const HeaderSearchBar = forwardRef<HeaderSearchBarRef, HeaderSearchBarProps>((_props, ref) => {
+const HeaderSearchBar = forwardRef<HeaderSearchBarRef, HeaderSearchBarProps>(({ scrolled = false }, ref) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   const {
@@ -54,7 +55,12 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef, HeaderSearchBarProps>((_p
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className="h-10 rounded-lg backdrop-blur-[5px] inline-flex justify-start items-center gap-2 relative bg-popover" style={{ padding: '10px 12px', width: '488px' }}>
+      <div
+        className={cn(
+          "flex h-10 w-[488px] items-center gap-2 rounded-lg border border-transparent transition-colors bg-popover px-3 py-[10px] backdrop-blur-[5px]",
+          scrolled && "border-default"
+        )}
+      >
         <div className="w-4 h-4 relative overflow-hidden flex-shrink-0">
           <SearchIcon className="text-secondary" />
         </div>
@@ -74,7 +80,7 @@ const HeaderSearchBar = forwardRef<HeaderSearchBarRef, HeaderSearchBarProps>((_p
         {query && (
           <>
             <Image
-              src="/cancle.svg"
+              src="/cancel.svg"
               alt="Clear"
               width={16}
               height={16}

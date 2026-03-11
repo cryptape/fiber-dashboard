@@ -360,7 +360,7 @@ export default function NavBarNew() {
             <button
               onClick={handleToggleMobileSearch}
               className="flex items-center justify-center transition-opacity hover:opacity-70 mr-7"
-              aria-label="搜索"
+              aria-label="Search"
             >
               <span
                 className={
@@ -371,7 +371,7 @@ export default function NavBarNew() {
               >
                 <Image
                   src="/search2.svg"
-                  alt="搜索"
+                  alt="Search"
                   width={24}
                   height={24}
                   className="w-[18px] h-[18px] md:w-6 md:h-6"
@@ -385,11 +385,11 @@ export default function NavBarNew() {
             <button
               onClick={handleToggleMobileSearch}
               className="flex items-center justify-center transition-opacity hover:opacity-70"
-              aria-label="关闭搜索"
+              aria-label="Close search"
             >
               <Image
                 src="/close3.svg"
-                alt="关闭"
+                alt="Close"
                 width={24}
                 height={24}
                 className="w-[18px] h-[18px] md:w-6 md:h-6"
@@ -426,7 +426,7 @@ export default function NavBarNew() {
               <div className="w-4 h-4 relative overflow-hidden flex items-center justify-center">
                 <Image
                   src="/search2.svg"
-                  alt="搜索"
+                  alt="Search"
                   width={16}
                   height={16}
                   className="w-4 h-4"

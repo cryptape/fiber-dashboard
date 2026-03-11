@@ -18,7 +18,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
   {
     value: "ckb",
     label: "CKB",
-    color: "#7459e6",
+    color: "#674BDC",
     unit: "CKB",
   },
   {
