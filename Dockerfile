@@ -12,7 +12,7 @@ RUN apt-get update && \
 COPY . .
 RUN cd /usr/src/fiber-dashbord-backend && cargo build --release
 
-FROM debian:bookworm-slim
+FROM debian:13
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libssl3 \
