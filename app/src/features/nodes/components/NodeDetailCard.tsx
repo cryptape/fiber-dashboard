@@ -49,7 +49,7 @@ export const NodeDetailCard: React.FC<NodeDetailCardProps> = ({
           </div>
           <CopyButton
             text={hash}
-            ariaLabel="复制哈希"
+            ariaLabel="Copy hash"
             className="flex-shrink-0"
           />
         </div>
@@ -61,7 +61,7 @@ export const NodeDetailCard: React.FC<NodeDetailCardProps> = ({
               <div className="w-4 h-4 relative">
                 <Image
                   src="/location.svg"
-                  alt="位置"
+                  alt="Location"
                   width={16}
                   height={16}
                   className="w-full h-full"

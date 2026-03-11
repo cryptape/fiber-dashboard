@@ -16,9 +16,9 @@ interface TimeSeriesChartProps {
 export default function TimeSeriesChart({
   data,
   title,
-  height = "400px",
+  height = "412px",
   className = "",
-  colors = ["#7459e6", "#fab83d"], // 默认使用紫色和黄色
+  colors = ["#674BDC", "#FBE38E"], // 默认使用紫色和黄色
   timeRange = "hourly", // 默认小时维度
 }: TimeSeriesChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);

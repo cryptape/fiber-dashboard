@@ -118,14 +118,19 @@ export const Nodes = () => {
   const { data: allNodesData, isLoading: allNodesLoading } = useQuery({
     queryKey: ['allNodesForMap', currentNetwork],
     queryFn: async () => {
+      const startTime = performance.now();
+      console.log('[MapData timing] Start fetching full node and channel data');
+      
       const [nodes, channels] = await Promise.all([
         apiClient.fetchAllActiveNodes(),
         apiClient.fetchAllActiveChannels(),
       ]);
       
+      const endTime = performance.now();
+      console.log(`[MapData timing] Node count: ${nodes.length}, Channel count: ${channels.length}, Duration: ${((endTime - startTime) / 1000).toFixed(2)}s`);
+      
       return { nodes, channels };
     },
-    staleTime: 300000, // 5分钟缓存
     refetchInterval: 300000, // 5分钟轮询
   });
 
@@ -228,11 +233,17 @@ export const Nodes = () => {
 
   // 转换为地图数据格式 - 使用全量节点数据
   const mapData: NodeMapData[] = useMemo(() => {
+    const startTime = performance.now();
+    console.log('[MapData timing] Start calculating mapData');
+    
     if (!allNodesData?.nodes) {
+      console.log('[MapData timing] No data, returning empty array');
       return [];
     }
 
+    const total = allNodesData.nodes.length;
     const nodesWithLoc = allNodesData.nodes.filter(node => node.loc);
+    console.log('[MapData] Filtered nodes without loc:', total - nodesWithLoc.length, 'Total:', total);
 
     const mapped = nodesWithLoc.map(node => {
       const [lat, lng] = (node.loc || "").split(",").map(coord => parseFloat(coord.trim()));
@@ -248,6 +259,11 @@ export const Nodes = () => {
     });
 
     const nodesWithCoords = mapped.filter(node => node.latitude !== 0 && node.longitude !== 0);
+    console.log('[MapData] Filtered nodes with zero coordinates:', mapped.length - nodesWithCoords.length, 'Mapped count:', mapped.length);
+
+    const endTime = performance.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`[MapData timing] mapData calculation completed, duration: ${duration}s, Final node count: ${nodesWithCoords.length}`);
 
     return nodesWithCoords;
   }, [allNodesData]);
@@ -256,10 +272,19 @@ export const Nodes = () => {
   const connectionData: NodeConnectionData[] = useMemo(() => {
     if (!allNodesData?.channels || !allNodesData?.nodes) return [];
 
-    return allNodesData.channels.map(channel => ({
+    const nodeIdSet = new Set(allNodesData.nodes.map(node => node.node_id));
+    const totalChannels = allNodesData.channels.length;
+
+    const filteredChannels = allNodesData.channels.filter(channel => {
+      // 确保两个节点都存在
+      return nodeIdSet.has(channel.node1) && nodeIdSet.has(channel.node2);
+    });
+
+    console.log('[ConnectionData] Filtered channels with missing nodes:', totalChannels - filteredChannels.length, 'Total channels:', totalChannels);
+
+    return filteredChannels.map(channel => ({
       fromNodeId: channel.node1,
       toNodeId: channel.node2,
-      channelOutpoint: channel.channel_outpoint,
     }));
   }, [allNodesData]);
 

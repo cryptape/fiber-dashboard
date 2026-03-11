@@ -50,7 +50,7 @@ export const TransactionOverview: React.FC<TransactionOverviewProps> = ({
             <div className="flex items-center gap-1">
               <span className="type-body text-purple">{txHash}</span>
               <div className="flex items-center">
-                <CopyButton text={fullTxHash} ariaLabel="复制交易哈希" />
+                <CopyButton text={fullTxHash} ariaLabel="Copy transaction hash" />
               </div>
             </div>
           )}
@@ -84,7 +84,7 @@ export const TransactionOverview: React.FC<TransactionOverviewProps> = ({
                 <div className="flex items-center gap-1 flex-1 min-w-0">
                   <div className="type-body text-primary break-all">{field.value}</div>
                   {field.copyable && (
-                    <CopyButton text={field.value} ariaLabel={`复制${field.label}`} />
+                    <CopyButton text={field.value} ariaLabel={`Copy ${field.label}`} />
                   )}
                 </div>
               )}

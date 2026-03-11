@@ -71,7 +71,7 @@ const HomeSearchBar = forwardRef<HomeSearchBarRef>((props, ref) => {
                   style={{ marginRight: '4px' }}
                 >
                   <Image
-                    src="/cancle.svg"
+                    src="/cancel.svg"
                     alt="Clear"
                     width={14}
                     height={14}

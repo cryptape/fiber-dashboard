@@ -155,10 +155,10 @@ export default function NodeNetworkMap({
     // 根据 channel 数量计算节点颜色的辅助函数
     const getNodeColor = (channelCount: number): string => {
       if (channelCount >= 40) return "#2F1C96"; // 40+
-      if (channelCount >= 30) return "#5034C4"; // 30-39
-      if (channelCount >= 20) return "#7459E6"; // 20-29
-      if (channelCount >= 10) return "#B8A8F4"; // 10-19
-      return "#E6E2FB"; // 0-9
+      if (channelCount >= 30) return "#4A33B8"; // 30-39
+      if (channelCount >= 20) return "#6A55D9"; // 20-29
+      if (channelCount >= 10) return "#8F7BE9"; // 10-19
+      return "#B6A8F3"; // 0-9
     };
 
     // 转换节点数据为散点图数据
@@ -184,6 +184,7 @@ export default function NodeNetworkMap({
       });
 
     const allNodeData = rawScatterData.filter(item => item.channelCount > 0);
+    console.log('[NodeNetworkMap] Filtered nodes with channelCount=0:', rawScatterData.length - allNodeData.length, 'Original node count:', rawScatterData.length);
 
     // 对相同经纬度的节点添加随机偏移，而不是去重
     const coordCountMap = new Map<string, number>();
@@ -191,6 +192,7 @@ export default function NodeNetworkMap({
     
     if (mock) {
       // Mock模式：对相同经纬度的节点添加随机偏移
+      console.log('[NodeNetworkMap] Mock mode: enable random offsets');
       nodeScatterData = allNodeData.map(item => {
       const key = `${item.value[0]},${item.value[1]}`;
       const count = coordCountMap.get(key) || 0;
@@ -217,8 +219,11 @@ export default function NodeNetworkMap({
       return item;
     });
 
+      const duplicateCount = Array.from(coordCountMap.values()).filter(c => c > 1).reduce((sum, c) => sum + c - 1, 0);
+      console.log('[NodeNetworkMap] Nodes with duplicated coordinates (offset applied):', duplicateCount, 'Final node count:', nodeScatterData.length);
     } else {
       // 正常模式：按经纬度去重，保留 channelCount 最多的节点
+      console.log('[NodeNetworkMap] Normal mode: deduplicate by coordinates');
       const coordMap = new Map<string, (typeof allNodeData)[0]>();
       allNodeData.forEach(item => {
         const key = `${item.value[0]},${item.value[1]}`;
@@ -229,7 +234,11 @@ export default function NodeNetworkMap({
       });
 
       nodeScatterData = Array.from(coordMap.values());
+      console.log('[NodeNetworkMap] Deduplicated duplicate coordinates:', allNodeData.length - nodeScatterData.length, 'Final node count:', nodeScatterData.length);
     }
+    console.log('[NodeNetworkMap] First 5 node samples:', nodeScatterData.slice(0, 5).map(n => ({ name: n.name, value: n.value, channelCount: n.channelCount })));
+
+    console.log(nodeScatterData, "nodeScatterData");
     // 创建节点ID到坐标的映射（使用偏移后的坐标）
     const nodeMap = new Map(
       nodeScatterData.map(node => [node.nodeId, node.value])
@@ -277,6 +286,10 @@ export default function NodeNetworkMap({
     });
 
     const linesData = Array.from(connectionGroups.values());
+    console.log('[NodeNetworkMap] Line data count:', linesData.length, 'Original connection count:', connections.length);
+    // 打印 count 最大的前 10 条连线
+    const topLines = [...linesData].sort((a, b) => b.count - a.count).slice(0, 10);
+    console.log('[NodeNetworkMap] Top 10 lines by count:', topLines.map(l => ({ from: l.node1Name, to: l.node2Name, count: l.count })));
 
     // 生成连线系列和图例数据（根据连接数量分组）
     const baseColor = "#59ABE6"; // 蓝色连线
@@ -372,7 +385,7 @@ export default function NodeNetworkMap({
           itemStyle: {
             borderColor: "transparent",
             borderWidth: 0,
-            areaColor: "rgba(0, 0, 0, 0.04)", // 增加不透明度使阴影更明显
+            areaColor: "rgba(106, 85, 217, 0.08)", // 增加不透明度使阴影更明显
           },
           emphasis: {
             disabled: true,
@@ -402,7 +415,7 @@ export default function NodeNetworkMap({
           emphasis: {
             itemStyle: {
               areaColor: "#D5CDF7",
-              borderColor: "#88899E",
+              borderColor: "#76778B",
             },
             label: {
               show: false,
@@ -411,7 +424,7 @@ export default function NodeNetworkMap({
           select: {
             itemStyle: {
               areaColor: "#D5CDF7",
-              borderColor: "#88899E",
+              borderColor: "#76778B",
             },
           },
           tooltip: {
@@ -433,10 +446,10 @@ export default function NodeNetworkMap({
       //     fontSize: 10,
       //   },
       //   pieces: [
-      //     { min: 0, max: 10, color: "#E6E2FB" },
-      //     { min: 10, max: 20, color: "#B8A8F4" },
-      //     { min: 20, max: 30, color: "#7459E6" },
-      //     { min: 30, max: 40, color: "#5034C4" },
+      //     { min: 0, max: 10, color: "#B6A8F3" },
+      //     { min: 10, max: 20, color: "#8F7BE9" },
+      //     { min: 20, max: 30, color: "#6A55D9" },
+      //     { min: 30, max: 40, color: "#4A33B8" },
       //     { min: 40, max: 50, color: "#2F1C96" },
       //     { min: 50, color: "#2F1C96" },
       //   ],
@@ -596,6 +609,8 @@ export default function NodeNetworkMap({
       ],
     };
 
+    console.log('[NodeNetworkMap] Line series count:', lineSeries.length, 'Node series: 1', 'Total series:', lineSeries.length + 1);
+    console.log('[NodeNetworkMap] Node data count passed to ECharts:', nodeScatterData.length);
     chartInstance.current.setOption(option, {
       notMerge: true, // 不合并配置，完全替换
       lazyUpdate: false,
