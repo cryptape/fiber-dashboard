@@ -44,6 +44,8 @@ export default function NodeNetworkMap({
   title = "Global Nodes Distribution",
   mock = false,
 }: NodeNetworkMapProps) {
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 10;
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -152,13 +154,21 @@ export default function NodeNetworkMap({
         (nodeChannelCount.get(conn.toNodeId) || 0) + 1
       );
     });
+    const NODE_COLORS = {
+      lightest: "#B6A8F3",
+      light: "#8F7BE9",
+      medium: "#6A55D9",
+      dark: "#4A33B8",
+      darkest: "#2F1C96",
+    } as const;
+
     // 根据 channel 数量计算节点颜色的辅助函数
     const getNodeColor = (channelCount: number): string => {
-      if (channelCount >= 40) return "#2F1C96"; // 40+
-      if (channelCount >= 30) return "#4A33B8"; // 30-39
-      if (channelCount >= 20) return "#6A55D9"; // 20-29
-      if (channelCount >= 10) return "#8F7BE9"; // 10-19
-      return "#B6A8F3"; // 0-9
+      if (channelCount >= 40) return NODE_COLORS.darkest; // 40+
+      if (channelCount >= 30) return NODE_COLORS.dark; // 30-39
+      if (channelCount >= 20) return NODE_COLORS.medium; // 20-29
+      if (channelCount >= 10) return NODE_COLORS.light; // 10-19
+      return NODE_COLORS.lightest; // 0-9
     };
 
     // 转换节点数据为散点图数据
@@ -294,15 +304,15 @@ export default function NodeNetworkMap({
     // 生成连线系列和图例数据（根据连接数量分组）
     const baseColor = "#59ABE6"; // 蓝色连线
     const connectionRanges = [
-      { min: 1, max: 1, width: 0.5, opacity: 0.15, label: "1 Channel" },
-      { min: 2, max: 3, width: 1, opacity: 0.25, label: "2-3 Channels" },
-      { min: 4, max: 6, width: 1.5, opacity: 0.4, label: "4-6 Channels" },
-      { min: 7, max: 9, width: 2, opacity: 0.6, label: "7-9 Channels" },
+      { min: 1, max: 1, width: 2, opacity: 1, label: "1 Channel" },
+      { min: 2, max: 3, width: 2, opacity: 1, label: "2-3 Channels" },
+      { min: 4, max: 6, width: 2, opacity: 1, label: "4-6 Channels" },
+      { min: 7, max: 9, width: 2, opacity: 1, label: "7-9 Channels" },
       {
         min: 10,
         max: Infinity,
-        width: 3,
-        opacity: 0.8,
+        width: 2,
+        opacity: 1,
         label: "10+ Channels",
       },
     ];
@@ -378,6 +388,10 @@ export default function NodeNetworkMap({
         {
           map: "world",
           roam: true,
+          scaleLimit: {
+            min: MIN_ZOOM,
+            max: MAX_ZOOM,
+          },
           zoom: zoom,
           center: shadowCenter, // 向下偏移以创建阴影效果
           zlevel: 0,
@@ -404,6 +418,10 @@ export default function NodeNetworkMap({
         {
           map: "world",
           roam: true,
+          scaleLimit: {
+            min: MIN_ZOOM,
+            max: MAX_ZOOM,
+          },
           zoom: zoom,
           center: mainCenter,
           zlevel: 1,
@@ -586,10 +604,11 @@ export default function NodeNetworkMap({
           itemStyle: {
             borderColor: "#FFFFFF",
             borderWidth: 1,
+            opacity: 1,
             // color: '#E6E2FB'
             color: (params: unknown) => {
               const p = params as { data?: { nodeColor?: string } };
-              return p.data?.nodeColor || "#E6E2FB";
+              return p.data?.nodeColor || NODE_COLORS.lightest;
             },
           },
           emphasis: {
@@ -650,7 +669,7 @@ export default function NodeNetworkMap({
     if (chartInstance.current) {
       const option = chartInstance.current.getOption() as echarts.EChartsOption;
       const currentZoom = (option.geo as echarts.GeoComponentOption[])?.[0]?.zoom || 1.2;
-      const newZoom = Math.min(currentZoom * 1.2, 10); // 最大放大10倍
+      const newZoom = Math.min(currentZoom * 1.2, MAX_ZOOM); // 最大放大10倍
       chartInstance.current.setOption({
         geo: [
           { zoom: newZoom }, // 阴影层
@@ -664,7 +683,7 @@ export default function NodeNetworkMap({
     if (chartInstance.current) {
       const option = chartInstance.current.getOption() as echarts.EChartsOption;
       const currentZoom = (option.geo as echarts.GeoComponentOption[])?.[0]?.zoom || 1.2;
-      const newZoom = Math.max(currentZoom / 1.2, 0.5); // 最小缩小到0.5倍
+      const newZoom = Math.max(currentZoom / 1.2, MIN_ZOOM); // 最小缩小到0.5倍
       chartInstance.current.setOption({
         geo: [
           { zoom: newZoom }, // 阴影层

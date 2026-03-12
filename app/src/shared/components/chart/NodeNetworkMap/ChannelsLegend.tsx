@@ -49,10 +49,10 @@ export function ChannelsLegend({ className }: Props) {
         <div className="flex items-center gap-2">
           <div className="inline-flex flex-col justify-center items-start">
             <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#2F1C96' }} />
-            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#5034C4' }} />
-            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#674BDC' }} />
-            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#B8A8F4' }} />
-            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#E6E2FB' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#4A33B8' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#6A55D9' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#8F7BE9' }} />
+            <div className="w-4 h-5 lg:w-8 lg:h-10" style={{ backgroundColor: '#B6A8F3' }} />
           </div>
           <div className="inline-flex flex-col justify-start items-start">
             <div className="h-5 lg:h-10 text-tertiary text-xs font-normal leading-4 flex items-center">♾️</div>
