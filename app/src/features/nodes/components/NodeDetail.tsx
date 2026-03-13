@@ -104,8 +104,8 @@ export const NodeDetail = () => {
   const totalCount = channelsResponse?.total_count ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // 统计：总通道数（后端已返回分页数据，需要获取总数）
-  const totalChannels = nodeInfo?.channel_count || 0;
+  // 统计：优先使用 nodeInfo.channel_count，取不到再用分页接口的 total_count
+  const totalChannels = nodeInfo?.channel_count || totalCount;
 
   const locationText = useMemo(() => {
     if (!nodeInfo) return "Unknown";
@@ -367,9 +367,10 @@ export const NodeDetail = () => {
       <NodeDetailCard
         name={nodeInfo?.node_name || "-"}
         status="Active"
-        hash={nodeInfo?.node_id || ""}
+        hash={nodeInfo?.node_id || nodeId}
         location={locationText}
         lastSeen={lastSeenText}
+        isUnannounced={!nodeInfo}
       />
       
       {/* KPI 卡片 */}

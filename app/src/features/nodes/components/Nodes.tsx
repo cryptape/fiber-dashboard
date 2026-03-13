@@ -467,7 +467,7 @@ export const Nodes = () => {
           <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
               <div className="text-lg font-medium mb-2">No nodes found</div>
-              <div className="text-sm">No nodes available</div>
+              <div className="text-sm">Search only includes announced nodes. Unannounced nodes won&apos;t appear here.</div>
             </div>
           </div>
         )}
