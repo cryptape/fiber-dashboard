@@ -197,12 +197,17 @@ export default function ChannelDetailPage() {
       </div>
 
       {/* Nodes */}
-      {(node1Info || node2Info) && (
+      {channelInfo && (
         <>
           <div className="mt-3">
             <SectionHeader title="Channel Participants" />
           </div>
-          <ChannelParticipants node1Info={node1Info} node2Info={node2Info} />
+          <ChannelParticipants
+            node1Info={node1Info}
+            node2Info={node2Info}
+            node1Id={channelInfo.node1}
+            node2Id={channelInfo.node2}
+          />
         </>
       )}
 
